@@ -1,65 +1,27 @@
-# Dependencies
-
-node_modules/
-
-# Build output
-
-dist/
-dist-ssr/
-release/
-
-# Environment variables
-
+# Environment and secrets
 .env
 .env.*
 !.env.example
-
-# Logs
-
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# IDE
-
-.vscode/
-.idea/
-*.iml
-
-# OS files
-
-.DS_Store
-Thumbs.db
-Desktop.ini
-
-# TypeScript
-
-*.tsbuildinfo
-
-# JavaScript / TypeScript cache
-
-*.cache
-.cache/
-
-# Electron Builder
-
-out/
-release/
-
-# Local certificates and keys
-
 *.pem
 *.key
-*.crt
 
-# Temporary files
+# Dependencies
+node_modules/
+**/node_modules/
 
-tmp/
-temp/
+# Build output
+**/dist/
+Frontend/release/
+Frontend/.vite/
 
-# Test coverage
+# Runtime data, logs, and backups
+*.log
+*.sql.gz
+*.dump
+Backend/backups/
 
-coverage/
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
