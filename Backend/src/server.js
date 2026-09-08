@@ -1,0 +1,12 @@
+import express from 'express';
+import { Pool } from 'pg';
+import { createDailyFinanceRouter, createSimpleFinanceRouter } from '../daily_finance/index.js';
+const app=express();
+const db=new Pool({connectionString:process.env.DATABASE_URL});
+app.use(express.json({limit:'1mb'}));
+const allowedOrigin=process.env.FRONTEND_ORIGIN||'http://localhost:5173';
+app.use((req,res,next)=>{const origin=req.headers.origin;if(!origin||origin===allowedOrigin)res.setHeader('Access-Control-Allow-Origin',allowedOrigin);res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');if(req.method==='OPTIONS')return res.sendStatus(204);next();});
+app.use('/api/daily-finance',createDailyFinanceRouter(db));
+app.use('/api/daily-finance',createSimpleFinanceRouter(db));
+app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
+app.listen(Number(process.env.PORT||3001),()=>console.log('Daily Finance API running'));

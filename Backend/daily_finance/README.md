@@ -1,0 +1,1 @@
+# Daily Finance backend module`n`nMount createDailyFinanceRouter(pool) under /api/daily-finance. Apply migrations/001_initial.sql to PostgreSQL before serving requests. Payment writes use a PostgreSQL transaction and an audit entry. NUMERIC values are handled as integer paise by calculation helpers.
