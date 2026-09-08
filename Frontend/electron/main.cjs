@@ -1,6 +1,10 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
+// Some Windows graphics environments cannot start Electron's GPU process.
+// The finance UI is 2D, so software rendering is sufficient and more reliable.
+app.disableHardwareAcceleration();
+
 let mainWindow;
 
 function createWindow() {
@@ -21,6 +25,9 @@ function createWindow() {
       path.join(__dirname, "../dist/index.html")
     );
   } else {
+    mainWindow.webContents.once("did-fail-load", () => {
+      mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    });
     mainWindow.loadURL("http://localhost:5173");
   }
 }

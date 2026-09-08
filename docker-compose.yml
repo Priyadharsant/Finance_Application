@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: finance-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finance}
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - finance_pgdata:/var/lib/postgresql/data
+      - ./Backend/daily_finance/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_daily_finance.sql:ro
+      - ./Backend/daily_finance/migrations/000_extensions.sql:/docker-entrypoint-initdb.d/000_extensions.sql:ro
+      - ./Backend/daily_finance/migrations/003_operations.sql:/docker-entrypoint-initdb.d/003_operations.sql:ro
+      - ./Backend/daily_finance/migrations/004_interest_fields.sql:/docker-entrypoint-initdb.d/004_interest_fields.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance} -d ${POSTGRES_DB:-finance}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  api:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: finance-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      FRONTEND_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finance}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-finance}
+    ports:
+      - "${API_PORT:-3001}:3001"
+volumes:
+  finance_pgdata:
