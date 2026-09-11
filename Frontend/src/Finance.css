@@ -1382,3 +1382,347 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .tableWrap { overflow: visible; }
   .tableWrap table { min-width: 0; font-size: 9px; }
 }
+
+/* === CLOSE LOAN EARLY MODAL (MODERN & SIMPLE) === */
+.closeLoanOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 16px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.closeLoanCard {
+  position: relative;
+  background: #ffffff;
+  border-radius: 18px;
+  width: min(400px, 94vw);
+  padding: 22px 24px;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px #e2e8f0;
+  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.closeLoanHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.closeLoanHeader h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.closeLoanCloseBtn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeLoanCloseBtn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.closeLoanGrid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.closeLoanField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.closeLoanLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.closeLoanInputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.closeLoanPrefix {
+  position: absolute;
+  left: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.closeLoanSuffix {
+  position: absolute;
+  right: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.closeLoanInput {
+  width: 100%;
+  padding: 8px 10px 8px 24px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.closeLoanInput:focus {
+  outline: none;
+  border-color: #0f766e !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12) !important;
+}
+
+.closeLoanInputPercent {
+  width: 100%;
+  padding: 8px 24px 8px 10px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.closeLoanInputPercent:focus {
+  outline: none;
+  border-color: #0f766e !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12) !important;
+}
+
+.closeLoanSummaryBox {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.closeLoanSummaryLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #166534;
+}
+
+.closeLoanSummarySub {
+  font-size: 11px;
+  color: #15803d;
+  margin-top: 1px;
+}
+
+.closeLoanSummaryValue {
+  font-size: 20px;
+  font-weight: 800;
+  color: #15803d;
+  letter-spacing: -0.3px;
+}
+
+/* Modern segmented switch */
+.closeLoanSegmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 9px;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.closeLoanSegmentBtn {
+  border: none;
+  background: transparent;
+  padding: 7px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.closeLoanSegmentBtn:hover {
+  color: #0f172a;
+}
+
+.closeLoanSegmentBtn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.closeLoanTextInput {
+  width: 100%;
+  padding: 8px 10px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.closeLoanTextInput:focus {
+  outline: none;
+  border-color: #0f766e !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12) !important;
+}
+
+.closeLoanActions {
+  display: flex;
+  gap: 10px;
+}
+
+.closeLoanCancelBtn {
+  flex: 1;
+  padding: 9px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeLoanCancelBtn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.closeLoanSubmitBtn {
+  flex: 1.6;
+  padding: 9px 14px;
+  border: none;
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 13.5px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.closeLoanSubmitBtn:hover {
+  background: #b91c1c;
+}
+
+/* === AUTO FINANCE TABLE FULL-WIDTH EXPANSION (UP TO 90%) & HORIZONTAL SCROLL === */
+.autoFinanceContainer {
+  width: 100%;
+}
+
+.autoFinanceContainer .content {
+  width: 100%;
+  max-width: 95vw;
+  box-sizing: border-box;
+  padding: 32px 36px;
+}
+
+.autoFinanceContainer .tableWrap,
+.autoFinanceContainer .card.tableWrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.autoFinanceContainer .tableWrap table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+.autoFinanceContainer .cardHead {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  box-sizing: border-box;
+  z-index: 6;
+}
+
+.autoFinanceContainer .detailsCard,
+.detailsCard.autoLoanDossier {
+  width: min(92vw, 1040px) !important;
+  max-width: 1040px !important;
+  box-sizing: border-box;
+}
+
+.autoFinanceContainer .detailsCard > .tableWrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Sleek horizontal scrollbar for Auto Finance tables */
+.autoFinanceContainer .tableWrap::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.autoFinanceContainer .tableWrap::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.autoFinanceContainer .tableWrap::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.autoFinanceContainer .tableWrap::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+

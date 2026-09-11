@@ -106,6 +106,7 @@ export async function recordEmiPayment(req, res) {
         loan_amount,
         interest_rate,
         tenure_months,
+        interest_type,
         status
       FROM autofinance_loans
       WHERE id = $1
@@ -125,15 +126,22 @@ export async function recordEmiPayment(req, res) {
     const tenureMonths = Number(loan.tenure_months || 0);
 
     // =====================================================
-    // CALCULATE TOTAL CONTRACTUAL FLAT INTEREST
+    // CALCULATE TOTAL CONTRACTUAL INTEREST
     // =====================================================
 
+    const schedInterestResult = await client.query(
+      `SELECT COALESCE(SUM(interest_component), 0) AS scheduled_interest
+       FROM autofinance_emi_schedules
+       WHERE loan_id = $1 AND status != 'CANCELLED'`,
+      [loanId]
+    );
+    const scheduledInterestSum = Number(schedInterestResult.rows[0].scheduled_interest || 0);
+
     const totalContractualInterest = Number(
-      (
-        originalPrincipal *
-        (interestRate / 100) *
-        (tenureMonths / 12)
-      ).toFixed(2),
+      (loan.interest_type === 'FLAT'
+        ? (originalPrincipal * (interestRate / 100) * (tenureMonths / 12))
+        : scheduledInterestSum
+      ).toFixed(2)
     );
 
     // =====================================================
@@ -251,6 +259,28 @@ export async function recordEmiPayment(req, res) {
     if (emi.status === "PAID") {
       throw new Error(
         "This EMI is already fully paid. Select a pending or partial EMI."
+      );
+    }
+
+    // =====================================================
+    // ENFORCE FIFO (FIRST-IN, FIRST-OUT)
+    // Borrowers cannot skip ahead to upcoming EMIs while
+    // earlier installments remain unpaid/overdue.
+    // =====================================================
+    const priorUnpaidRes = await client.query(
+      `SELECT installment_number 
+       FROM autofinance_emi_schedules 
+       WHERE loan_id = $1 
+         AND installment_number < $2 
+         AND status IN ('PENDING', 'PARTIAL')
+       ORDER BY installment_number ASC 
+       LIMIT 1`,
+      [loanId, emi.installment_number]
+    );
+
+    if (priorUnpaidRes.rows.length > 0) {
+      throw new Error(
+        `Installment #${priorUnpaidRes.rows[0].installment_number} is still pending/unpaid. Financial accounting rules require clearing earlier installments before collecting Installment #${emi.installment_number}.`
       );
     }
 
@@ -456,8 +486,8 @@ export async function recordEmiPayment(req, res) {
           p.payment_method,
           p.reference_number,
           p.created_at as payment_date,
-          s.installment_number,
-          s.total_emi as expected_emi,
+          COALESCE(s.installment_number, 0) as installment_number,
+          COALESCE(s.total_emi, p.amount_paid) as expected_emi,
           l.loan_amount,
           l.interest_rate,
           l.tenure_months,
@@ -468,7 +498,7 @@ export async function recordEmiPayment(req, res) {
           v.model,
           v.registration_number
         FROM autofinance_payments p
-        JOIN autofinance_emi_schedules s ON p.emi_id = s.id
+        LEFT JOIN autofinance_emi_schedules s ON p.emi_id = s.id
         JOIN autofinance_loans l ON p.loan_id = l.id
         JOIN autofinance_customers c ON l.customer_id = c.id
         LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
@@ -479,6 +509,109 @@ export async function recordEmiPayment(req, res) {
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  } finally {
+    client.release();
+  }
+}
+
+export async function closeLoanEarly(req, res) {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const { id: loanId } = req.params;
+    const {
+      principalAmount,
+      interestAmount,
+      paymentMethod,
+      referenceNumber,
+    } = req.body;
+
+    const paidPrincipal = Number(principalAmount || 0);
+    const paidInterest = Number(interestAmount || 0);
+    const totalPaid = paidPrincipal + paidInterest;
+
+    if (!loanId || totalPaid <= 0) {
+      throw new Error("loanId and a valid closure amount are required");
+    }
+
+    // 1. Mark loan as COMPLETED
+    const loanUpdate = await client.query(
+      `UPDATE autofinance_loans SET status = 'COMPLETED' WHERE id = $1 AND status != 'COMPLETED' RETURNING id`,
+      [loanId]
+    );
+
+    if (loanUpdate.rows.length === 0) {
+      throw new Error("Loan not found or already completed");
+    }
+
+    // 2. Cancel all pending and partial EMIs
+    await client.query(
+      `
+      UPDATE autofinance_emi_schedules
+      SET status = 'CANCELLED'
+      WHERE loan_id = $1 AND status IN ('PENDING', 'PARTIAL')
+      `,
+      [loanId]
+    );
+
+    // 3. Insert Closure Payment Record
+    const payRes = await client.query(
+      `
+      INSERT INTO autofinance_payments (
+        loan_id,
+        payment_date,
+        amount_paid,
+        principal_paid,
+        interest_paid,
+        extra_principal_paid,
+        payment_method,
+        reference_number
+      )
+      VALUES (
+        $1, CURRENT_DATE, $2, $3, $4, 0, $5, $6
+      )
+      RETURNING *
+      `,
+      [
+        loanId,
+        totalPaid,
+        paidPrincipal,
+        paidInterest,
+        paymentMethod || "CASH",
+        referenceNumber || "LOAN_CLOSURE",
+      ]
+    );
+
+    const payment = payRes.rows[0];
+
+    // 4. Update Global Cash Ledger
+    await createLedgerEntry(client, {
+      type: "AUTO_COLLECTION",
+      amount: totalPaid,
+      direction: "CREDIT",
+      sourceModule: "AUTO",
+      referenceType: "LOAN_CLOSURE",
+      referenceId: payment.id,
+      notes: `Early Closure Payment for Loan ${loanId}`,
+    });
+
+    await client.query("COMMIT");
+
+    return res.status(200).json({
+      success: true,
+      message: "Loan closed successfully",
+      data: payment,
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error closing loan early:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   } finally {
     client.release();
   }

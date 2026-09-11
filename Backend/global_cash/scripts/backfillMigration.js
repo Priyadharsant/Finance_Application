@@ -1,3 +1,4 @@
+
 import { pool } from "../../autoFinance/config/db.js";
 import { createContribution } from "../services/partnerCapital.service.js";
 import { createLedgerEntry } from "../services/globalCash.service.js";

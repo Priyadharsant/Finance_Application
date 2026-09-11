@@ -1,6 +1,30 @@
 import { pool } from "../config/db.js";
-import { validateAndDisburseFunds } from "../../global_cash/services/globalCash.service.js";
+import { validateAndDisburseFunds, createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
 import crypto from "crypto";
+
+export function addMonthsSafe(baseDate, months) {
+  let y, m, d;
+  if (typeof baseDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(baseDate)) {
+    const parts = baseDate.slice(0, 10).split('-').map(Number);
+    y = parts[0];
+    m = parts[1] - 1;
+    d = parts[2];
+  } else {
+    const dt = new Date(baseDate);
+    y = dt.getFullYear();
+    m = dt.getMonth();
+    d = dt.getDate();
+  }
+
+  const targetMonthTotal = m + months;
+  const targetYear = y + Math.floor(targetMonthTotal / 12);
+  const targetMonth = ((targetMonthTotal % 12) + 12) % 12;
+  const maxDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const targetDay = Math.min(d, maxDays);
+
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${targetYear}-${pad(targetMonth + 1)}-${pad(targetDay)}`;
+}
 
 export async function createLoanWithVehicle(data) {
   const client = await pool.connect();
@@ -35,12 +59,12 @@ export async function createLoanWithVehicle(data) {
       registrationNumber,
       chassisNumber,
       engineNumber,
-      insuranceDetails
+      insuranceDetails,
+      incomeDue, documentFee, hirePurchase, taxAmount, insurance, insuranceFine, greenTax, fine, nationalTax, permit, brokerageCustomer, brokerageHand
     } = data;
 
-    const start = new Date(startDate || Date.now());
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + parseInt(tenureMonths));
+    const startStr = startDate ? startDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const endStr = addMonthsSafe(startStr, parseInt(tenureMonths || 12));
 
     // 0. Create Customer Inline if no customerId is provided
     let finalCustomerId = customerId;
@@ -66,15 +90,37 @@ export async function createLoanWithVehicle(data) {
       throw new Error("Customer ID or Customer details (First Name, Last Name) are required");
     }
 
-    // Ensure interest_type column exists
+    // Ensure columns exist and autofinance_expenses table exists
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';`);
+    await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS fees_details JSONB DEFAULT '{}'::jsonb;`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS autofinance_expenses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        loan_id UUID NULL,
+        expense_date DATE NOT NULL,
+        amount NUMERIC(14,2) NOT NULL CHECK(amount > 0),
+        expense_type VARCHAR(100) DEFAULT 'BROKERAGE_HAND',
+        description TEXT NOT NULL,
+        created_by UUID NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE OR REPLACE VIEW expenses AS SELECT * FROM autofinance_expenses;
+    `);
+
+    const feesDetailsObj = {
+      incomeDue: Number(incomeDue||0), documentFee: Number(documentFee||0), hirePurchase: Number(hirePurchase||0),
+      taxAmount: Number(taxAmount||0), insurance: Number(insurance||0), insuranceFine: Number(insuranceFine||0),
+      greenTax: Number(greenTax||0), fine: Number(fine||0), nationalTax: Number(nationalTax||0),
+      permit: Number(permit||0), brokerageCustomer: Number(brokerageCustomer||0), brokerageHand: Number(brokerageHand||0)
+    };
 
     // 1. Insert Loan
     const loanQuery = `
       INSERT INTO autofinance_loans (
-        customer_id, loan_type_id, interest_type, loan_amount, interest_rate, tenure_months, start_date, end_date, status
+        customer_id, loan_type_id, interest_type, loan_amount, interest_rate, tenure_months, start_date, end_date, status, fees_details
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE', $9)
       RETURNING *;
     `;
     const loanRes = await client.query(loanQuery, [
@@ -84,20 +130,47 @@ export async function createLoanWithVehicle(data) {
       loanAmount,
       interestRate,
       tenureMonths,
-      start.toISOString().slice(0, 10),
-      end.toISOString().slice(0, 10)
+      startStr,
+      endStr,
+      feesDetailsObj
     ]);
     const loan = loanRes.rows[0];
 
-    // Global Cash Ledger Integration
+    const totalDeductions = feesDetailsObj.incomeDue + feesDetailsObj.documentFee + feesDetailsObj.hirePurchase + feesDetailsObj.taxAmount + feesDetailsObj.insurance + feesDetailsObj.insuranceFine + feesDetailsObj.greenTax + feesDetailsObj.fine + feesDetailsObj.nationalTax + feesDetailsObj.permit + feesDetailsObj.brokerageCustomer;
+    const inHandAmount = Number(loanAmount) - totalDeductions;
+
+    // Global Cash Ledger Integration (Disburse in-hand amount)
     await validateAndDisburseFunds(client, {
       module: 'AUTO',
-      amount: loanAmount,
-      effectiveDate: start.toISOString().slice(0, 10),
+      amount: inHandAmount,
+      effectiveDate: startStr,
       referenceType: 'AUTO_LOAN',
       referenceId: loan.id,
-      notes: `Auto Loan Disbursement for Customer ${customerId}`
+      notes: `Auto Loan Disbursement (In-Hand) for Customer ${finalCustomerId}`
     });
+
+    // Record expense for brokerage provided by hand into autofinance_expenses table & Global Cash Ledger
+    if (feesDetailsObj.brokerageHand > 0) {
+      try {
+        await client.query(`
+          INSERT INTO autofinance_expenses (loan_id, expense_date, amount, expense_type, description, created_by)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [loan.id, startStr, feesDetailsObj.brokerageHand, 'BROKERAGE_HAND', `Brokerage Hand for Auto Loan ${loan.id}`, null]);
+
+        await createLedgerEntry(client, {
+          effectiveDate: startStr,
+          type: 'BUSINESS_EXPENSE',
+          amount: feesDetailsObj.brokerageHand,
+          direction: 'DEBIT',
+          sourceModule: 'AUTO',
+          referenceType: 'AUTO_BROKERAGE_HAND',
+          referenceId: loan.id,
+          notes: `Brokerage Hand Expense for Auto Loan ${loan.id}`
+        });
+      } catch(e) {
+        console.error("Failed to insert brokerage expense or ledger entry", e);
+      }
+    }
 
     // 2. Insert Vehicle (if vehicle details provided)
     let vehicle = null;
@@ -131,16 +204,28 @@ export async function createLoanWithVehicle(data) {
 
     if (method === 'REDUCING') {
       const r = (ratePercent / 100) / 12;
-      const emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+      let emi = 0;
+      if (r > 0) {
+        emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+      } else {
+        emi = P / n;
+      }
       let balance = P;
 
       for (let i = 1; i <= n; i++) {
-        const dueDate = new Date(start);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        const dueDateStr = addMonthsSafe(startStr, i);
 
-        const interestComp = balance * r;
-        const principalComp = emi - interestComp;
+        let interestComp = r > 0 ? balance * r : 0;
+        let principalComp = emi - interestComp;
+
+        // Absorb minor rounding discrepancy on final installment
+        if (i === n) {
+          principalComp = balance;
+          emi = principalComp + interestComp;
+        }
+
         balance -= principalComp;
+        if (balance < 0) balance = 0;
 
         await client.query(`
           INSERT INTO autofinance_emi_schedules (
@@ -150,7 +235,7 @@ export async function createLoanWithVehicle(data) {
         `, [
           loan.id,
           i,
-          dueDate.toISOString().slice(0, 10),
+          dueDateStr,
           principalComp.toFixed(2),
           interestComp.toFixed(2),
           emi.toFixed(2)
@@ -164,8 +249,7 @@ export async function createLoanWithVehicle(data) {
       const monthlyEMI = monthlyPrincipal + monthlyInterest;
 
       for (let i = 1; i <= n; i++) {
-        const dueDate = new Date(start);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        const dueDateStr = addMonthsSafe(startStr, i);
 
         await client.query(`
           INSERT INTO autofinance_emi_schedules (
@@ -175,7 +259,7 @@ export async function createLoanWithVehicle(data) {
         `, [
           loan.id,
           i,
-          dueDate.toISOString().slice(0, 10),
+          dueDateStr,
           monthlyPrincipal.toFixed(2),
           monthlyInterest.toFixed(2),
           monthlyEMI.toFixed(2)
@@ -197,18 +281,22 @@ export async function getAllLoans() {
   const query = `
     SELECT 
       l.*,
+      CASE 
+        WHEN l.status = 'COMPLETED' OR (COALESCE(s.total_dues_count, 0) > 0 AND COALESCE(s.pending_dues_count, 0) = 0) THEN 'COMPLETED'
+        ELSE l.status
+      END as status,
       c.first_name, c.last_name, c.phone, c.customer_code,
       lt.name as loan_type_name,
       v.vehicle_type, v.make, v.model, v.registration_number,
       COALESCE(p.total_paid, 0) as total_paid,
-      COALESCE(s.pending_dues_count, 0) as pending_dues_count,
+      COALESCE(CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE s.pending_dues_count END, 0) as pending_dues_count,
       COALESCE(s.paid_dues_count, 0) as paid_dues_count,
       COALESCE(s.total_dues_count, l.tenure_months) as total_dues_count,
-      COALESCE(s.overdue_dues_count, 0) as overdue_dues_count,
-      next_emi.next_due_date,
-      next_emi.next_emi_amount,
-      next_emi.next_emi_id,
-      next_emi.next_installment_number
+      COALESCE(CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE s.overdue_dues_count END, 0) as overdue_dues_count,
+      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_due_date END as next_due_date,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_amount END as next_emi_amount,
+      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_emi_id END as next_emi_id,
+      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_installment_number END as next_installment_number
     FROM autofinance_loans l
     JOIN autofinance_customers c ON l.customer_id = c.id
     LEFT JOIN autofinance_loan_types lt ON l.loan_type_id = lt.id
@@ -221,10 +309,10 @@ export async function getAllLoans() {
     LEFT JOIN (
       SELECT 
         loan_id,
-        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_dues_count,
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END) as pending_dues_count,
         COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_dues_count,
         COUNT(id) as total_dues_count,
-        COUNT(CASE WHEN status = 'PENDING' AND due_date < CURRENT_DATE THEN 1 END) as overdue_dues_count
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date < CURRENT_DATE THEN 1 END) as overdue_dues_count
       FROM autofinance_emi_schedules
       GROUP BY loan_id
     ) s ON l.id = s.loan_id
@@ -232,11 +320,11 @@ export async function getAllLoans() {
       SELECT 
         loan_id,
         MIN(due_date) as next_due_date,
-        (array_agg(total_emi ORDER BY due_date ASC))[1] as next_emi_amount,
+        (array_agg(GREATEST(0, total_emi - COALESCE(collected_amount, 0)) ORDER BY due_date ASC))[1] as next_emi_amount,
         (array_agg(id ORDER BY due_date ASC))[1] as next_emi_id,
         (array_agg(installment_number ORDER BY due_date ASC))[1] as next_installment_number
       FROM autofinance_emi_schedules
-      WHERE status = 'PENDING'
+      WHERE status IN ('PENDING', 'PARTIAL')
       GROUP BY loan_id
     ) next_emi ON l.id = next_emi.loan_id
     ORDER BY l.created_at DESC;
@@ -317,6 +405,7 @@ export async function getDueInstallments() {
   const query = `
     SELECT 
       s.*,
+      GREATEST(0, s.total_emi - COALESCE(s.collected_amount, 0)) AS remaining_emi_amount,
       l.customer_id, l.loan_amount, l.tenure_months,
       c.first_name, c.last_name, c.phone, c.customer_code,
       v.make, v.model, v.registration_number, v.vehicle_type,
@@ -333,16 +422,16 @@ export async function getDueInstallments() {
     LEFT JOIN (
       SELECT 
         loan_id,
-        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_dues_count,
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END) as pending_dues_count,
         COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_dues_count,
         COUNT(id) as total_dues_count,
-        COUNT(CASE WHEN status = 'PENDING' AND due_date <= CURRENT_DATE THEN 1 END) as outstanding_due_count,
-        COUNT(CASE WHEN status = 'PENDING' AND due_date < CURRENT_DATE THEN 1 END) as overdue_due_count,
-        COUNT(CASE WHEN status = 'PENDING' AND due_date = CURRENT_DATE THEN 1 END) as today_due_count
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date <= CURRENT_DATE THEN 1 END) as outstanding_due_count,
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date < CURRENT_DATE THEN 1 END) as overdue_due_count,
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date = CURRENT_DATE THEN 1 END) as today_due_count
       FROM autofinance_emi_schedules
       GROUP BY loan_id
     ) ls ON s.loan_id = ls.loan_id
-    WHERE s.status = 'PENDING' AND s.due_date <= CURRENT_DATE
+    WHERE s.status IN ('PENDING', 'PARTIAL') AND s.due_date <= CURRENT_DATE AND l.status = 'ACTIVE'
     ORDER BY s.due_date ASC, s.installment_number ASC;
   `;
   const res = await pool.query(query);
@@ -350,42 +439,53 @@ export async function getDueInstallments() {
 }
 
 export async function getAutoFinanceOverview() {
+  // 1. Isolated counts/sums to completely eliminate multi-table Cartesian multiplication
   const query = `
     SELECT
-      COUNT(DISTINCT l.id) as total_loans,
-      COALESCE(SUM(l.loan_amount), 0) as total_disbursed,
-      COUNT(DISTINCT c.id) as total_customers,
-      COALESCE(SUM(p.amount_paid), 0) as total_collected,
-      COUNT(DISTINCT v.id) as total_vehicles,
-      COUNT(DISTINCT CASE WHEN v.vehicle_type = 'TWO_WHEELER' THEN v.id END) as two_wheeler_count,
-      COUNT(DISTINCT CASE WHEN v.vehicle_type = 'CAR' THEN v.id END) as car_count,
-      COUNT(DISTINCT CASE WHEN v.vehicle_type = 'COMMERCIAL' THEN v.id END) as commercial_count,
-      COUNT(DISTINCT CASE WHEN l.status = 'ACTIVE' THEN l.id END) as active_loans,
-      COUNT(DISTINCT CASE WHEN l.status = 'COMPLETED' THEN l.id END) as completed_loans
-    FROM autofinance_loans l
-    LEFT JOIN autofinance_customers c ON l.customer_id = c.id
-    LEFT JOIN autofinance_payments p ON l.id = p.loan_id
-    LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id;
+      (SELECT COUNT(*) FROM autofinance_loans) as total_loans,
+      (SELECT COALESCE(SUM(loan_amount), 0) FROM autofinance_loans) as total_disbursed,
+      (SELECT COUNT(*) FROM autofinance_customers) as total_customers,
+      (SELECT COALESCE(SUM(amount_paid), 0) FROM autofinance_payments) as total_collected,
+      (SELECT COUNT(*) FROM autofinance_vehicles) as total_vehicles,
+      (SELECT COUNT(*) FROM autofinance_vehicles WHERE vehicle_type = 'TWO_WHEELER') as two_wheeler_count,
+      (SELECT COUNT(*) FROM autofinance_vehicles WHERE vehicle_type = 'CAR') as car_count,
+      (SELECT COUNT(*) FROM autofinance_vehicles WHERE vehicle_type = 'COMMERCIAL') as commercial_count,
+      (SELECT COUNT(*) FROM autofinance_loans WHERE status = 'ACTIVE') as active_loans,
+      (SELECT COUNT(*) FROM autofinance_loans WHERE status = 'COMPLETED') as completed_loans;
   `;
   const res = await pool.query(query);
   const row = res.rows[0] || {};
 
-  // Calculate schedule totals for expected interest, total payable, today due & overdue
+  // 2. Schedule totals for active loans (including PENDING and PARTIAL)
   const schedQuery = `
     SELECT 
-      COALESCE(SUM(total_emi), 0) as total_expected_emi,
-      COALESCE(SUM(interest_component), 0) as total_expected_interest,
-      COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_installments,
-      COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_installments,
+      COALESCE(SUM(s.total_emi), 0) as total_expected_emi,
+      COALESCE(SUM(s.interest_component), 0) as total_expected_interest,
+      COUNT(CASE WHEN s.status IN ('PENDING', 'PARTIAL') THEN 1 END) as pending_installments,
+      COUNT(CASE WHEN s.status = 'PAID' THEN 1 END) as paid_installments,
       
-      -- TODAY DUE
-      COALESCE(SUM(CASE WHEN due_date = CURRENT_DATE AND status = 'PENDING' THEN total_emi ELSE 0 END), 0) as today_due_amount,
-      COUNT(CASE WHEN due_date = CURRENT_DATE AND status = 'PENDING' THEN 1 END) as today_due_count,
+      -- TODAY DUE (Remaining balance on pending/partial due today)
+      COALESCE(SUM(
+        CASE 
+          WHEN s.due_date = CURRENT_DATE AND s.status IN ('PENDING', 'PARTIAL') 
+          THEN GREATEST(0, s.total_emi - COALESCE(s.collected_amount, 0)) 
+          ELSE 0 
+        END
+      ), 0) as today_due_amount,
+      COUNT(CASE WHEN s.due_date = CURRENT_DATE AND s.status IN ('PENDING', 'PARTIAL') THEN 1 END) as today_due_count,
       
-      -- OUTSTANDING OVERDUE (DUE ON OR BEFORE TODAY)
-      COALESCE(SUM(CASE WHEN due_date <= CURRENT_DATE AND status = 'PENDING' THEN total_emi ELSE 0 END), 0) as overdue_amount,
-      COUNT(CASE WHEN due_date <= CURRENT_DATE AND status = 'PENDING' THEN 1 END) as overdue_count
-    FROM autofinance_emi_schedules;
+      -- OUTSTANDING OVERDUE (Remaining balance on pending/partial due on or before today)
+      COALESCE(SUM(
+        CASE 
+          WHEN s.due_date <= CURRENT_DATE AND s.status IN ('PENDING', 'PARTIAL') 
+          THEN GREATEST(0, s.total_emi - COALESCE(s.collected_amount, 0)) 
+          ELSE 0 
+        END
+      ), 0) as overdue_amount,
+      COUNT(CASE WHEN s.due_date <= CURRENT_DATE AND s.status IN ('PENDING', 'PARTIAL') THEN 1 END) as overdue_count
+    FROM autofinance_emi_schedules s
+    JOIN autofinance_loans l ON s.loan_id = l.id
+    WHERE l.status = 'ACTIVE';
   `;
   const schedRes = await pool.query(schedQuery);
   const schedRow = schedRes.rows[0] || {};
@@ -438,12 +538,10 @@ export async function rescheduleFutureEMIs(client, loanId) {
   
   let totalPrincipalPaid = 0;
   let totalInterestPaid = 0;
-  
   let unpaidPrincipalInPartials = 0;
   let unpaidInterestInPartials = 0;
-  
   const pendingSchedules = [];
-  
+
   for (const s of schedules) {
     const pPaid = Number(s.paid_principal || 0);
     const iPaid = Number(s.paid_interest || 0);
@@ -461,6 +559,27 @@ export async function rescheduleFutureEMIs(client, loanId) {
       pendingSchedules.push(s);
     }
   }
+
+  // Automatic Loan Completion Check:
+  // If no schedules are pending/partial OR if total principal paid has covered the original loan amount
+  const hasUnsettled = schedules.some(s => s.status === 'PENDING' || s.status === 'PARTIAL');
+  const principalRemaining = P_initial - totalPrincipalPaid;
+
+  if (!hasUnsettled || principalRemaining <= 0.01) {
+    if (principalRemaining <= 0.01) {
+      await client.query(
+        `UPDATE autofinance_emi_schedules 
+         SET principal_component = 0, interest_component = 0, total_emi = 0, status = 'CANCELLED'
+         WHERE loan_id = $1 AND status IN ('PENDING', 'PARTIAL')`,
+        [loanId]
+      );
+    }
+    await client.query(
+      `UPDATE autofinance_loans SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+      [loanId]
+    );
+    return;
+  }
   
   const n_pending = pendingSchedules.length;
   if (n_pending === 0) return; // Nothing to reschedule
@@ -470,18 +589,22 @@ export async function rescheduleFutureEMIs(client, loanId) {
 
   // 3. Recalculate & Update Pending Schedules
   if (isReducing) {
-    const r = ratePercent / 100 / 12;
+    const r = (ratePercent / 100) / 12;
     let newEmi = 0;
     
     if (principalToDistribute > 0) {
-      newEmi = (principalToDistribute * r * Math.pow(1 + r, n_pending)) / (Math.pow(1 + r, n_pending) - 1);
+      if (r > 0) {
+        newEmi = (principalToDistribute * r * Math.pow(1 + r, n_pending)) / (Math.pow(1 + r, n_pending) - 1);
+      } else {
+        newEmi = principalToDistribute / n_pending;
+      }
     }
     
     let currentBalance = principalToDistribute;
     
     for (let i = 0; i < n_pending; i++) {
       const pending = pendingSchedules[i];
-      let interestComp = currentBalance * r;
+      let interestComp = r > 0 ? currentBalance * r : 0;
       let principalComp = principalToDistribute > 0 ? newEmi - interestComp : 0;
       
       // Handle the final installment to absorb rounding differences
@@ -490,6 +613,7 @@ export async function rescheduleFutureEMIs(client, loanId) {
       }
       
       currentBalance -= principalComp;
+      if (currentBalance < 0) currentBalance = 0;
       const totalEmi = principalComp + interestComp;
       
       await client.query(
@@ -537,19 +661,20 @@ export async function rescheduleFutureEMIs(client, loanId) {
     }
   }
 
-  // 4. Check for Loan Completion
+  // 4. Check for Loan Completion if all principal has been distributed/absorbed
   if (principalToDistribute <= 0) {
-    // Zero out any remaining pending schedules just to be safe
     await client.query(
       `UPDATE autofinance_emi_schedules 
        SET principal_component = 0, interest_component = 0, total_emi = 0, status = 'CANCELLED'
-       WHERE loan_id = $1 AND status = 'PENDING'`,
+       WHERE loan_id = $1 AND status IN ('PENDING', 'PARTIAL')`,
       [loanId]
     );
 
     await client.query(
-      `UPDATE autofinance_loans SET status = 'COMPLETED' WHERE id = $1`,
+      `UPDATE autofinance_loans SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
       [loanId]
     );
   }
 }
+
+

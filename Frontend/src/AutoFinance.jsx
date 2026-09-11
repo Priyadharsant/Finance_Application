@@ -10,6 +10,7 @@ import {
   Clock3,
   CircleDollarSign,
   IdCard,
+  Landmark,
   Mail,
   MapPin,
   Phone,
@@ -88,6 +89,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [showAddLoanType, setShowAddLoanType] = useState(false);
   const [showCreateLoan, setShowCreateLoan] = useState(false);
   const [payEmiModal, setPayEmiModal] = useState(null);
+  const [closeLoanModal, setCloseLoanModal] = useState(null);
 
   // Form states
   const [typeForm, setTypeForm] = useState({
@@ -130,6 +132,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   // Filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [loanTabFilter, setLoanTabFilter] = useState("ALL");
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState("ALL");
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "desc",
@@ -216,6 +220,18 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         registrationNumber: "",
         chassisNumber: "",
         engineNumber: "",
+        incomeDue: 0,
+        documentFee: 0,
+        hirePurchase: 0,
+        taxAmount: 0,
+        insurance: 0,
+        insuranceFine: 0,
+        greenTax: 0,
+        fine: 0,
+        nationalTax: 0,
+        permit: 0,
+        brokerageCustomer: 0,
+        brokerageHand: 0,
       });
       loadData();
     } catch (err) {
@@ -244,6 +260,53 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         paymentMethod: "CASH",
         referenceNumber: "",
       });
+      if (selectedLoan) {
+        const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
+        if (details.success) setSelectedLoan(details.data);
+      }
+      loadData();
+    } catch (err) {
+      setNotice?.({ type: "error", text: err.message });
+    }
+  };
+
+  const handleOpenCloseLoan = (loanDetails) => {
+    const principal = Number(loanDetails.loan.loan_amount || 0);
+    // Include both scheduled principal paid and extra principal paid
+    const paidPrincipalRes = (loanDetails.schedules || []).reduce(
+      (acc, s) => acc + Number(s.paid_principal || 0) + Number(s.extra_principal_paid || 0),
+      0
+    );
+    const remainingPrincipal = Math.max(0, principal - paidPrincipalRes);
+
+    setCloseLoanModal({
+      loanId: loanDetails.loan.id,
+      principalAmount: remainingPrincipal,
+      interestPercent: 0,
+      paymentMethod: "CASH",
+      referenceNumber: "",
+    });
+  };
+
+  const submitCloseLoan = async (e) => {
+    e.preventDefault();
+    if (!closeLoanModal) return;
+    try {
+      const p = Number(closeLoanModal.principalAmount || 0);
+      const pct = Number(closeLoanModal.interestPercent || 0);
+      const interestAmt = Math.round((p * pct) / 100);
+
+      await apiCall(`/loans/${closeLoanModal.loanId}/close`, {
+        method: "POST",
+        body: JSON.stringify({
+          principalAmount: p,
+          interestAmount: interestAmt,
+          paymentMethod: closeLoanModal.paymentMethod,
+          referenceNumber: closeLoanModal.referenceNumber,
+        }),
+      });
+      setNotice?.({ type: "success", text: "Loan successfully closed early!" });
+      setCloseLoanModal(null);
       if (selectedLoan) {
         const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
         if (details.success) setSelectedLoan(details.data);
@@ -312,6 +375,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
     const totalCollected = loan.schedules.reduce((acc, s) => acc + parseFloat(s.total_cash_collected || s.collected_amount || 0), 0);
 
+    const fees = loan.loan.fees_details || {};
+    const totalDeductions = Number(fees.incomeDue || 0) + Number(fees.documentFee || 0) + Number(fees.hirePurchase || 0) +
+      Number(fees.taxAmount || 0) + Number(fees.insurance || 0) + Number(fees.insuranceFine || 0) +
+      Number(fees.greenTax || 0) + Number(fees.fine || 0) + Number(fees.nationalTax || 0) +
+      Number(fees.permit || 0) + Number(fees.brokerageCustomer || 0);
+
     // Sheet 1: Details
     const detailsData = [
       { "Category": "Customer Name", "Value": `${loan.loan.first_name} ${loan.loan.last_name}` },
@@ -323,6 +392,19 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       { "Category": "Chassis No", "Value": loan.loan.chassis_number || "N/A" },
       { "Category": "Engine No", "Value": loan.loan.engine_number || "N/A" },
       { "Category": "Loan Amount", "Value": Number(loan.loan.loan_amount) },
+      { "Category": "Income Due", "Value": Number(fees.incomeDue || 0) },
+      { "Category": "Document Fee", "Value": Number(fees.documentFee || 0) },
+      { "Category": "Hire Purchase", "Value": Number(fees.hirePurchase || 0) },
+      { "Category": "Tax Amount", "Value": Number(fees.taxAmount || 0) },
+      { "Category": "Insurance", "Value": Number(fees.insurance || 0) },
+      { "Category": "Insurance Fine", "Value": Number(fees.insuranceFine || 0) },
+      { "Category": "Green Tax", "Value": Number(fees.greenTax || 0) },
+      { "Category": "Fine", "Value": Number(fees.fine || 0) },
+      { "Category": "National Tax", "Value": Number(fees.nationalTax || 0) },
+      { "Category": "Permit", "Value": Number(fees.permit || 0) },
+      { "Category": "Brokerage (Customer)", "Value": Number(fees.brokerageCustomer || 0) },
+      { "Category": "Brokerage (By Hand)", "Value": Number(fees.brokerageHand || 0) },
+      { "Category": "In-Hand Amount", "Value": Number(loan.loan.loan_amount) - totalDeductions },
       { "Category": "Interest Rate (%)", "Value": Number(loan.loan.interest_rate) },
       { "Category": "Tenure (Months)", "Value": Number(loan.loan.tenure_months) },
       { "Category": "Start Date", "Value": dateLabel(loan.loan.start_date) },
@@ -371,7 +453,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     XLSX.utils.book_append_sheet(workbook, ws1, "Customer Details");
     XLSX.utils.book_append_sheet(workbook, ws2, "EMI Schedule");
     XLSX.utils.book_append_sheet(workbook, ws3, "Payment History");
-    
+
     XLSX.writeFile(workbook, `Full_Report_${loan.loan.customer_code || "Loan"}_${loan.loan.registration_number || "Vehicle"}.xlsx`);
   };
 
@@ -417,8 +499,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     );
   }, [customers, search]);
 
-  const filteredLoans = useMemo(() => {
+  // Dashboard strictly shows ACTIVE loans only (no completed/settled loans)
+  const dashboardLoans = useMemo(() => {
     let result = loans.filter((l) => {
+      // Must be ACTIVE and have pending dues
+      if (l.status !== "ACTIVE" || Number(l.pending_dues_count ?? 1) <= 0) return false;
+
       const matchesSearch =
         !search ||
         `${l.first_name} ${l.last_name}`
@@ -475,6 +561,44 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
     return result;
   }, [loans, search, statusFilter, sortConfig]);
+
+  // Vehicle Loans directory: show ACTIVE loans first, then COMPLETED loans
+  const vehiclePageLoans = useMemo(() => {
+    let list = loans.filter((l) => {
+      const matchesSearch =
+        !search ||
+        `${l.first_name} ${l.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+        (l.customer_code && l.customer_code.toLowerCase().includes(search.toLowerCase())) ||
+        (l.registration_number && l.registration_number.toLowerCase().includes(search.toLowerCase())) ||
+        (l.make && l.make.toLowerCase().includes(search.toLowerCase())) ||
+        (l.model && l.model.toLowerCase().includes(search.toLowerCase()));
+
+      if (!matchesSearch) return false;
+
+      if (loanTabFilter === "ACTIVE" && l.status !== "ACTIVE") return false;
+      if (loanTabFilter === "COMPLETED" && l.status !== "COMPLETED") return false;
+
+      if (vehicleTypeFilter !== "ALL" && l.vehicle_type !== vehicleTypeFilter) return false;
+
+      return true;
+    });
+
+    list.sort((a, b) => {
+      // 1. Show ACTIVE loans first, then COMPLETED loans
+      const isActiveA = a.status === "ACTIVE" ? 1 : 0;
+      const isActiveB = b.status === "ACTIVE" ? 1 : 0;
+      if (isActiveA !== isActiveB) {
+        return isActiveB - isActiveA; // Active (1) first, Completed (0) second
+      }
+
+      // 2. Within each group, sort newest first
+      const dateA = new Date(a.created_at || a.start_date || 0).getTime();
+      const dateB = new Date(b.created_at || b.start_date || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return list;
+  }, [loans, search, loanTabFilter, vehicleTypeFilter]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -634,15 +758,14 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               }}
             >
               <div>
-                <span className="overline" style={{ color: "#d97706" }}>
-                  COMPREHENSIVE LOAN PORTFOLIO & STATUS
+                <span className="overline" style={{ color: "#059669" }}>
+                  ACTIVE VEHICLE LOANS &amp; DUE TRACKING
                 </span>
                 <h3 style={{ marginTop: "2px" }}>
-                  <Zap size={17} /> Vehicle Loans & Due Tracking
+                  <Zap size={17} /> Active Vehicle Loans &amp; Due Tracking
                 </h3>
                 <p>
-                  Overview of all vehicle loans, payment progress, and
-                  actionable dues.
+                  Active ongoing vehicle loans, payment progress, and actionable dues.
                 </p>
               </div>
               <div
@@ -664,10 +787,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                     marginRight: "4px",
                   }}
                 >
-                  <option value="ALL">All Loans</option>
-                  <option value="OVERDUE">Overdue</option>
+                  <option value="ALL">All Active Loans</option>
+                  <option value="OVERDUE">Overdue Dues</option>
                   <option value="DUE_TODAY">Due Today</option>
-                  <option value="UPCOMING">Upcoming / Up to Date</option>
+                  <option value="UPCOMING">Upcoming Dues</option>
                 </select>
                 <span
                   className="tag"
@@ -742,7 +865,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredLoans.map((l) => {
+                {dashboardLoans.map((l) => {
                   const todayStr = new Date().toISOString().slice(0, 10);
                   const dueStr = l.next_due_date
                     ? new Date(l.next_due_date).toISOString().slice(0, 10)
@@ -758,8 +881,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                     (d) => String(d.loan_id) === String(l.id),
                   );
                   const monthlyDueAmount = dashDue
-                    ? dashDue.total_emi
-                    : l.next_emi_amount || 0;
+                    ? (dashDue.remaining_emi_amount !== undefined ? Number(dashDue.remaining_emi_amount) : Math.max(0, Number(dashDue.total_emi || 0) - Number(dashDue.collected_amount || 0)))
+                    : Number(l.next_emi_amount || 0);
                   const instNo = dashDue
                     ? dashDue.installment_number
                     : l.next_installment_number || "?";
@@ -944,20 +1067,20 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                             Collect EMI
                           </button>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <span style={{ fontSize: "12px", color: "#047857", fontWeight: "bold" }}>
-                              Collected: {money(l.total_paid)}
-                            </span>
-                            <button
-                              className="payButton"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openLoanDetails(l.id);
-                              }}
-                            >
-                              Details
-                            </button>
-                          </div>
+                          <button
+                            className="payButton"
+                            style={{
+                              background: "#f1f5f9",
+                              color: "#0f172a",
+                              borderColor: "#cbd5e1",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openLoanDetails(l.id);
+                            }}
+                          >
+                            Details
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -965,14 +1088,13 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                 })}
               </tbody>
             </table>
-            {!loans.length && (
+            {!dashboardLoans.length && (
               <div className="empty">
                 <div>
                   <CarFront size={28} />
                 </div>
                 <b>
-                  No vehicle loans registered yet. Click "+ New Vehicle Loan"
-                  above.
+                  No active vehicle loans found matching criteria. Click "+ New Vehicle Loan" above.
                 </b>
               </div>
             )}
@@ -1137,11 +1259,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         <section className="content">
           <div className="intro">
             <div>
-              <span className="overline autoBadgeTag">VEHICLE LOANS</span>
-              <h2>Vehicle Loans & Assets</h2>
+              <span className="overline autoBadgeTag">VEHICLE LOANS PORTFOLIO</span>
+              <h2>Vehicle Loans & Registered Assets</h2>
               <p>
-                Browse loan agreements linked with vehicle registrations,
-                chassis numbers, and EMIs.
+                Comprehensive directory of all active and completed vehicle loan agreements, registered vehicles, and repayment status.
               </p>
             </div>
             <button
@@ -1152,12 +1273,107 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
             </button>
           </div>
 
-          <div className="filterBar">
-            <input
-              placeholder="Search by vehicle reg no, make, model, or customer..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          {/* QUICK PORTFOLIO SUMMARY CARDS */}
+          <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "22px" }}>
+            <div className="metric autoMetric blue">
+              <span>Total Disbursed</span>
+              <b>{money(overview.total_disbursed || 0)}</b>
+              <small style={{ color: "#64748b", fontSize: "11.5px", display: "block", marginTop: "4px" }}>{loans.length} Total Loans</small>
+            </div>
+            <div className="metric autoMetric green">
+              <span>Active Loans</span>
+              <b>{loans.filter(l => l.status === 'ACTIVE').length}</b>
+              <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>Ongoing Repayments</small>
+            </div>
+            <div className="metric autoMetric teal">
+              <span>Completed Loans</span>
+              <b>{loans.filter(l => l.status === 'COMPLETED').length}</b>
+              <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>Fully Settled</small>
+            </div>
+            <div className="metric autoMetric orange">
+              <span>Total EMI Collected</span>
+              <b>{money(overview.total_collected || 0)}</b>
+              <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>{overview.recovery_rate || "0"}% Recovered</small>
+            </div>
+          </div>
+
+          {/* ORGANIZED FILTER BAR: TABS + SEARCH + VEHICLE TYPE */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", padding: "4px", borderRadius: "10px" }}>
+              <button
+                type="button"
+                style={{
+                  padding: "7px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 700,
+                  fontSize: "12.5px",
+                  cursor: "pointer",
+                  background: loanTabFilter === "ALL" ? "#ffffff" : "transparent",
+                  color: loanTabFilter === "ALL" ? "#0f172a" : "#64748b",
+                  boxShadow: loanTabFilter === "ALL" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s ease"
+                }}
+                onClick={() => setLoanTabFilter("ALL")}
+              >
+                All Loans ({loans.length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: "7px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 700,
+                  fontSize: "12.5px",
+                  cursor: "pointer",
+                  background: loanTabFilter === "ACTIVE" ? "#ffffff" : "transparent",
+                  color: loanTabFilter === "ACTIVE" ? "#059669" : "#64748b",
+                  boxShadow: loanTabFilter === "ACTIVE" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s ease"
+                }}
+                onClick={() => setLoanTabFilter("ACTIVE")}
+              >
+                Active ({loans.filter(l => l.status === "ACTIVE").length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: "7px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 700,
+                  fontSize: "12.5px",
+                  cursor: "pointer",
+                  background: loanTabFilter === "COMPLETED" ? "#ffffff" : "transparent",
+                  color: loanTabFilter === "COMPLETED" ? "#2563eb" : "#64748b",
+                  boxShadow: loanTabFilter === "COMPLETED" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s ease"
+                }}
+                onClick={() => setLoanTabFilter("COMPLETED")}
+              >
+                Completed ({loans.filter(l => l.status === "COMPLETED").length})
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flex: 1, minWidth: "280px", maxWidth: "560px" }}>
+              <input
+                placeholder="Search by customer, phone, vehicle, or reg no..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ flex: 1, padding: "8px 14px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", outline: "none" }}
+              />
+              <select
+                value={vehicleTypeFilter}
+                onChange={(e) => setVehicleTypeFilter(e.target.value)}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", background: "#ffffff", fontWeight: 600, color: "#334155" }}
+              >
+                <option value="ALL">All Vehicle Types</option>
+                <option value="TWO_WHEELER">Two Wheeler</option>
+                <option value="CAR">Car</option>
+                <option value="COMMERCIAL">Commercial</option>
+              </select>
+            </div>
           </div>
 
           <div className="card tableWrap">
@@ -1165,79 +1381,126 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               <thead>
                 <tr>
                   <th>Customer</th>
-                  <th>Loan Amount</th>
-                  <th>Rate</th>
-                  <th>Tenure</th>
-                  <th>Start Date</th>
-                  <th>Total Collected</th>
-                  <th>Pending Dues</th>
+                  <th>Vehicle &amp; Reg No</th>
+                  <th>Loan Details</th>
+                  <th>Collections</th>
                   <th>Status</th>
-                  <th>EMI</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLoans.map((l) => (
+                {vehiclePageLoans.map((l) => (
                   <tr
                     key={l.id}
                     className="clickable"
                     onClick={() => openLoanDetails(l.id)}
                   >
                     <td>
+                      <div className="customerNameCell">
+                        <div>
+                          <b>
+                            {l.first_name} {l.last_name}
+                          </b>
+                          <small>
+                            {l.phone ? (
+                              <PhoneLink phone={l.phone} icon />
+                            ) : (
+                              l.customer_code
+                            )}
+                          </small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
                       <b>
-                        {l.first_name} {l.last_name}
+                        {l.make || "Vehicle"} {l.model}
                       </b>
+                      <small
+                        className="autoRegNo"
+                        style={{ display: "inline-block", marginTop: "3px" }}
+                      >
+                        {l.registration_number || l.vehicle_type}
+                      </small>
                     </td>
                     <td>
                       <b>{money(l.loan_amount)}</b>
+                      <small style={{ display: "block", color: "#64748b", marginTop: "2px" }}>
+                        {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
+                      </small>
                     </td>
-                    <td>{l.interest_rate}%</td>
-                    <td>{l.tenure_months} Mo</td>
-                    <td>{dateLabel(l.start_date)}</td>
-                    <td className="greenText">{money(l.total_paid)}</td>
+                    <td>
+                      <b className="greenText">{money(l.total_paid)}</b>
+                      <small style={{ display: "block", marginTop: "3px" }}>
+                        <span
+                          className="tag"
+                          style={{
+                            fontSize: "10.5px",
+                            padding: "2px 6px",
+                            background:
+                              l.status === "COMPLETED"
+                                ? "#ecfdf5"
+                                : Number(l.pending_dues_count || 0) > 0
+                                  ? "#fff7ed"
+                                  : "#ecfdf5",
+                            color:
+                              l.status === "COMPLETED"
+                                ? "#047857"
+                                : Number(l.pending_dues_count || 0) > 0
+                                  ? "#c2410c"
+                                  : "#047857",
+                            border:
+                              l.status === "COMPLETED"
+                                ? "1px solid #d1fae5"
+                                : Number(l.pending_dues_count || 0) > 0
+                                  ? "1px solid #ffedd5"
+                                  : "1px solid #d1fae5",
+                          }}
+                        >
+                          <Clock3 size={11} style={{ verticalAlign: "middle", marginRight: "2px" }} />
+                          {l.paid_dues_count || 0} / {l.total_dues_count || l.tenure_months} Paid
+                        </span>
+                      </small>
+                    </td>
                     <td>
                       <span
                         className="tag"
                         style={{
-                          background:
-                            Number(l.pending_dues_count || 0) > 0
-                              ? "#fff7ed"
-                              : "#ecfdf5",
-                          color:
-                            Number(l.pending_dues_count || 0) > 0
-                              ? "#c2410c"
-                              : "#047857",
-                          border: "1px solid #ffedd5",
+                          background: l.status === "ACTIVE" ? "#ecfdf5" : "#eff6ff",
+                          color: l.status === "ACTIVE" ? "#047857" : "#1d4ed8",
+                          border: `1px solid ${l.status === "ACTIVE" ? "#d1fae5" : "#bfdbfe"}`,
+                          fontWeight: 700,
                         }}
                       >
-                        <Clock3 size={13} /> {l.pending_dues_count || 0} Dues
-                        Pending ({l.paid_dues_count || 0}/
-                        {l.total_dues_count || l.tenure_months} Paid)
+                        {l.status || "ACTIVE"}
                       </span>
-                    </td>
-                    <td>
-                      <span className="tag" style={{ background: l.status === "ACTIVE" ? "#ecfdf5" : "#f1f5f9", color: l.status === "ACTIVE" ? "#047857" : "#475569", border: `1px solid ${l.status === "ACTIVE" ? "#d1fae5" : "#cbd5e1"}` }}>{l.status || "ACTIVE"}</span>
                     </td>
                     <td>
                       <button
                         className="payButton"
+                        style={{
+                          background: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
+                          borderColor: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
+                          color: "#fff",
+                          fontWeight: 700,
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           openLoanDetails(l.id);
                         }}
                       >
-                        Details & EMI
+                        Details
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!filteredLoans.length && (
+            {!vehiclePageLoans.length && (
               <div className="empty">
                 <div>
                   <CarFront size={28} />
                 </div>
-                <b>No vehicle loans found.</b>
+                <b>No vehicle loans found matching the criteria.</b>
               </div>
             )}
           </div>
@@ -1261,8 +1524,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           <div className="exportBar" style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "20px", alignItems: "center" }}>
             <button className="primary autoBtn" onClick={handleExportTotal}>Export Total Portfolio (Excel)</button>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f1f5f9", padding: "2px 8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
-              <input 
-                type="month" 
+              <input
+                type="month"
                 value={reportMonth}
                 onChange={(e) => setReportMonth(e.target.value)}
                 style={{ border: "none", background: "transparent", outline: "none", fontSize: "14px", cursor: "pointer", color: "#0f172a" }}
@@ -1319,8 +1582,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                     <td>{l.tenure_months} Mo</td>
                     <td className="greenText">{money(l.total_paid)}</td>
                     <td>
-                      <button 
-                        className="payButton" 
+                      <button
+                        className="payButton"
                         style={{ padding: "4px 10px", fontSize: "11.5px", background: "#f1f5f9", color: "#0f172a", border: "1px solid #cbd5e1" }}
                         onClick={() => handleExportIndividualFromId(l.id)}
                       >
@@ -1539,7 +1802,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                   </label>
                 </>
               )}
-              
+
               <div className="formSectionHeader">
                 Loan Scheme Configuration
               </div>
@@ -1639,7 +1902,40 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                 />
               </label>
 
+              <div className="formSectionHeader" style={{ marginTop: "24px" }}>
+                💰 Deductions & Fees
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
+                <label>Income Due <input type="number" className="autoInput" value={loanForm.incomeDue} onChange={(e) => setLoanForm({ ...loanForm, incomeDue: Number(e.target.value) })} /></label>
+                <label>Document <input type="number" className="autoInput" value={loanForm.documentFee} onChange={(e) => setLoanForm({ ...loanForm, documentFee: Number(e.target.value) })} /></label>
+                <label>Hire Purchase <input type="number" className="autoInput" value={loanForm.hirePurchase} onChange={(e) => setLoanForm({ ...loanForm, hirePurchase: Number(e.target.value) })} /></label>
+                <label>Tax Amount <input type="number" className="autoInput" value={loanForm.taxAmount} onChange={(e) => setLoanForm({ ...loanForm, taxAmount: Number(e.target.value) })} /></label>
+                <label>Insurance <input type="number" className="autoInput" value={loanForm.insurance} onChange={(e) => setLoanForm({ ...loanForm, insurance: Number(e.target.value) })} /></label>
+                <label>Ins. Fine <input type="number" className="autoInput" value={loanForm.insuranceFine} onChange={(e) => setLoanForm({ ...loanForm, insuranceFine: Number(e.target.value) })} /></label>
+                <label>Green Tax <input type="number" className="autoInput" value={loanForm.greenTax} onChange={(e) => setLoanForm({ ...loanForm, greenTax: Number(e.target.value) })} /></label>
+                <label>Fine <input type="number" className="autoInput" value={loanForm.fine} onChange={(e) => setLoanForm({ ...loanForm, fine: Number(e.target.value) })} /></label>
+                <label>National Tax <input type="number" className="autoInput" value={loanForm.nationalTax} onChange={(e) => setLoanForm({ ...loanForm, nationalTax: Number(e.target.value) })} /></label>
+                <label>Permit <input type="number" className="autoInput" value={loanForm.permit} onChange={(e) => setLoanForm({ ...loanForm, permit: Number(e.target.value) })} /></label>
+                <label>Brokerage (Cust.) <input type="number" className="autoInput" value={loanForm.brokerageCustomer} onChange={(e) => setLoanForm({ ...loanForm, brokerageCustomer: Number(e.target.value) })} /></label>
+                <label>Brokerage (Hand) <input type="number" className="autoInput" value={loanForm.brokerageHand} onChange={(e) => setLoanForm({ ...loanForm, brokerageHand: Number(e.target.value) })} /></label>
+              </div>
+
               {/* LIVE EMI CALCULATION PREVIEW BOX (FLAT & REDUCING) */}
+              <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px dashed #cbd5e1", marginTop: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#64748b", fontWeight: 600 }}>Total Loan Amount:</span>
+                  <b style={{ fontSize: "16px", color: "#0f172a" }}>₹{Number(loanForm.loanAmount || 0).toLocaleString()}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                  <span style={{ color: "#ef4444", fontWeight: 600 }}>Total Deductions:</span>
+                  <b style={{ fontSize: "15px", color: "#ef4444" }}>- ₹{(Number(loanForm.incomeDue || 0) + Number(loanForm.documentFee || 0) + Number(loanForm.hirePurchase || 0) + Number(loanForm.taxAmount || 0) + Number(loanForm.insurance || 0) + Number(loanForm.insuranceFine || 0) + Number(loanForm.greenTax || 0) + Number(loanForm.fine || 0) + Number(loanForm.nationalTax || 0) + Number(loanForm.permit || 0) + Number(loanForm.brokerageCustomer || 0)).toLocaleString()}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
+                  <span style={{ color: "#059669", fontWeight: 700, fontSize: "16px" }}>In-Hand Amount (Disbursed):</span>
+                  <b style={{ fontSize: "20px", color: "#059669" }}>₹{(Number(loanForm.loanAmount || 0) - (Number(loanForm.incomeDue || 0) + Number(loanForm.documentFee || 0) + Number(loanForm.hirePurchase || 0) + Number(loanForm.taxAmount || 0) + Number(loanForm.insurance || 0) + Number(loanForm.insuranceFine || 0) + Number(loanForm.greenTax || 0) + Number(loanForm.fine || 0) + Number(loanForm.nationalTax || 0) + Number(loanForm.permit || 0) + Number(loanForm.brokerageCustomer || 0))).toLocaleString()}</b>
+                </div>
+              </div>
+
               {Boolean(loanForm.loanAmount && loanForm.tenureMonths) &&
                 (() => {
                   const P = parseFloat(loanForm.loanAmount || 0);
@@ -1781,9 +2077,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           }}
         >
           <div
-            className="detailsCard"
+            className="detailsCard autoLoanDossier"
             onClick={(event) => event.stopPropagation()}
-            style={{ maxWidth: "1020px" }}
+            style={{ width: "min(92vw, 1040px)", maxWidth: "1040px" }}
           >
             <button className="close" onClick={() => setSelectedLoan(null)}>
               <X size={18} />
@@ -1799,7 +2095,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
             >
               <div>
                 <span className="overline autoBadgeTag">
-                  VEHICLE LOAN AGREEMENT & BORROWER DOSSIER
+                  VEHICLE LOAN AGREEMENT &amp; BORROWER DETAILS
                 </span>
                 <h2 style={{ marginTop: "4px" }}>
                   {selectedLoan.loan.first_name} {selectedLoan.loan.last_name}
@@ -1971,20 +2267,31 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
             </div>
 
             <div className="card tableWrap" style={{ marginTop: "16px" }}>
-              <div className="cardHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="cardHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                 <h3>
                   EMI Installment Schedule (
                   {selectedLoan.schedules?.filter((s) => s.status === "PAID")
                     .length || 0}{" "}
                   / {selectedLoan.schedules?.length || 0} Paid)
                 </h3>
-                <button 
-                  className="primary autoBtn" 
-                  style={{ padding: "4px 10px", fontSize: "12px", background: "#3b82f6", borderColor: "#3b82f6" }}
-                  onClick={() => handleExportIndividual(selectedLoan)}
-                >
-                  Download Schedule (Excel)
-                </button>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  {selectedLoan.loan.status !== 'COMPLETED' && (
+                    <button
+                      className="primary autoBtn"
+                      style={{ padding: "4px 10px", fontSize: "12px", background: "#ef4444", borderColor: "#ef4444" }}
+                      onClick={() => handleOpenCloseLoan(selectedLoan)}
+                    >
+                      Close Loan Early
+                    </button>
+                  )}
+                  <button
+                    className="primary autoBtn"
+                    style={{ padding: "4px 10px", fontSize: "12px", background: "#3b82f6", borderColor: "#3b82f6" }}
+                    onClick={() => handleExportIndividual(selectedLoan)}
+                  >
+                    Download Schedule (Excel)
+                  </button>
+                </div>
               </div>
               <table>
                 <thead>
@@ -1999,109 +2306,168 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedLoan.schedules?.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <b>#{s.installment_number}</b>
-                      </td>
-                      <td>{dateLabel(s.due_date)}</td>
-                      
-                      {/* PRINCIPAL COLUMN */}
-                      <td>
-                        <div>{money(s.scheduled_principal || s.principal_component)}</div>
-                        {s.status === "PARTIAL" && (
-                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                            {money(s.paid_principal || 0)} paid
-                          </div>
-                        )}
-                      </td>
+                  {(() => {
+                    const earliestUnpaid = selectedLoan.schedules?.find(
+                      (item) => item.status === "PENDING" || item.status === "PARTIAL"
+                    );
+                    return selectedLoan.schedules?.map((s) => {
+                      const isEarliestDue = earliestUnpaid && earliestUnpaid.id === s.id;
+                      const hasPriorUnpaid = earliestUnpaid && earliestUnpaid.installment_number < s.installment_number;
 
-                      {/* INTEREST COLUMN */}
-                      <td>
-                        <div>{money(s.scheduled_interest || s.interest_component)}</div>
-                        {s.status === "PARTIAL" && (
-                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                            {money(s.paid_interest || 0)} paid
-                          </div>
-                        )}
-                      </td>
+                      return (
+                        <tr key={s.id}>
+                          <td>
+                            <b>#{s.installment_number}</b>
+                          </td>
+                          <td>{dateLabel(s.due_date)}</td>
 
-                      {/* TOTAL EMI COLUMN */}
-                      <td>
-                        <div><b>{money(s.scheduled_emi || s.total_emi)}</b></div>
-                        {s.status === "PARTIAL" && (
-                          <div style={{ fontSize: "11px", color: "#ef4444", marginTop: "2px", fontWeight: "bold" }}>
-                            {money(s.remaining_emi_amount)} remaining
-                          </div>
-                        )}
-                      </td>
-
-                      {/* STATUS COLUMN */}
-                      <td>
-                        {s.status === "PAID" ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                            <span className="tag active" style={{ width: "fit-content" }}>PAID</span>
-                            <span style={{ fontSize: "11px", color: "#64748b" }}>
-                              EMI Paid: {money(s.scheduled_amount_paid)}
-                            </span>
-                            {Number(s.extra_principal_paid || 0) > 0 && (
-                              <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
-                                Extra Principal: {money(s.extra_principal_paid)}
-                              </span>
+                          {/* PRINCIPAL COLUMN */}
+                          <td>
+                            <b>{money(s.scheduled_principal)}</b>
+                            {s.status === "PARTIAL" && Number(s.paid_principal || 0) > 0 && (
+                              <small style={{ display: "block", color: "#059669", fontSize: "11px" }}>
+                                Paid: {money(s.paid_principal)}
+                              </small>
                             )}
-                            <span style={{ fontSize: "11px", fontWeight: "bold", color: "#0f172a" }}>
-                              Total Collected: {money(s.total_cash_collected)}
-                            </span>
-                          </div>
-                        ) : s.status === "PARTIAL" ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                            <span className="tag" style={{ background: "#fef08a", color: "#854d0e", borderColor: "#fde047", width: "fit-content" }}>
-                              PARTIAL
-                            </span>
-                            <span style={{ fontSize: "11px", color: "#64748b" }}>
-                              Paid: {money(s.scheduled_amount_paid)}
-                            </span>
                             {Number(s.extra_principal_paid || 0) > 0 && (
-                              <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
-                                Extra Principal: {money(s.extra_principal_paid)}
-                              </span>
+                              <small style={{ display: "block", color: "#16a34a", fontSize: "11px" }}>
+                                Extra: {money(s.extra_principal_paid)}
+                              </small>
                             )}
-                          </div>
-                        ) : (
-                          <span className="tag">PENDING</span>
-                        )}
-                      </td>
+                            {s.status === "PARTIAL" && Number(s.remaining_principal || 0) > 0 && (
+                              <small style={{ display: "block", color: "#dc2626", fontSize: "11px" }}>
+                                Rem: {money(s.remaining_principal)}
+                              </small>
+                            )}
+                          </td>
 
-                      {/* ACTION COLUMN */}
-                      <td>
-                        {s.status !== "PAID" ? (
-                          <button
-                            className="payButton"
-                            onClick={() => {
-                              setPayEmiModal({
-                                loanId: selectedLoan.loan.id,
-                                emiId: s.id,
-                                totalEmi: s.total_emi,
-                                instNo: s.installment_number,
-                                remainingEmi: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
-                              });
-                              setPayForm({
-                                amountPaid: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
-                                paymentMethod: "CASH",
-                                referenceNumber: "",
-                              });
-                            }}
-                          >
-                            Collect EMI
-                          </button>
-                        ) : (
-                          <div style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
-                            {money(s.collected_amount || s.total_emi)}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          {/* INTEREST COLUMN */}
+                          <td>
+                            <b>{money(s.scheduled_interest)}</b>
+                            {s.status === "PARTIAL" && Number(s.paid_interest || 0) > 0 && (
+                              <small style={{ display: "block", color: "#059669", fontSize: "11px" }}>
+                                Paid: {money(s.paid_interest)}
+                              </small>
+                            )}
+                            {s.status === "PARTIAL" && Number(s.remaining_interest || 0) > 0 && (
+                              <small style={{ display: "block", color: "#dc2626", fontSize: "11px" }}>
+                                Rem: {money(s.remaining_interest)}
+                              </small>
+                            )}
+                          </td>
+
+                          {/* TOTAL EMI COLUMN */}
+                          <td>
+                            <b>{money(s.scheduled_emi)}</b>
+                            {s.status === "PARTIAL" && (
+                              <small style={{ display: "block", color: "#d97706", fontWeight: "bold", fontSize: "11px" }}>
+                                Bal Due: {money(s.remaining_emi_amount)}
+                              </small>
+                            )}
+                          </td>
+
+                          {/* STATUS COLUMN */}
+                          <td>
+                            {s.status === "PAID" ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                <span className="tag" style={{ background: "#dcfce7", color: "#15803d", borderColor: "#86efac", width: "fit-content" }}>
+                                  PAID
+                                </span>
+                                {Number(s.extra_principal_paid || 0) > 0 && (
+                                  <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
+                                    Extra Principal: {money(s.extra_principal_paid)}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: "11px", fontWeight: "bold", color: "#0f172a" }}>
+                                  Total Collected: {money(s.total_cash_collected)}
+                                </span>
+                              </div>
+                            ) : s.status === "PARTIAL" ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                <span className="tag" style={{ background: "#fef08a", color: "#854d0e", borderColor: "#fde047", width: "fit-content" }}>
+                                  PARTIAL
+                                </span>
+                                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                  Paid: {money(s.scheduled_amount_paid)}
+                                </span>
+                                {Number(s.extra_principal_paid || 0) > 0 && (
+                                  <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
+                                    Extra Principal: {money(s.extra_principal_paid)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : s.status === "CANCELLED" ? (
+                              <span className="tag" style={{ background: "#f1f5f9", color: "#64748b", borderColor: "#cbd5e1" }}>
+                                CANCELLED
+                              </span>
+                            ) : (
+                              <span className="tag">PENDING</span>
+                            )}
+                          </td>
+
+                          {/* ACTION COLUMN */}
+                          <td>
+                            {selectedLoan.loan.status === "COMPLETED" || s.status === "CANCELLED" ? (
+                              <div style={{ color: s.status === "PAID" ? "#047857" : "#94a3b8", fontWeight: s.status === "PAID" ? "bold" : "normal", fontSize: "12px" }}>
+                                {s.status === "PAID" ? money(s.collected_amount || s.total_emi) : "Cancelled"}
+                              </div>
+                            ) : s.status !== "PAID" ? (
+                              <button
+                                className="payButton"
+                                style={{
+                                  background: isEarliestDue ? "#059669" : hasPriorUnpaid ? "#64748b" : "#2563eb",
+                                  borderColor: isEarliestDue ? "#059669" : hasPriorUnpaid ? "#64748b" : "#2563eb",
+                                  color: "#fff",
+                                  fontWeight: "700",
+                                }}
+                                title={hasPriorUnpaid ? `Installment #${earliestUnpaid.installment_number} is unpaid and must be cleared first` : undefined}
+                                onClick={() => {
+                                  if (hasPriorUnpaid) {
+                                    setNotice?.({
+                                      type: "info",
+                                      text: `Installment #${earliestUnpaid.installment_number} is pending. Auto-routed payment to Installment #${earliestUnpaid.installment_number} to maintain chronological order.`
+                                    });
+                                    setPayEmiModal({
+                                      loanId: selectedLoan.loan.id,
+                                      emiId: earliestUnpaid.id,
+                                      totalEmi: earliestUnpaid.total_emi,
+                                      instNo: earliestUnpaid.installment_number,
+                                      remainingEmi: earliestUnpaid.status === "PARTIAL" ? earliestUnpaid.remaining_emi_amount : earliestUnpaid.total_emi,
+                                    });
+                                    setPayForm({
+                                      amountPaid: earliestUnpaid.status === "PARTIAL" ? earliestUnpaid.remaining_emi_amount : earliestUnpaid.total_emi,
+                                      paymentMethod: "CASH",
+                                      referenceNumber: "",
+                                    });
+                                    return;
+                                  }
+
+                                  setPayEmiModal({
+                                    loanId: selectedLoan.loan.id,
+                                    emiId: s.id,
+                                    totalEmi: s.total_emi,
+                                    instNo: s.installment_number,
+                                    remainingEmi: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
+                                  });
+                                  setPayForm({
+                                    amountPaid: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
+                                    paymentMethod: "CASH",
+                                    referenceNumber: "",
+                                  });
+                                }}
+                              >
+                                {isEarliestDue ? "Collect EMI" : hasPriorUnpaid ? `Pay Due (#${earliestUnpaid.installment_number})` : "Pay Advance"}
+                              </button>
+                            ) : (
+                              <div style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
+                                {money(s.collected_amount || s.total_emi)}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -2176,6 +2542,164 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
             >
               Confirm Payment
             </button>
+          </form>
+        </div>
+      )}
+
+      {closeLoanModal && (
+        <div
+          className="closeLoanOverlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setCloseLoanModal(null);
+            }
+          }}
+        >
+          <form
+            className="closeLoanCard"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitCloseLoan}
+          >
+            <div className="closeLoanHeader">
+              <h3>
+                <CheckCircle2 size={19} style={{ color: "#dc2626" }} />
+                Close Loan Early
+              </h3>
+              <button
+                type="button"
+                className="closeLoanCloseBtn"
+                onClick={() => setCloseLoanModal(null)}
+                title="Cancel"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="closeLoanGrid">
+              <div className="closeLoanField">
+                <label className="closeLoanLabel">Principal (₹)</label>
+                <div className="closeLoanInputWrap">
+                  <span className="closeLoanPrefix">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    className="closeLoanInput"
+                    value={closeLoanModal.principalAmount}
+                    onChange={(e) =>
+                      setCloseLoanModal({
+                        ...closeLoanModal,
+                        principalAmount: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="closeLoanField">
+                <label className="closeLoanLabel">Interest (%)</label>
+                <div className="closeLoanInputWrap">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    className="closeLoanInputPercent"
+                    value={closeLoanModal.interestPercent === "" ? "" : closeLoanModal.interestPercent}
+                    onChange={(e) =>
+                      setCloseLoanModal({
+                        ...closeLoanModal,
+                        interestPercent: e.target.value === "" ? "" : Number(e.target.value),
+                      })
+                    }
+                  />
+                  <span className="closeLoanSuffix">%</span>
+                </div>
+              </div>
+            </div>
+
+            {(() => {
+              const p = Number(closeLoanModal.principalAmount || 0);
+              const pct = Number(closeLoanModal.interestPercent || 0);
+              const interestAmt = Math.round((p * pct) / 100);
+              const totalAmt = p + interestAmt;
+
+              return (
+                <div className="closeLoanSummaryBox">
+                  <div>
+                    <div className="closeLoanSummaryLabel">Total Settlement</div>
+                    <div className="closeLoanSummarySub">
+                      ₹{p.toLocaleString()} + {pct}% (₹{interestAmt.toLocaleString()})
+                    </div>
+                  </div>
+                  <div className="closeLoanSummaryValue">
+                    ₹{totalAmt.toLocaleString()}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="closeLoanField" style={{ marginBottom: "10px" }}>
+              <label className="closeLoanLabel">Payment Method</label>
+              <div className="closeLoanSegmented">
+                <button
+                  type="button"
+                  className={`closeLoanSegmentBtn ${closeLoanModal.paymentMethod === "CASH" ? "active" : ""}`}
+                  onClick={() =>
+                    setCloseLoanModal({ ...closeLoanModal, paymentMethod: "CASH" })
+                  }
+                >
+                  Cash
+                </button>
+                <button
+                  type="button"
+                  className={`closeLoanSegmentBtn ${closeLoanModal.paymentMethod === "UPI" ? "active" : ""}`}
+                  onClick={() =>
+                    setCloseLoanModal({ ...closeLoanModal, paymentMethod: "UPI" })
+                  }
+                >
+                  UPI
+                </button>
+                <button
+                  type="button"
+                  className={`closeLoanSegmentBtn ${closeLoanModal.paymentMethod === "BANK_TRANSFER" ? "active" : ""}`}
+                  onClick={() =>
+                    setCloseLoanModal({ ...closeLoanModal, paymentMethod: "BANK_TRANSFER" })
+                  }
+                >
+                  Bank
+                </button>
+              </div>
+            </div>
+
+            <div className="closeLoanField">
+              <label className="closeLoanLabel">Reference / UTR (Optional)</label>
+              <input
+                type="text"
+                className="closeLoanTextInput"
+                placeholder="UTR / Cheque / Txn ID"
+                value={closeLoanModal.referenceNumber || ""}
+                onChange={(e) =>
+                  setCloseLoanModal({
+                    ...closeLoanModal,
+                    referenceNumber: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="closeLoanActions">
+              <button
+                type="button"
+                className="closeLoanCancelBtn"
+                onClick={() => setCloseLoanModal(null)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="closeLoanSubmitBtn">
+                Confirm &amp; Close
+              </button>
+            </div>
           </form>
         </div>
       )}
