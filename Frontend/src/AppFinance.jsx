@@ -14,9 +14,13 @@ import {
   UserRound,
   WalletCards,
   X,
+  Landmark,
+  Users,
+  Globe,
 } from "lucide-react";
 import "./Finance.css";
 import AutoFinanceView from "./AutoFinance.jsx";
+import GlobalCapitalView from "./GlobalCapital.jsx";
 
 const API =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/daily-finance";
@@ -100,7 +104,7 @@ export default function AppFinance() {
 
   const handleModuleSwitch = (targetModule) => {
     setAppModule(targetModule);
-    setPage("Dashboard");
+    setPage(targetModule === "GLOBAL" ? "Ledger Overview" : "Dashboard");
   };
 
   const submitFinance = async (event) => {
@@ -217,10 +221,22 @@ export default function AppFinance() {
     "Customers",
     "Loan Schemes",
     "Vehicle Loans",
-    "EMI Schedules",
     "Reports",
   ];
-  const currentMenus = appModule === "DAILY" ? dailyMenus : autoMenus;
+  const globalMenus = [
+    "Ledger Overview",
+    "Partner Management",
+    "Capital Transactions",
+    "Monthly Closing",
+  ];
+
+  const currentMenus =
+    appModule === "DAILY"
+      ? dailyMenus
+      : appModule === "AUTO"
+        ? autoMenus
+        : globalMenus;
+
   const menuIcons = {
     Dashboard: LayoutDashboard,
     Customers: UserRound,
@@ -229,6 +245,10 @@ export default function AppFinance() {
     "Vehicle Loans": CarFront,
     "EMI Schedules": CalendarDays,
     Reports: FileText,
+    "Ledger Overview": Globe,
+    "Partner Management": Users,
+    "Capital Transactions": Landmark,
+    "Monthly Closing": FileText,
   };
   const NoticeIcon = notice?.type === "error" ? AlertCircle : CheckCircle2;
 
@@ -237,18 +257,34 @@ export default function AppFinance() {
       <aside>
         <div className="financeLogo">
           <b>
-            {appModule === "DAILY" ? (
-              <Activity size={21} strokeWidth={2.5} />
-            ) : (
-              <CarFront size={21} strokeWidth={2.5} />
-            )}
+            {appModule === "DAILY" && <Activity size={21} strokeWidth={2.5} />}
+            {appModule === "AUTO" && <CarFront size={21} strokeWidth={2.5} />}
+            {appModule === "GLOBAL" && <Globe size={21} strokeWidth={2.5} />}
           </b>
           <div>
             FinFlow
             <small>
-              {appModule === "DAILY" ? "Daily Finance" : "Auto Finance"}
+              {appModule === "DAILY" && "Daily Finance"}
+              {appModule === "AUTO" && "Auto Finance"}
+              {appModule === "GLOBAL" && "Global Capital"}
             </small>
           </div>
+        </div>
+
+        {/* GLOBAL PORTAL BUTTON */}
+        <div style={{ margin: "0 10px 15px" }}>
+          <button
+            className={`globalPortalBtn ${appModule === "GLOBAL" ? "active" : ""}`}
+            onClick={() => handleModuleSwitch("GLOBAL")}
+          >
+            <div className="globalPortalIcon">
+              <Globe size={18} />
+            </div>
+            <div className="globalPortalText">
+              <span>Global Capital</span>
+              <small>Overview & Ledgers</small>
+            </div>
+          </button>
         </div>
 
         {/* MODULE TOGGLE SWITCHER IN SIDEBAR */}
@@ -257,18 +293,20 @@ export default function AppFinance() {
             className={`moduleToggleBtn ${appModule === "DAILY" ? "active" : ""}`}
             onClick={() => handleModuleSwitch("DAILY")}
           >
-            <Activity size={15} /> Daily
+            <Activity size={15} /> <span>Daily Finance</span>
           </button>
           <button
             className={`moduleToggleBtn ${appModule === "AUTO" ? "active autoMode" : ""}`}
             onClick={() => handleModuleSwitch("AUTO")}
           >
-            <CarFront size={15} /> Auto
+            <CarFront size={15} /> <span>Auto Finance</span>
           </button>
         </div>
 
         <div className="menuTitle">
-          {appModule === "DAILY" ? "DAILY FINANCE MENU" : "AUTO FINANCE MENU"}
+          {appModule === "DAILY" && "DAILY FINANCE MENU"}
+          {appModule === "AUTO" && "AUTO FINANCE MENU"}
+          {appModule === "GLOBAL" && "GLOBAL CAPITAL MENU"}
         </div>
         {currentMenus.map((item) => (
           <button
@@ -301,7 +339,9 @@ export default function AppFinance() {
               <span className="livePulseDot"></span>
               {appModule === "DAILY"
                 ? "DAILY FINANCE MODULE"
-                : "AUTO FINANCE MODULE"}
+                : appModule === "AUTO"
+                  ? "AUTO FINANCE MODULE"
+                  : "GLOBAL CAPITAL MODULE"}
             </span>
             <h1>{page}</h1>
           </div>
@@ -319,6 +359,12 @@ export default function AppFinance() {
                 onClick={() => handleModuleSwitch("AUTO")}
               >
                 <CarFront size={15} /> Auto Finance
+              </button>
+              <button
+                className={`headerToggleBtn ${appModule === "GLOBAL" ? "active globalMode" : ""}`}
+                onClick={() => handleModuleSwitch("GLOBAL")}
+              >
+                <Globe size={15} /> Global Capital
               </button>
             </div>
             <span>{dateLabel(entryDate)}</span>
@@ -358,6 +404,8 @@ export default function AppFinance() {
         {/* RENDER MODULE VIEWS */}
         {appModule === "AUTO" ? (
           <AutoFinanceView activeMenu={page} setNotice={setNotice} />
+        ) : appModule === "GLOBAL" ? (
+          <GlobalCapitalView activeMenu={page} setNotice={setNotice} />
         ) : (
           <>
             {page === "Dashboard" && (
@@ -523,9 +571,11 @@ function Dashboard({ position, customers, recent, setPage, openDetails }) {
                   <td>
                     <b>{customer.customer_name}</b>
                     <small>
-                      {customer.mobile_number ||
-                        customer.address ||
-                        "No contact details"}
+                      {customer.mobile_number ? (
+                        <PhoneLink phone={customer.mobile_number} />
+                      ) : (
+                        customer.address || "No contact details"
+                      )}
                     </small>
                   </td>
                   <td>{money(customer.net_disbursement)}</td>
@@ -632,9 +682,11 @@ function Customers({
                 <td>
                   <b>{customer.customer_name}</b>
                   <small>
-                    {customer.mobile_number ||
-                      customer.address ||
-                      "No contact details"}
+                    {customer.mobile_number ? (
+                      <PhoneLink phone={customer.mobile_number} />
+                    ) : (
+                      customer.address || "No contact details"
+                    )}
                   </small>
                 </td>
                 <td>{money(customer.gross_finance_amount)}</td>
@@ -737,7 +789,13 @@ function EntryRow({ customer, savePayment, openDetails, busy }) {
           onClick={() => openDetails(customer.customer_id)}
         >
           <b>{customer.customer_name}</b>
-          <small>{customer.mobile_number || "Open details"}</small>
+          <small>
+            {customer.mobile_number ? (
+              <PhoneLink phone={customer.mobile_number} />
+            ) : (
+              "Open details"
+            )}
+          </small>
         </button>
       </td>
       <td>{money(customer.agreed_total_payable)}</td>
@@ -897,8 +955,14 @@ function CustomerDetails({ data, close, editPayment }) {
         <span className="overline">CUSTOMER DETAILS</span>
         <h2>{customer.customer_name}</h2>
         <p>
-          {customer.mobile_number || "No phone"} ·{" "}
-          {customer.address || "No address"}
+          {customer.mobile_number ? (
+            <a className="phoneLink" href={`tel:${customer.mobile_number}`}>
+              {customer.mobile_number}
+            </a>
+          ) : (
+            "No phone"
+          )}{" "}
+          · {customer.address || "No address"}
         </p>
         <div className="detailGrid">
           <Metric
@@ -1248,5 +1312,17 @@ function Empty({ text }) {
       </div>
       <b>{text}</b>
     </div>
+  );
+}
+
+function PhoneLink({ phone }) {
+  return (
+    <a
+      className="phoneLink"
+      href={`tel:${phone}`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {phone}
+    </a>
   );
 }

@@ -7,6 +7,7 @@ import authRoutes from '../autoFinance/routes/authRoutes.js';
 import customerRoutes from '../autoFinance/routes/customerRoutes.js';
 import loanTypeRoutes from '../autoFinance/routes/loanTypeRoutes.js';
 import loanRoutes from '../autoFinance/routes/loanRoutes.js';
+import globalCashRoutes from '../global_cash/routes/globalCash.routes.js';
 const app=express();
 const db=new Pool({
   host: process.env.POSTGRES_HOST || 'localhost',
@@ -36,5 +37,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/loan-types', loanTypeRoutes);
 app.use('/api/loans', loanRoutes);
+app.use('/api/global-cash', globalCashRoutes);
 app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
 app.listen(Number(process.env.API_PORT||3000),()=>console.log('Daily Finance API running'));

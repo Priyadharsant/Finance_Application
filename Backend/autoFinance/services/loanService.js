@@ -1,12 +1,26 @@
 import { pool } from "../config/db.js";
+import { validateAndDisburseFunds } from "../../global_cash/services/globalCash.service.js";
+import crypto from "crypto";
 
 export async function createLoanWithVehicle(data) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
+    // Acquire global lock to prevent concurrent over-allocation
+    await client.query('SELECT pg_advisory_xact_lock(1001);');
+
     const {
+      // customer details
       customerId,
+      firstName,
+      lastName,
+      phone,
+      email,
+      address,
+      city,
+      state,
+      // loan details
       loanTypeId,
       interestType, // FLAT or REDUCING
       loanAmount,
@@ -28,6 +42,30 @@ export async function createLoanWithVehicle(data) {
     const end = new Date(start);
     end.setMonth(end.getMonth() + parseInt(tenureMonths));
 
+    // 0. Create Customer Inline if no customerId is provided
+    let finalCustomerId = customerId;
+    if (!finalCustomerId && firstName && lastName) {
+      finalCustomerId = crypto.randomUUID();
+      const customerCode = 'AUTO-' + Math.floor(10000 + Math.random() * 90000);
+      const custQuery = `
+        INSERT INTO autofinance_customers (id, customer_code, first_name, last_name, phone, email, address, city, state)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `;
+      await client.query(custQuery, [
+        finalCustomerId,
+        customerCode,
+        firstName,
+        lastName,
+        phone || null,
+        email || null,
+        address || null,
+        city || null,
+        state || null
+      ]);
+    } else if (!finalCustomerId) {
+      throw new Error("Customer ID or Customer details (First Name, Last Name) are required");
+    }
+
     // Ensure interest_type column exists
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';`);
 
@@ -40,7 +78,7 @@ export async function createLoanWithVehicle(data) {
       RETURNING *;
     `;
     const loanRes = await client.query(loanQuery, [
-      customerId,
+      finalCustomerId,
       loanTypeId || null,
       interestType || 'FLAT',
       loanAmount,
@@ -50,6 +88,16 @@ export async function createLoanWithVehicle(data) {
       end.toISOString().slice(0, 10)
     ]);
     const loan = loanRes.rows[0];
+
+    // Global Cash Ledger Integration
+    await validateAndDisburseFunds(client, {
+      module: 'AUTO',
+      amount: loanAmount,
+      effectiveDate: start.toISOString().slice(0, 10),
+      referenceType: 'AUTO_LOAN',
+      referenceId: loan.id,
+      notes: `Auto Loan Disbursement for Customer ${customerId}`
+    });
 
     // 2. Insert Vehicle (if vehicle details provided)
     let vehicle = null;
@@ -156,7 +204,11 @@ export async function getAllLoans() {
       COALESCE(s.pending_dues_count, 0) as pending_dues_count,
       COALESCE(s.paid_dues_count, 0) as paid_dues_count,
       COALESCE(s.total_dues_count, l.tenure_months) as total_dues_count,
-      COALESCE(s.overdue_dues_count, 0) as overdue_dues_count
+      COALESCE(s.overdue_dues_count, 0) as overdue_dues_count,
+      next_emi.next_due_date,
+      next_emi.next_emi_amount,
+      next_emi.next_emi_id,
+      next_emi.next_installment_number
     FROM autofinance_loans l
     JOIN autofinance_customers c ON l.customer_id = c.id
     LEFT JOIN autofinance_loan_types lt ON l.loan_type_id = lt.id
@@ -176,6 +228,17 @@ export async function getAllLoans() {
       FROM autofinance_emi_schedules
       GROUP BY loan_id
     ) s ON l.id = s.loan_id
+    LEFT JOIN (
+      SELECT 
+        loan_id,
+        MIN(due_date) as next_due_date,
+        (array_agg(total_emi ORDER BY due_date ASC))[1] as next_emi_amount,
+        (array_agg(id ORDER BY due_date ASC))[1] as next_emi_id,
+        (array_agg(installment_number ORDER BY due_date ASC))[1] as next_installment_number
+      FROM autofinance_emi_schedules
+      WHERE status = 'PENDING'
+      GROUP BY loan_id
+    ) next_emi ON l.id = next_emi.loan_id
     ORDER BY l.created_at DESC;
   `;
   const result = await pool.query(query);
@@ -199,7 +262,37 @@ export async function getLoanDetails(loanId) {
   if (!loanRes.rows[0]) return null;
 
   const scheduleQuery = `
-    SELECT * FROM autofinance_emi_schedules
+    SELECT 
+      *,
+      principal_component AS scheduled_principal,
+      interest_component AS scheduled_interest,
+      total_emi AS scheduled_emi,
+      
+      (
+        LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
+        LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0))
+      ) AS scheduled_amount_paid,
+      
+      GREATEST(COALESCE(principal_component, 0) - COALESCE(paid_principal, 0), 0) AS remaining_principal,
+      
+      GREATEST(COALESCE(interest_component, 0) - COALESCE(paid_interest, 0), 0) AS remaining_interest,
+      
+      GREATEST(
+        COALESCE(total_emi, 0) - 
+        (
+          LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
+          LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0))
+        ), 
+        0
+      ) AS remaining_emi_amount,
+      
+      (
+        LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
+        LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0)) +
+        COALESCE(extra_principal_paid, 0)
+      ) AS total_cash_collected
+
+    FROM autofinance_emi_schedules
     WHERE loan_id = $1
     ORDER BY installment_number ASC;
   `;
@@ -276,7 +369,7 @@ export async function getAutoFinanceOverview() {
   `;
   const res = await pool.query(query);
   const row = res.rows[0] || {};
-  
+
   // Calculate schedule totals for expected interest, total payable, today due & overdue
   const schedQuery = `
     SELECT 
@@ -317,4 +410,146 @@ export async function getAutoFinanceOverview() {
     overdue_amount: parseFloat(schedRow.overdue_amount || 0),
     overdue_count: parseInt(schedRow.overdue_count || 0)
   };
+}
+
+export async function rescheduleFutureEMIs(client, loanId) {
+  // 1. Fetch Loan Details
+  const loanRes = await client.query(
+    `SELECT loan_amount, interest_rate, tenure_months, interest_type FROM autofinance_loans WHERE id = $1`,
+    [loanId]
+  );
+  if (!loanRes.rows[0]) return;
+  
+  const loan = loanRes.rows[0];
+  const P_initial = parseFloat(loan.loan_amount);
+  const ratePercent = parseFloat(loan.interest_rate);
+  const n_total = parseInt(loan.tenure_months);
+  const isReducing = loan.interest_type === 'REDUCING';
+
+  // 2. Fetch all schedules
+  const schedRes = await client.query(
+    `SELECT * FROM autofinance_emi_schedules 
+     WHERE loan_id = $1 
+     ORDER BY installment_number ASC`,
+    [loanId]
+  );
+  
+  const schedules = schedRes.rows;
+  
+  let totalPrincipalPaid = 0;
+  let totalInterestPaid = 0;
+  
+  let unpaidPrincipalInPartials = 0;
+  let unpaidInterestInPartials = 0;
+  
+  const pendingSchedules = [];
+  
+  for (const s of schedules) {
+    const pPaid = Number(s.paid_principal || 0);
+    const iPaid = Number(s.paid_interest || 0);
+    const ePaid = Number(s.extra_principal_paid || 0);
+    
+    totalPrincipalPaid += pPaid + ePaid;
+    totalInterestPaid += iPaid;
+    
+    if (s.status === 'PARTIAL') {
+      const pComp = Number(s.principal_component || 0);
+      const iComp = Number(s.interest_component || 0);
+      unpaidPrincipalInPartials += Math.max(0, pComp - pPaid);
+      unpaidInterestInPartials += Math.max(0, iComp - iPaid);
+    } else if (s.status === 'PENDING') {
+      pendingSchedules.push(s);
+    }
+  }
+  
+  const n_pending = pendingSchedules.length;
+  if (n_pending === 0) return; // Nothing to reschedule
+
+  let principalToDistribute = P_initial - totalPrincipalPaid - unpaidPrincipalInPartials;
+  if (principalToDistribute < 0) principalToDistribute = 0;
+
+  // 3. Recalculate & Update Pending Schedules
+  if (isReducing) {
+    const r = ratePercent / 100 / 12;
+    let newEmi = 0;
+    
+    if (principalToDistribute > 0) {
+      newEmi = (principalToDistribute * r * Math.pow(1 + r, n_pending)) / (Math.pow(1 + r, n_pending) - 1);
+    }
+    
+    let currentBalance = principalToDistribute;
+    
+    for (let i = 0; i < n_pending; i++) {
+      const pending = pendingSchedules[i];
+      let interestComp = currentBalance * r;
+      let principalComp = principalToDistribute > 0 ? newEmi - interestComp : 0;
+      
+      // Handle the final installment to absorb rounding differences
+      if (i === n_pending - 1) {
+        principalComp = currentBalance;
+      }
+      
+      currentBalance -= principalComp;
+      const totalEmi = principalComp + interestComp;
+      
+      await client.query(
+        `UPDATE autofinance_emi_schedules 
+         SET principal_component = $1, interest_component = $2, total_emi = $3 
+         WHERE id = $4`,
+        [principalComp.toFixed(2), interestComp.toFixed(2), totalEmi.toFixed(2), pending.id]
+      );
+    }
+  } else {
+    // FLAT INTEREST
+    const totalContractualInterest = P_initial * ratePercent * (n_total / 12) / 100;
+    let interestToDistribute = totalContractualInterest - totalInterestPaid - unpaidInterestInPartials;
+    if (interestToDistribute < 0) interestToDistribute = 0;
+
+    let distributedPrincipal = 0;
+    let distributedInterest = 0;
+
+    for (let i = 0; i < n_pending; i++) {
+      const pending = pendingSchedules[i];
+      let monthlyPrincipal = principalToDistribute / n_pending;
+      let monthlyInterest = interestToDistribute / n_pending;
+
+      // Absorb rounding differences on final installment
+      if (i === n_pending - 1) {
+        monthlyPrincipal = principalToDistribute - distributedPrincipal;
+        monthlyInterest = interestToDistribute - distributedInterest;
+      } else {
+        // Round to 2 decimals to match normal exact distribution
+        monthlyPrincipal = Math.round(monthlyPrincipal * 100) / 100;
+        monthlyInterest = Math.round(monthlyInterest * 100) / 100;
+      }
+
+      distributedPrincipal += monthlyPrincipal;
+      distributedInterest += monthlyInterest;
+
+      const newTotalEmi = monthlyPrincipal + monthlyInterest;
+
+      await client.query(
+        `UPDATE autofinance_emi_schedules 
+         SET principal_component = $1, interest_component = $2, total_emi = $3 
+         WHERE id = $4`,
+        [monthlyPrincipal.toFixed(2), monthlyInterest.toFixed(2), newTotalEmi.toFixed(2), pending.id]
+      );
+    }
+  }
+
+  // 4. Check for Loan Completion
+  if (principalToDistribute <= 0) {
+    // Zero out any remaining pending schedules just to be safe
+    await client.query(
+      `UPDATE autofinance_emi_schedules 
+       SET principal_component = 0, interest_component = 0, total_emi = 0, status = 'CANCELLED'
+       WHERE loan_id = $1 AND status = 'PENDING'`,
+      [loanId]
+    );
+
+    await client.query(
+      `UPDATE autofinance_loans SET status = 'COMPLETED' WHERE id = $1`,
+      [loanId]
+    );
+  }
 }

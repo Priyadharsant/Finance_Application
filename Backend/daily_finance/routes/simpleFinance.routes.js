@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validateAndDisburseFunds, createLedgerEntry } from '../../global_cash/services/globalCash.service.js';
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const amountPattern = /^\d+(\.\d{1,2})?$/;
@@ -46,8 +47,21 @@ export function createSimpleFinanceRouter(db) {
       const dailyDue = dailyAgreedDue || 0;
       if (!customerName || !amountPattern.test(String(grossFinanceAmount)) || !amountPattern.test(String(interestValue || 0)) || !amountPattern.test(String(payable)) || deduction > Number(grossFinanceAmount)) throw new Error('Customer name and valid finance amounts are required');
       await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(1001);');
+      
       const customer = await client.query(`INSERT INTO daily_finance_customers(customer_name,mobile_number,address,notes) VALUES($1,$2,$3,$4) RETURNING *`, [customerName.trim(), mobileNumber || null, address || null, notes || null]);
       const account = await client.query(`INSERT INTO daily_finance_accounts(customer_id,finance_date,gross_finance_amount,initial_deduction,interest_type,interest_value,agreed_total_payable,daily_agreed_due,expected_collection_days,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,'ACTIVE') RETURNING *`, [customer.rows[0].customer_id, datePattern.test(financeDate || '') ? financeDate : new Date().toISOString().slice(0,10), grossFinanceAmount, deduction, normalizedInterestType, interestValue || 0, payable, dailyDue]);
+      
+      const netDisbursementAmount = Number(grossFinanceAmount) - deduction;
+      await validateAndDisburseFunds(client, {
+        module: 'DAILY',
+        amount: netDisbursementAmount,
+        effectiveDate: account.rows[0].finance_date.toISOString().slice(0, 10),
+        referenceType: 'DAILY_LOAN',
+        referenceId: account.rows[0].finance_id,
+        notes: `Daily Finance Loan Disbursement for Customer ${customer.rows[0].customer_id}`
+      });
+
       await client.query('COMMIT');
       res.status(201).json({ customer: customer.rows[0], account: account.rows[0] });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message || 'Unable to create customer' }); } finally { client.release(); }
@@ -62,6 +76,18 @@ export function createSimpleFinanceRouter(db) {
       const payment = await client.query(`INSERT INTO daily_finance_payments(customer_id,finance_id,collection_date,amount,payment_method,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`, [customerId, financeId, collectionDate, amount, paymentMethod, notes || null]);
       await client.query(`UPDATE daily_finance_accounts SET status=CASE WHEN (SELECT COALESCE(SUM(amount),0) FROM daily_finance_payments WHERE finance_id=$1 AND status <> 'VOID') >= agreed_total_payable THEN 'COMPLETED' ELSE status END, updated_at=NOW() WHERE finance_id=$1`, [financeId]);
       await client.query(`INSERT INTO daily_finance_audit_logs(action,entity,entity_id,new_value) VALUES('CREATE','PAYMENT',$1,$2)`, [payment.rows[0].payment_id, JSON.stringify(payment.rows[0])]);
+      
+      await createLedgerEntry(client, {
+        effectiveDate: collectionDate,
+        type: 'DAILY_COLLECTION',
+        amount: Number(amount),
+        direction: 'CREDIT',
+        sourceModule: 'DAILY',
+        referenceType: 'DAILY_PAYMENT',
+        referenceId: payment.rows[0].payment_id,
+        notes: `Daily Finance Collection for Account ${financeId}`
+      });
+
       await client.query('COMMIT'); res.status(201).json(payment.rows[0]);
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message || 'Unable to save payment' }); } finally { client.release(); }
   });
@@ -77,6 +103,24 @@ export function createSimpleFinanceRouter(db) {
       const result = await client.query(`UPDATE daily_finance_payments SET collection_date=$1,amount=$2,payment_method=$3,notes=$4,updated_at=NOW() WHERE payment_id=$5 RETURNING *`, [collectionDate, amount, paymentMethod, notes || null, req.params.paymentId]);
       await client.query(`UPDATE daily_finance_accounts a SET status=CASE WHEN (SELECT COALESCE(SUM(amount),0) FROM daily_finance_payments WHERE finance_id=a.finance_id AND status <> 'VOID') >= a.agreed_total_payable THEN 'COMPLETED' ELSE 'ACTIVE' END,updated_at=NOW() WHERE finance_id=$1`, [previous.rows[0].finance_id]);
       await client.query(`INSERT INTO daily_finance_audit_logs(action,entity,entity_id,old_value,new_value) VALUES('UPDATE','PAYMENT',$1,$2,$3)`, [req.params.paymentId, JSON.stringify(previous.rows[0]), JSON.stringify(result.rows[0])]);
+      
+      const oldAmount = Number(previous.rows[0].amount);
+      const newAmount = Number(amount);
+      const delta = newAmount - oldAmount;
+
+      if (delta !== 0) {
+        await createLedgerEntry(client, {
+          effectiveDate: collectionDate,
+          type: 'ADJUSTMENT',
+          amount: Math.abs(delta),
+          direction: delta > 0 ? 'CREDIT' : 'DEBIT',
+          sourceModule: 'DAILY',
+          referenceType: 'DAILY_PAYMENT',
+          referenceId: req.params.paymentId,
+          notes: `Daily Finance Collection Adjustment for Account ${previous.rows[0].finance_id}`
+        });
+      }
+
       await client.query('COMMIT');
       res.json(result.rows[0]);
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message || 'Unable to update collection' }); } finally { client.release(); }
