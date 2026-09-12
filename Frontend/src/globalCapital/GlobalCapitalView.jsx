@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import { globalCapitalApi } from "./services/globalCapitalApi.js";
 
 // Tab Components
@@ -34,6 +35,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const [partners, setPartners] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [expenseServerSummary, setExpenseServerSummary] = useState(null);
   const [closings, setClosings] = useState([]);
   const [profitCalcs, setProfitCalcs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -126,6 +128,53 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     notes: "",
   });
 
+  const dynamicTitle = useMemo(() => {
+    if (selectedRecord?.type === "partner" && selectedRecord.record) {
+      return `${selectedRecord.record.partner_name || "Partner"} · Partner Dossier · Global Capital | FinFlow`;
+    }
+    if (selectedRecord?.type === "ledger" && selectedRecord.record) {
+      return `Ledger Transaction #${selectedRecord.record.transaction_id || ""} · Global Capital | FinFlow`;
+    }
+    if (selectedRecord?.record) {
+      return `Record Details · Global Capital | FinFlow`;
+    }
+    if (profitPaymentModal?.partner_name) {
+      return `Profit Settlement (${profitPaymentModal.partner_name}) · Global Capital | FinFlow`;
+    }
+    if (showAddPartner) {
+      return `Add Business Partner · Global Capital | FinFlow`;
+    }
+    if (showCapitalModal) {
+      return `${capitalActionType === "CONTRIBUTION" ? "Add Partner Capital" : "Withdraw Partner Capital"} · Global Capital | FinFlow`;
+    }
+    if (showAddExpense) {
+      return `Record Expense · Global Capital | FinFlow`;
+    }
+    if (showDraftModal) {
+      return `Draft Monthly Closing · Global Capital | FinFlow`;
+    }
+    if (selectedDailyDetail) {
+      return `Daily Breakdown (${selectedDailyDetail.calculation_date}) · Global Capital | FinFlow`;
+    }
+    if (segmentModalData) {
+      return `Time-Weighted Segments · Global Capital | FinFlow`;
+    }
+    return `${activeMenu || "Ledger Overview"} · Global Capital | FinFlow`;
+  }, [
+    activeMenu,
+    selectedRecord,
+    profitPaymentModal,
+    showAddPartner,
+    showCapitalModal,
+    capitalActionType,
+    showAddExpense,
+    showDraftModal,
+    selectedDailyDetail,
+    segmentModalData,
+  ]);
+
+  useDocumentTitle(dynamicTitle);
+
   // ----------------------------------------------------
   // Fetch Functions
   // ----------------------------------------------------
@@ -145,7 +194,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     setLoading(true);
     try {
       const data = await globalCapitalApi.getPartners();
-      setPartners(data);
+      setPartners(Array.isArray(data) ? data : []);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch partners" });
     } finally {
@@ -157,7 +206,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     setLoading(true);
     try {
       const data = await globalCapitalApi.getPartnerTransactions();
-      setTransactions(data);
+      setTransactions(Array.isArray(data) ? data : []);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch transactions" });
     } finally {
@@ -174,7 +223,15 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         category: expenseFilterCategory,
         search: expenseSearch,
       });
-      setExpenses(data);
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.expenses)
+        ? data.expenses
+        : [];
+      setExpenses(list);
+      if (data?.summary) {
+        setExpenseServerSummary(data.summary);
+      }
     } catch {
       setNotice({ type: "error", text: "Failed to fetch expenses" });
     } finally {
@@ -185,7 +242,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const fetchClosings = async () => {
     try {
       const data = await globalCapitalApi.getMonthlyClosings();
-      setClosings(data);
+      setClosings(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
     }
@@ -194,7 +251,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const fetchProfitCalcs = async () => {
     try {
       const data = await globalCapitalApi.getProfitCalculations();
-      setProfitCalcs(data);
+      setProfitCalcs(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
     }
@@ -474,25 +531,34 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   }, [ledgerData.ledger]);
 
   const expenseSummary = useMemo(() => {
-    const totalFiltered = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const countFiltered = expenses.length;
-    const allTimeTotal = Number(ledgerData.expenses?.totalExpenses || totalFiltered);
-    const allTimeCount = expenses.length;
+    const list = Array.isArray(expenses) ? expenses : [];
+    const totalFiltered =
+      expenseServerSummary?.totalFiltered ??
+      list.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const countFiltered =
+      expenseServerSummary?.countFiltered ?? list.length;
+    const allTimeTotal =
+      expenseServerSummary?.allTimeTotal ??
+      Number(ledgerData.expenses?.totalExpenses || totalFiltered);
+    const allTimeCount =
+      expenseServerSummary?.allTimeCount ?? list.length;
 
-    const categoryBreakdown = {
+    const categoryBreakdown = expenseServerSummary?.categoryBreakdown || {
       AUTO: { total: 0, count: 0 },
       DAILY: { total: 0, count: 0 },
       GENERAL: { total: 0, count: 0 },
     };
 
-    expenses.forEach((e) => {
-      const cat = e.category || "GENERAL";
-      if (!categoryBreakdown[cat]) {
-        categoryBreakdown[cat] = { total: 0, count: 0 };
-      }
-      categoryBreakdown[cat].total += Number(e.amount || 0);
-      categoryBreakdown[cat].count += 1;
-    });
+    if (!expenseServerSummary?.categoryBreakdown) {
+      list.forEach((e) => {
+        const cat = e.category || "GENERAL";
+        if (!categoryBreakdown[cat]) {
+          categoryBreakdown[cat] = { total: 0, count: 0 };
+        }
+        categoryBreakdown[cat].total += Number(e.amount || 0);
+        categoryBreakdown[cat].count += 1;
+      });
+    }
 
     return {
       totalFiltered,
@@ -501,7 +567,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       allTimeCount,
       categoryBreakdown,
     };
-  }, [expenses, ledgerData.expenses]);
+  }, [expenses, expenseServerSummary, ledgerData.expenses]);
 
   return (
     <>

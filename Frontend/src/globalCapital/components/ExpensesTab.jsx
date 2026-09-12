@@ -26,6 +26,12 @@ export default function ExpensesTab({
   onDeleteExpense,
   onSelectRecord,
 }) {
+  const expenseList = Array.isArray(expenses)
+    ? expenses
+    : Array.isArray(expenses?.expenses)
+    ? expenses.expenses
+    : [];
+
   return (
     <div className="financeFadeIn globalCapitalView">
       <div className="financeHeader">
@@ -206,7 +212,7 @@ export default function ExpensesTab({
             <Receipt size={18} /> Expenses Ledger
           </h3>
           <span className="tag autoTag">
-            {expenses.length} {expenses.length === 1 ? "Record" : "Records"}
+            {expenseList.length} {expenseList.length === 1 ? "Record" : "Records"}
           </span>
         </div>
 
@@ -224,7 +230,7 @@ export default function ExpensesTab({
               </tr>
             </thead>
             <tbody>
-              {expenses.map((exp) => (
+              {expenseList.map((exp) => (
                 <tr
                   className="clickable globalClickableRow"
                   key={exp.id}
@@ -291,7 +297,7 @@ export default function ExpensesTab({
                   </td>
                 </tr>
               ))}
-              {expenses.length === 0 && (
+              {expenseList.length === 0 && (
                 <tr>
                   <td colSpan="7" style={{ textAlign: "center", padding: "42px 20px" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>

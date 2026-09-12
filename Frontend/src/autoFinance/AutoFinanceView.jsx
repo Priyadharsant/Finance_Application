@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import { apiCall } from "./services/autoFinanceApi";
 import {
   exportToExcel,
@@ -42,6 +43,38 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [showCreateLoan, setShowCreateLoan] = useState(false);
   const [payEmiModal, setPayEmiModal] = useState(null);
   const [closeLoanModal, setCloseLoanModal] = useState(null);
+
+  const dynamicTitle = useMemo(() => {
+    if (selectedLoan) {
+      return `Loan #${selectedLoan.loan_code || selectedLoan.loan_id} · Auto Finance | FinFlow`;
+    }
+    if (selectedCustomer) {
+      return `${selectedCustomer.first_name || ""} ${selectedCustomer.last_name || ""} · Customer Profile · Auto Finance | FinFlow`;
+    }
+    if (showCreateLoan) {
+      return `New Vehicle Loan · Auto Finance | FinFlow`;
+    }
+    if (payEmiModal) {
+      return `Pay EMI · Auto Finance | FinFlow`;
+    }
+    if (closeLoanModal) {
+      return `Close Loan · Auto Finance | FinFlow`;
+    }
+    if (showAddLoanType) {
+      return `New Loan Scheme · Auto Finance | FinFlow`;
+    }
+    return `${activeMenu || "Dashboard"} · Auto Finance | FinFlow`;
+  }, [
+    activeMenu,
+    selectedLoan,
+    selectedCustomer,
+    showCreateLoan,
+    payEmiModal,
+    closeLoanModal,
+    showAddLoanType,
+  ]);
+
+  useDocumentTitle(dynamicTitle);
 
   // Form states
   const [typeForm, setTypeForm] = useState({

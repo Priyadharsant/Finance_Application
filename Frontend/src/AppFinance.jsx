@@ -22,6 +22,7 @@ import {
 import "./Finance.css";
 import AutoFinanceView from "./AutoFinance.jsx";
 import GlobalCapitalView from "./GlobalCapital.jsx";
+import useDocumentTitle from "./hooks/useDocumentTitle.js";
 
 const API =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/daily-finance";
@@ -80,6 +81,31 @@ export default function AppFinance() {
   const [showAdd, setShowAdd] = useState(false);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const dynamicTitle = useMemo(() => {
+    const moduleLabel =
+      appModule === "DAILY"
+        ? "Daily Finance"
+        : appModule === "AUTO"
+        ? "Auto Finance"
+        : "Global Capital";
+
+    if (appModule === "DAILY") {
+      if (details?.customer?.customer_name) {
+        return `${details.customer.customer_name} · Customer Details | FinFlow`;
+      }
+      if (showAdd) {
+        return `New Customer Finance · Daily Finance | FinFlow`;
+      }
+      if (editingPayment) {
+        return `Edit Payment · Daily Finance | FinFlow`;
+      }
+    }
+
+    return `${page} · ${moduleLabel} | FinFlow`;
+  }, [appModule, page, details, showAdd, editingPayment]);
+
+  useDocumentTitle(dynamicTitle);
 
   const loadDashboard = () =>
     call(`/dashboard?date=${entryDate}`)
