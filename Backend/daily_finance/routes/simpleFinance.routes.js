@@ -196,6 +196,18 @@ export function createSimpleFinanceRouter(db) {
       if (!datePattern.test(String(expenseDate)) || !amountPattern.test(String(amount)) || !description?.trim()) throw new Error('Date, amount, and description are required');
       const result = await db.query(`INSERT INTO daily_finance_expenses(expense_date,amount,description) VALUES($1,$2,$3) RETURNING *`, [expenseDate, amount, description.trim()]);
       await db.query(`INSERT INTO daily_finance_audit_logs(action,entity,entity_id,new_value) VALUES('CREATE','EXPENSE',$1,$2)`, [result.rows[0].expense_id, JSON.stringify(result.rows[0])]);
+      
+      // Also sync to unified expenses table with category = 'DAILY'
+      try {
+        await db.query(`
+          INSERT INTO expenses(id, expense_date, amount, category, expense_type, description)
+          VALUES($1, $2, $3, 'DAILY', 'DAILY_OPERATIONAL', $4)
+          ON CONFLICT (id) DO NOTHING;
+        `, [result.rows[0].expense_id, expenseDate, amount, description.trim()]);
+      } catch (err) {
+        console.error('Unified expenses sync error:', err);
+      }
+
       res.status(201).json(result.rows[0]);
     } catch (error) { res.status(400).json({ error: error.message || 'Unable to save expense' }); }
   });

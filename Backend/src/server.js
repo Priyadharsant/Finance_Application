@@ -8,6 +8,7 @@ import customerRoutes from '../autoFinance/routes/customerRoutes.js';
 import loanTypeRoutes from '../autoFinance/routes/loanTypeRoutes.js';
 import loanRoutes from '../autoFinance/routes/loanRoutes.js';
 import globalCashRoutes from '../global_cash/routes/globalCash.routes.js';
+import { initMonthlyClosingCron } from '../global_cash/services/monthlyClosingCron.service.js';
 const app=express();
 const db=new Pool({
   host: process.env.POSTGRES_HOST || 'localhost',
@@ -28,7 +29,7 @@ app.use(session({
   }
 }));
 const allowedOrigin=process.env.FRONTEND_ORIGIN||'http://localhost:5173';
-app.use((req,res,next)=>{const origin=req.headers.origin;if(!origin||origin===allowedOrigin)res.setHeader('Access-Control-Allow-Origin',allowedOrigin);res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');if(req.method==='OPTIONS')return res.sendStatus(204);next();});
+app.use((req,res,next)=>{const origin=req.headers.origin;if(!origin||origin===allowedOrigin)res.setHeader('Access-Control-Allow-Origin',allowedOrigin);res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,DELETE,PATCH,OPTIONS');if(req.method==='OPTIONS')return res.sendStatus(204);next();});
 app.use('/api/daily-finance',createDailyFinanceRouter(db));
 app.use('/api/daily-finance',createSimpleFinanceRouter(db));
 
@@ -39,4 +40,7 @@ app.use('/api/loan-types', loanTypeRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/global-cash', globalCashRoutes);
 app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
-app.listen(Number(process.env.API_PORT||3000),()=>console.log('Daily Finance API running'));
+app.listen(Number(process.env.API_PORT||3000),()=>{
+  console.log('Daily Finance API running');
+  initMonthlyClosingCron();
+});

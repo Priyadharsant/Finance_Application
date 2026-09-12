@@ -17,6 +17,7 @@ import {
   Landmark,
   Users,
   Globe,
+  Receipt,
 } from "lucide-react";
 import "./Finance.css";
 import AutoFinanceView from "./AutoFinance.jsx";
@@ -227,6 +228,7 @@ export default function AppFinance() {
     "Ledger Overview",
     "Partner Management",
     "Capital Transactions",
+    "Expenses",
     "Monthly Closing",
   ];
 
@@ -248,6 +250,7 @@ export default function AppFinance() {
     "Ledger Overview": Globe,
     "Partner Management": Users,
     "Capital Transactions": Landmark,
+    Expenses: Receipt,
     "Monthly Closing": FileText,
   };
   const NoticeIcon = notice?.type === "error" ? AlertCircle : CheckCircle2;

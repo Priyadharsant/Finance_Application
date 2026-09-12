@@ -31,16 +31,90 @@ export async function createContribution(client, partnerId, amount, effectiveDat
   return capitalTransaction;
 }
 
-export async function getPartnerCurrentCapital(client, partnerId) {
+export async function createWithdrawal(client, partnerId, amount, effectiveDate, notes) {
+  if (amount <= 0) throw new Error("Withdrawal amount must be > 0");
+
+  const currentCapital = await getPartnerCurrentCapital(client, partnerId);
+  if (amount > currentCapital) {
+    throw new Error(
+      `Insufficient partner capital. Partner only has ₹${Number(currentCapital).toLocaleString('en-IN', { minimumFractionDigits: 2 })} available to withdraw.`
+    );
+  }
+
+  const date = effectiveDate || new Date().toISOString().slice(0, 10);
+
+  // 1. Insert Partner Capital Transaction (WITHDRAWAL)
+  const capQuery = `
+    INSERT INTO partner_capital_transactions (
+      partner_id, transaction_type, amount, effective_date, status, notes
+    )
+    VALUES ($1, 'WITHDRAWAL', $2, $3, 'COMPLETED', $4)
+    RETURNING *;
+  `;
+  const capRes = await client.query(capQuery, [partnerId, amount, date, notes]);
+  const capitalTransaction = capRes.rows[0];
+
+  // 2. Insert Global Cash Ledger Entry (DEBIT)
+  await createLedgerEntry(client, {
+    effectiveDate: date,
+    type: 'PARTNER_WITHDRAWAL',
+    amount: amount,
+    direction: 'DEBIT',
+    sourceModule: 'GLOBAL',
+    referenceType: 'CAPITAL_TRANSACTION',
+    referenceId: capitalTransaction.id,
+    notes: notes || 'Capital withdrawal by partner'
+  });
+
+  return capitalTransaction;
+}
+
+export async function getPartnerStats(client, partnerId) {
   const query = `
     SELECT 
-      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE') THEN amount ELSE 0 END), 0) -
-      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS current_capital
+      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS base_capital,
+      COALESCE(SUM(CASE WHEN transaction_type = 'PROFIT_SHARE' THEN amount ELSE 0 END), 0) AS profit_from_tx,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'PROFIT_SHARE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS total_contributed,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS total_withdrawn
     FROM partner_capital_transactions
     WHERE partner_id = $1 AND status = 'COMPLETED';
   `;
   const res = await client.query(query, [partnerId]);
-  return parseFloat(res.rows[0].current_capital);
+  const row = res.rows[0];
+  const baseCapital = parseFloat(row.base_capital);
+  let totalProfitEarned = parseFloat(row.profit_from_tx);
+
+  // If there are finalized profit allocations not yet in capital transactions, also check allocations
+  if (totalProfitEarned === 0) {
+    try {
+      const allocRes = await client.query(`
+        SELECT COALESCE(SUM(allocated_profit), 0) AS alloc_profit
+        FROM partner_profit_allocations a
+        JOIN partner_profit_calculations c ON a.calculation_id = c.id
+        WHERE a.partner_id = $1 AND c.status = 'FINALIZED';
+      `, [partnerId]);
+      totalProfitEarned = parseFloat(allocRes.rows[0].alloc_profit || 0);
+    } catch (e) {
+      // ignore if table doesn't exist
+    }
+  }
+
+  const totalContributed = baseCapital + totalProfitEarned;
+  const totalWithdrawn = parseFloat(row.total_withdrawn);
+  const currentCapital = totalContributed - totalWithdrawn;
+
+  return {
+    baseCapital,
+    totalProfitEarned,
+    totalContributed,
+    totalWithdrawn,
+    currentCapital, // Total Amount (+ Profit)
+  };
+}
+
+export async function getPartnerCurrentCapital(client, partnerId) {
+  const stats = await getPartnerStats(client, partnerId);
+  return stats.currentCapital;
 }
 
 export async function calculateMonthlyWeightedCapital(client, year, month) {
@@ -135,7 +209,7 @@ function applyTransaction(partnerBalanceObj, transaction) {
   const amt = parseFloat(transaction.amount);
   const type = transaction.transaction_type;
 
-  if (['CONTRIBUTION', 'ADJUSTMENT_INCREASE'].includes(type)) {
+  if (['CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'PROFIT_SHARE', 'CAPITAL_DEPOSIT'].includes(type)) {
     partnerBalanceObj.currentBalance += amt;
   } else if (['WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT'].includes(type)) {
     partnerBalanceObj.currentBalance -= amt;

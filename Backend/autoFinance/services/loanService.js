@@ -90,22 +90,23 @@ export async function createLoanWithVehicle(data) {
       throw new Error("Customer ID or Customer details (First Name, Last Name) are required");
     }
 
-    // Ensure columns exist and autofinance_expenses table exists
+    // Ensure columns exist and expenses table exists
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';`);
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS fees_details JSONB DEFAULT '{}'::jsonb;`);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS autofinance_expenses (
+      CREATE TABLE IF NOT EXISTS expenses (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        loan_id UUID NULL,
         expense_date DATE NOT NULL,
         amount NUMERIC(14,2) NOT NULL CHECK(amount > 0),
-        expense_type VARCHAR(100) DEFAULT 'BROKERAGE_HAND',
+        category VARCHAR(50) NOT NULL DEFAULT 'GENERAL',
+        expense_type VARCHAR(100) DEFAULT 'GENERAL',
         description TEXT NOT NULL,
+        loan_id UUID NULL,
+        finance_id UUID NULL,
         created_by UUID NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
-      CREATE OR REPLACE VIEW expenses AS SELECT * FROM autofinance_expenses;
     `);
 
     const feesDetailsObj = {
@@ -149,26 +150,15 @@ export async function createLoanWithVehicle(data) {
       notes: `Auto Loan Disbursement (In-Hand) for Customer ${finalCustomerId}`
     });
 
-    // Record expense for brokerage provided by hand into autofinance_expenses table & Global Cash Ledger
+    // Record expense for brokerage provided by hand into expenses table (Category: AUTO)
     if (feesDetailsObj.brokerageHand > 0) {
       try {
         await client.query(`
-          INSERT INTO autofinance_expenses (loan_id, expense_date, amount, expense_type, description, created_by)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [loan.id, startStr, feesDetailsObj.brokerageHand, 'BROKERAGE_HAND', `Brokerage Hand for Auto Loan ${loan.id}`, null]);
-
-        await createLedgerEntry(client, {
-          effectiveDate: startStr,
-          type: 'BUSINESS_EXPENSE',
-          amount: feesDetailsObj.brokerageHand,
-          direction: 'DEBIT',
-          sourceModule: 'AUTO',
-          referenceType: 'AUTO_BROKERAGE_HAND',
-          referenceId: loan.id,
-          notes: `Brokerage Hand Expense for Auto Loan ${loan.id}`
-        });
+          INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by)
+          VALUES ($1, $2, $3, 'AUTO', 'BROKERAGE_HAND', $4, null)
+        `, [loan.id, startStr, feesDetailsObj.brokerageHand, `Brokerage Hand for Auto Loan ${loan.id}`]);
       } catch(e) {
-        console.error("Failed to insert brokerage expense or ledger entry", e);
+        console.error("Failed to insert brokerage expense into expenses table", e);
       }
     }
 
