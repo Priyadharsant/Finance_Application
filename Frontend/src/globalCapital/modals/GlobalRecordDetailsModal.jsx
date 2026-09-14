@@ -102,12 +102,37 @@ export default function GlobalRecordDetailsModal({ type, record, close }) {
           </button>
         </div>
         <div className="globalRecordGrid">
-          {fields.map(([label, value]) => (
-            <div key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
+          {fields.map(([label, value]) => {
+            const isDescWithSub =
+              label === "Reason (Why)" &&
+              typeof value === "string" &&
+              value.includes(" - ");
+            return (
+              <div key={label}>
+                <span>{label}</span>
+                {isDescWithSub ? (
+                  <div>
+                    <strong style={{ display: "block" }}>
+                      {value.slice(0, value.indexOf(" - ")).trim()}
+                    </strong>
+                    <small
+                      style={{
+                        color: "#64748b",
+                        fontSize: "12px",
+                        display: "block",
+                        marginTop: "2px",
+                        fontWeight: "400",
+                      }}
+                    >
+                      {value.slice(value.indexOf(" - ") + 3).trim()}
+                    </small>
+                  </div>
+                ) : (
+                  <strong>{value}</strong>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

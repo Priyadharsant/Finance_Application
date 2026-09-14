@@ -6,8 +6,10 @@ import {
   Users,
   Eye,
   Check,
+  Download,
 } from "lucide-react";
 import { money } from "../utils/formatters.js";
+import { exportSingleMonthClosing } from "../services/globalCapitalExportUtils.js";
 import DayToDayCalculationLog from "./DayToDayCalculationLog.jsx";
 
 export default function MonthlyClosingTab({
@@ -86,6 +88,21 @@ export default function MonthlyClosingTab({
               <button
                 type="button"
                 className="secondaryBtn"
+                onClick={() =>
+                  exportSingleMonthClosing(
+                    currentMonthEstimate,
+                    new Date().getFullYear(),
+                    new Date().getMonth() + 1
+                  )
+                }
+                title="Export current month closing estimate to Excel"
+              >
+                <Download size={13} />
+                <span>Export Month (Excel)</span>
+              </button>
+              <button
+                type="button"
+                className="secondaryBtn"
                 onClick={onRefreshEstimate}
                 title="Refresh current month"
               >
@@ -155,14 +172,13 @@ export default function MonthlyClosingTab({
             </span>
           </div>
 
-          <div className="tableResponsive">
+          <div className="tableResponsive tableScroll">
             <table className="financeTable">
               <thead>
                 <tr>
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Opening Capital</th>
                   <th style={{ textAlign: "right" }}>Current Capital</th>
-                  <th style={{ textAlign: "right" }}>Capital Weight</th>
                   <th style={{ textAlign: "center" }}>Share %</th>
                   <th style={{ textAlign: "right" }}>Estimated Profit</th>
                   <th style={{ textAlign: "center" }}>Status</th>
@@ -187,9 +203,6 @@ export default function MonthlyClosingTab({
                       </td>
                       <td style={{ textAlign: "right", fontWeight: "600", color: "#0f766e" }}>
                         {money(alloc.closingCapital)}
-                      </td>
-                      <td style={{ textAlign: "right", fontFamily: "monospace" }}>
-                        {weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </td>
                       <td style={{ textAlign: "center" }}>
                         <span className="profitRatioPill">
@@ -236,7 +249,7 @@ export default function MonthlyClosingTab({
                   currentMonthEstimate.allocations.length === 0) && (
                   <tr>
                     <td
-                      colSpan="8"
+                      colSpan="7"
                       style={{ textAlign: "center", padding: "28px", color: "#94a3b8" }}
                     >
                       No active partner capital in this period.
@@ -343,31 +356,8 @@ export default function MonthlyClosingTab({
             Past Months
           </h3>
           <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
-            Click any month below to view its finalized profit and partner shares.
+            Select any month and year below to view its finalized profit and partner shares.
           </p>
-        </div>
-
-        {/* Quick Month Selector Buttons */}
-        <div style={{ marginBottom: "16px" }}>
-          <div className="passedMonthsPills">
-            {passedMonthsList.map((pm) => {
-              const isSelected = historyYear === pm.year && historyMonth === pm.month;
-              return (
-                <button
-                  key={`${pm.year}-${pm.month}`}
-                  type="button"
-                  className={`passedMonthPillBtn ${isSelected ? "active" : ""}`}
-                  onClick={() => {
-                    setHistoryYear(pm.year);
-                    setHistoryMonth(pm.month);
-                    onFetchHistoryMonth(pm.year, pm.month);
-                  }}
-                >
-                  {pm.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Month & Year Dropdown Bar */}
@@ -431,6 +421,22 @@ export default function MonthlyClosingTab({
                 <Eye size={13} />
               )}
               <span>View Month</span>
+            </button>
+            <button
+              type="button"
+              className="secondaryBtn"
+              style={{ padding: "6px 14px", fontSize: "13px" }}
+              onClick={() =>
+                exportSingleMonthClosing(
+                  historyMonthData,
+                  historyYear,
+                  historyMonth
+                )
+              }
+              title="Export this historical monthly closing to Excel"
+            >
+              <Download size={13} />
+              <span>Export Month (Excel)</span>
             </button>
           </div>
 
@@ -511,14 +517,13 @@ export default function MonthlyClosingTab({
             </span>
           </div>
 
-          <div className="tableResponsive">
+          <div className="tableResponsive tableScroll">
             <table className="financeTable">
               <thead>
                 <tr>
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Opening Capital</th>
                   <th style={{ textAlign: "right" }}>Closing Capital</th>
-                  <th style={{ textAlign: "right" }}>Capital Weight</th>
                   <th style={{ textAlign: "center" }}>Share %</th>
                   <th style={{ textAlign: "right" }}>Profit Earned</th>
                   <th style={{ textAlign: "center" }}>Status</th>
@@ -543,9 +548,6 @@ export default function MonthlyClosingTab({
                       </td>
                       <td style={{ textAlign: "right", fontWeight: "600", color: "#0f766e" }}>
                         {money(alloc.closingCapital)}
-                      </td>
-                      <td style={{ textAlign: "right", fontFamily: "monospace" }}>
-                        {weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                       </td>
                       <td style={{ textAlign: "center" }}>
                         <span className="profitRatioPill">
@@ -596,7 +598,7 @@ export default function MonthlyClosingTab({
                 {(!historyMonthData?.allocations || historyMonthData.allocations.length === 0) && (
                   <tr>
                     <td
-                      colSpan="8"
+                      colSpan="7"
                       style={{ textAlign: "center", padding: "28px", color: "#94a3b8" }}
                     >
                       No allocations recorded for this month.

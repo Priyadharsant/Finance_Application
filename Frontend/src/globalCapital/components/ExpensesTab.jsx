@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Plus,
   Receipt,
@@ -8,8 +8,11 @@ import {
   Search,
   X,
   Trash2,
+  Download,
+  Calendar,
 } from "lucide-react";
 import { money } from "../utils/formatters.js";
+import { exportBusinessExpenses } from "../services/globalCapitalExportUtils.js";
 
 export default function ExpensesTab({
   expenses,
@@ -32,6 +35,25 @@ export default function ExpensesTab({
     ? expenses.expenses
     : [];
 
+  const filteredTotal = useMemo(() => {
+    return expenseList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  }, [expenseList]);
+
+  const categoryBreakdown = useMemo(() => {
+    const map = {
+      AUTO: { total: 0, count: 0 },
+      DAILY: { total: 0, count: 0 },
+      GENERAL: { total: 0, count: 0 },
+    };
+    expenseList.forEach((e) => {
+      const cat = (e.category || "GENERAL").toUpperCase();
+      if (!map[cat]) map[cat] = { total: 0, count: 0 };
+      map[cat].total += Number(e.amount || 0);
+      map[cat].count += 1;
+    });
+    return map;
+  }, [expenseList]);
+
   return (
     <div className="financeFadeIn globalCapitalView">
       <div className="financeHeader">
@@ -42,55 +64,68 @@ export default function ExpensesTab({
             Track, categorize, and audit all company expenses across Auto, Daily, and General operations.
           </p>
         </div>
-        <button className="primaryBtn" onClick={onOpenAddExpense}>
-          <Plus size={16} /> Record Expense
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            className="secondaryBtn"
+            onClick={() =>
+              exportBusinessExpenses(expenseList, {
+                label: expenseFilterMonth ? `${expenseFilterYear}_${expenseFilterMonth}` : `${expenseFilterYear}_All`,
+              })
+            }
+            title="Export Filtered Expenses Report to Excel"
+          >
+            <Download size={16} /> Export Report (Excel) ({expenseList.length})
+          </button>
+          <button className="primaryBtn" onClick={onOpenAddExpense}>
+            <Plus size={16} /> Record Expense
+          </button>
+        </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* Metric Cards (Dynamic Based on Filtered Records) */}
       <div
         className="globalCapitalStats compact"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}
       >
         <div>
-          <span>Period Total</span>
+          <span>{expenseFilterCategory !== "ALL" ? `${expenseFilterCategory} Expenses` : "Filtered Period Total"}</span>
           <strong style={{ color: "#e11d48" }}>
-            {money(expenseSummary.totalFiltered)}
+            {money(filteredTotal)}
           </strong>
-          <small>{expenseSummary.countFiltered || 0} entries in selected period</small>
+          <small>{expenseList.length} filtered entries in view</small>
         </div>
         <div>
           <span>All-time total</span>
           <strong>
-            {money(expenseSummary.allTimeTotal)}
+            {money(expenseSummary?.allTimeTotal ?? filteredTotal)}
           </strong>
-          <small>{expenseSummary.allTimeCount || 0} total records</small>
+          <small>{expenseSummary?.allTimeCount || expenseList.length} total recorded</small>
         </div>
         <div>
           <span>Auto Finance</span>
           <strong style={{ color: "#2563eb" }}>
-            {money(expenseSummary.categoryBreakdown?.AUTO?.total)}
+            {money(categoryBreakdown.AUTO.total)}
           </strong>
           <small>
-            Brokerage &amp; vehicle fees ({expenseSummary.categoryBreakdown?.AUTO?.count || 0})
+            Brokerage &amp; vehicle fees ({categoryBreakdown.AUTO.count})
           </small>
         </div>
         <div>
           <span>Daily Finance</span>
           <strong style={{ color: "#059669" }}>
-            {money(expenseSummary.categoryBreakdown?.DAILY?.total)}
+            {money(categoryBreakdown.DAILY.total)}
           </strong>
           <small>
-            Operational expenses ({expenseSummary.categoryBreakdown?.DAILY?.count || 0})
+            Operational expenses ({categoryBreakdown.DAILY.count})
           </small>
         </div>
         <div>
           <span>General Expenses</span>
           <strong style={{ color: "#7c3aed" }}>
-            {money(expenseSummary.categoryBreakdown?.GENERAL?.total)}
+            {money(categoryBreakdown.GENERAL.total)}
           </strong>
           <small>
-            Office, rent &amp; overheads ({expenseSummary.categoryBreakdown?.GENERAL?.count || 0})
+            Office, rent &amp; overheads ({categoryBreakdown.GENERAL.count})
           </small>
         </div>
       </div>
@@ -129,6 +164,65 @@ export default function ExpensesTab({
         </div>
 
         <div className="expenseFilterRight">
+          {/* Month Calendar Picker */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#ffffff",
+              padding: "4px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+            }}
+            title="Filter by Month Calendar"
+          >
+            <Calendar size={15} color="#0f766e" />
+            <input
+              type="month"
+              value={
+                expenseFilterYear && expenseFilterMonth
+                  ? `${expenseFilterYear}-${String(expenseFilterMonth).padStart(2, "0")}`
+                  : ""
+              }
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [y, m] = e.target.value.split("-");
+                  setExpenseFilterYear(y);
+                  setExpenseFilterMonth(String(parseInt(m, 10)));
+                } else {
+                  setExpenseFilterMonth("");
+                }
+              }}
+              style={{
+                border: "none",
+                outline: "none",
+                fontSize: "12px",
+                color: "#1e293b",
+                fontWeight: "500",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              title="Click calendar icon to select month"
+            />
+            {expenseFilterMonth && (
+              <button
+                type="button"
+                onClick={() => setExpenseFilterMonth("")}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  padding: "0 2px",
+                }}
+                title="Clear Month Filter"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
           <select
             className="expenseSelect"
             value={expenseFilterMonth}
@@ -239,8 +333,30 @@ export default function ExpensesTab({
                   }
                 >
                   <td>{new Date(exp.expense_date).toLocaleDateString("en-IN")}</td>
-                  <td style={{ fontWeight: "600", color: "#0f172a" }}>
-                    {exp.description}
+                  <td>
+                    {(() => {
+                      const desc = exp.description || "";
+                      if (desc.includes(" - ")) {
+                        const firstDash = desc.indexOf(" - ");
+                        const mainTitle = desc.slice(0, firstDash).trim();
+                        const subDetails = desc.slice(firstDash + 3).trim();
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            <span style={{ fontWeight: "600", color: "#0f172a" }}>
+                              {mainTitle}
+                            </span>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "400" }}>
+                              {subDetails}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <span style={{ fontWeight: "600", color: "#0f172a" }}>
+                          {desc}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td>
                     <span

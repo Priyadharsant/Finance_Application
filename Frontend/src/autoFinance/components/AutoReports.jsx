@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { X, Calendar } from "lucide-react";
 import { money } from "../services/autoFinanceApi";
 
 export default function AutoReports({
@@ -10,6 +11,23 @@ export default function AutoReports({
   handleExportMonthly,
   handleExportIndividualFromId,
 }) {
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
+
+  const filteredLoans = useMemo(() => {
+    if (!reportMonth) return loans;
+    return loans.filter((l) => {
+      const lm = String(l.start_date || l.disbursement_date || l.created_at || "").slice(0, 7);
+      return lm === reportMonth;
+    });
+  }, [loans, reportMonth]);
+
+  const repDisbursed = filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
+  const repCollected = filteredLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const repRemaining = filteredLoans.reduce((sum, l) => sum + Math.max(0, Number(l.loan_amount || 0) - Number(l.total_paid || 0)), 0);
+  const repActive = filteredLoans.filter(l => l.status === "ACTIVE").length;
+  const repCompleted = filteredLoans.filter(l => l.status === "COMPLETED").length;
+  const repRecoveryRate = repDisbursed > 0 ? Math.round((repCollected / repDisbursed) * 100) : 0;
+
   return (
     <section className="content">
       <div className="intro">
@@ -34,7 +52,7 @@ export default function AutoReports({
         }}
       >
         <button className="primary autoBtn" onClick={handleExportTotal}>
-          Export Total Portfolio (Excel)
+          Export Total Portfolio (Excel) ({loans.length})
         </button>
         <div
           style={{
@@ -47,6 +65,7 @@ export default function AutoReports({
             border: "1px solid #cbd5e1",
           }}
         >
+          <Calendar size={14} color="#0f766e" />
           <input
             type="month"
             value={reportMonth}
@@ -55,11 +74,28 @@ export default function AutoReports({
               border: "none",
               background: "transparent",
               outline: "none",
-              fontSize: "14px",
+              fontSize: "13px",
               cursor: "pointer",
               color: "#0f172a",
+              fontWeight: 500,
             }}
           />
+          {reportMonth && (
+            <button
+              type="button"
+              onClick={() => setReportMonth("")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
+                padding: "0 2px",
+              }}
+              title="Clear Month Filter"
+            >
+              <X size={13} />
+            </button>
+          )}
           <button
             className="primary autoBtn"
             style={{
@@ -70,30 +106,48 @@ export default function AutoReports({
             }}
             onClick={handleExportMonthly}
           >
-            Export Monthly (Excel)
+            Export Monthly (Excel) ({filteredLoans.length})
           </button>
         </div>
         <button onClick={() => window.print()}>Export PDF / Print</button>
       </div>
 
-      <div className="metricGrid">
-        <div className="metric autoMetric">
-          <span>Total Financed Portfolio</span>
-          <b>{money(overview.total_disbursed || 0)}</b>
+      {/* DYNAMIC METRIC GRID (BASED ON FILTERS) */}
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "20px" }}>
+        <div className="metric autoMetric blue">
+          <span>Financed Portfolio</span>
+          <b>{money(repDisbursed)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+            {filteredLoans.length} Loans {reportMonth ? `(${reportMonth})` : "(All Time)"}
+          </small>
         </div>
         <div className="metric autoMetric green">
-          <span>Total EMI Recovered</span>
-          <b>{money(overview.total_collected || 0)}</b>
+          <span>EMI Recovered</span>
+          <b>{money(repCollected)}</b>
+          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            {repRecoveryRate}% Recovered
+          </small>
+        </div>
+        <div className="metric autoMetric red">
+          <span>Remaining Portfolio</span>
+          <b>{money(repRemaining)}</b>
+          <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            Balance Outstanding
+          </small>
         </div>
         <div className="metric autoMetric orange">
           <span>Active Vehicle Assets</span>
-          <b>{overview.total_vehicles || loans.length || 0}</b>
+          <b>{repActive} Active</b>
+          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            {repCompleted} Settled / Completed
+          </small>
         </div>
       </div>
 
       <div className="card tableWrap">
-        <div className="cardHead">
-          <h3>Portfolio Summary</h3>
+        <div className="cardHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ margin: 0 }}>Portfolio Summary {reportMonth ? `(${reportMonth})` : ""}</h3>
+          <span style={{ fontSize: "12px", color: "#64748b" }}>{filteredLoans.length} Loans Found</span>
         </div>
         <table>
           <thead>
@@ -108,7 +162,7 @@ export default function AutoReports({
             </tr>
           </thead>
           <tbody>
-            {loans.map((l) => (
+            {filteredLoans.map((l) => (
               <tr key={l.id}>
                 <td>
                   <b>

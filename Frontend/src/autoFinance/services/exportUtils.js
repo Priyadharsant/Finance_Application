@@ -23,27 +23,83 @@ export const exportToExcel = (data, fileName) => {
   XLSX.writeFile(workbook, `${fileName}.xlsx`);
 };
 
-export const exportTotalPortfolio = (loans) => {
-  const exportData = loans.map(l => ({
-    "Customer Name": `${l.first_name} ${l.last_name}`,
-    "Customer Code": l.customer_code,
-    "Phone": l.phone || "",
-    "Vehicle": `${l.make} ${l.model}`,
-    "Reg No": l.registration_number,
-    "Loan Amount": Number(l.loan_amount),
-    "Interest Rate (%)": Number(l.interest_rate),
-    "Tenure (Months)": Number(l.tenure_months),
-    "Start Date": dateLabel(l.start_date),
-    "End Date": dateLabel(l.end_date),
-    "Total Collected": Number(l.total_paid || 0),
-    "Pending Dues": Number(l.pending_dues_count || 0),
-    "Status": l.status,
-  }));
-  exportToExcel(exportData, `Total_Portfolio_Report_${new Date().toISOString().slice(0, 10)}`);
+export const exportTotalPortfolio = (loans = [], label = "") => {
+  const exportData = (loans || []).map(l => {
+    let fees = {};
+    try {
+      fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
+    } catch (_) {
+      fees = {};
+    }
+
+    const incomeDue = Number(fees.incomeDue || 0);
+    const documentFee = Number(fees.documentFee || 0);
+    const hirePurchase = Number(fees.hirePurchase || 0);
+    const taxAmount = Number(fees.taxAmount || 0);
+    const insurance = Number(fees.insurance || 0);
+    const insuranceFine = Number(fees.insuranceFine || 0);
+    const greenTax = Number(fees.greenTax || 0);
+    const fine = Number(fees.fine || 0);
+    const nationalTax = Number(fees.nationalTax || 0);
+    const permit = Number(fees.permit || 0);
+    const brokerageCustomer = Number(fees.brokerageCustomer || 0);
+    const brokerageHand = Number(fees.brokerageHand || 0);
+
+    const totalDeductions =
+      incomeDue +
+      documentFee +
+      hirePurchase +
+      taxAmount +
+      insurance +
+      insuranceFine +
+      greenTax +
+      fine +
+      nationalTax +
+      permit +
+      brokerageCustomer;
+
+    const inHandAmount = Number(l.loan_amount || 0) - totalDeductions;
+
+    return {
+      "Customer Name": `${l.first_name || ""} ${l.last_name || ""}`.trim(),
+      "Customer Code": l.customer_code || "—",
+      "Phone": l.phone || "",
+      "Vehicle": `${l.make || ""} ${l.model || ""}`.trim(),
+      "Reg No": l.registration_number || "PENDING",
+      "Loan Amount (₹)": Number(l.loan_amount || 0),
+      "Income Due (₹)": incomeDue,
+      "Document Fee (₹)": documentFee,
+      "Hire Purchase (₹)": hirePurchase,
+      "Tax Amount (₹)": taxAmount,
+      "Insurance (₹)": insurance,
+      "Insurance Fine (₹)": insuranceFine,
+      "Green Tax (₹)": greenTax,
+      "Fine (₹)": fine,
+      "National Tax (₹)": nationalTax,
+      "Permit (₹)": permit,
+      "Brokerage (Customer) (₹)": brokerageCustomer,
+      "Brokerage (By Hand) (₹)": brokerageHand,
+      "Total Deductions & Fees (₹)": totalDeductions,
+      "Amount Given to Customer (After All Deductions) (₹)": inHandAmount,
+      "Interest Rate (%)": Number(l.interest_rate || 0),
+      "Tenure (Months)": Number(l.tenure_months || 0),
+      "Start Date": dateLabel(l.start_date),
+      "End Date": dateLabel(l.end_date),
+      "Total Collected (₹)": Number(l.total_paid || 0),
+      "Pending Dues": Number(l.pending_dues_count || 0),
+      "Status": l.status || "ACTIVE",
+    };
+  });
+
+  const fileName = `Auto_Loans_Report_${label ? label + "_" : ""}${new Date().toISOString().slice(0, 10)}`;
+  exportToExcel(
+    exportData.length ? exportData : [{ Message: "No vehicle loans found matching the applied filters." }],
+    fileName
+  );
 };
 
-export const exportCustomersList = (customers) => {
-  const exportData = customers.map(c => ({
+export const exportCustomersList = (customers = [], label = "") => {
+  const exportData = (customers || []).map(c => ({
     "Customer Code": c.customer_code,
     "First Name": c.first_name,
     "Last Name": c.last_name,
@@ -52,8 +108,14 @@ export const exportCustomersList = (customers) => {
     "City": c.city || "",
     "State": c.state || "",
     "Address": c.address || "",
+    "Created Date": c.created_at ? String(c.created_at).slice(0, 10) : "—",
   }));
-  exportToExcel(exportData, `Auto_Customers_${new Date().toISOString().slice(0, 10)}`);
+
+  const fileName = `Auto_Customers_${label ? label + "_" : ""}${new Date().toISOString().slice(0, 10)}`;
+  exportToExcel(
+    exportData.length ? exportData : [{ Message: "No customers found matching the applied filters." }],
+    fileName
+  );
 };
 
 export const exportIndividualLoan = (loan) => {

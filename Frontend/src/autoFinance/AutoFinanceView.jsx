@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
+import "./autoFinance.css";
 import { apiCall } from "./services/autoFinanceApi";
 import {
   exportToExcel,
@@ -130,7 +131,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [loanTabFilter, setLoanTabFilter] = useState("ALL");
-  const [vehicleTypeFilter, setVehicleTypeFilter] = useState("ALL");
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const [loanMonthFilter, setLoanMonthFilter] = useState(currentMonthStr);
+  const [dashboardMonthFilter, setDashboardMonthFilter] = useState(currentMonthStr);
+  const [customerMonthFilter, setCustomerMonthFilter] = useState(currentMonthStr);
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "desc",
@@ -282,11 +286,17 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       0
     );
     const remainingPrincipal = Math.max(0, principal - paidPrincipalRes);
+    const custName = `${loanDetails.loan.first_name || ''} ${loanDetails.loan.last_name || ''}`.trim() || 'Customer';
+    const regNum = loanDetails.loan.registration_number || '';
 
     setCloseLoanModal({
       loanId: loanDetails.loan.id,
+      customerName: custName,
+      regNumber: regNum,
+      remainingPrincipal,
       principalAmount: remainingPrincipal,
       interestPercent: 0,
+      discountAmount: 0,
       paymentMethod: "CASH",
       referenceNumber: "",
     });
@@ -299,17 +309,20 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       const p = Number(closeLoanModal.principalAmount || 0);
       const pct = Number(closeLoanModal.interestPercent || 0);
       const interestAmt = Math.round((p * pct) / 100);
+      const discount = Number(closeLoanModal.discountAmount || 0);
 
       await apiCall(`/loans/${closeLoanModal.loanId}/close`, {
         method: "POST",
         body: JSON.stringify({
           principalAmount: p,
           interestAmount: interestAmt,
+          discountAmount: discount,
           paymentMethod: closeLoanModal.paymentMethod,
           referenceNumber: closeLoanModal.referenceNumber,
         }),
       });
-      setNotice?.({ type: "success", text: "Loan successfully closed early!" });
+      const discNote = discount > 0 ? ` (₹${discount.toLocaleString()} discount recorded in expenses)` : '';
+      setNotice?.({ type: "success", text: `Loan successfully closed early!${discNote}` });
       setCloseLoanModal(null);
       if (selectedLoan) {
         const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
@@ -386,27 +399,48 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   };
 
   const handleExportCustomers = () => {
-    exportCustomersList(filteredCustomers);
+    exportCustomersList(filteredCustomers, customerMonthFilter || undefined);
+  };
+
+  const handleExportVehicleLoans = () => {
+    exportTotalPortfolio(vehiclePageLoans, loanMonthFilter || undefined);
+  };
+
+  const handleExportDashboardLoans = () => {
+    exportTotalPortfolio(dashboardLoans, dashboardMonthFilter ? `Dues_${dashboardMonthFilter}` : "Active_Dues");
   };
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(
-      (c) =>
-        !search ||
-        `${c.first_name} ${c.last_name}`
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
-        (c.phone && c.phone.includes(search)) ||
-        (c.customer_code &&
-          c.customer_code.toLowerCase().includes(search.toLowerCase()))
-    );
-  }, [customers, search]);
+    return customers.filter((c) => {
+      if (customerMonthFilter) {
+        const cDate = String(c.created_at || "").slice(0, 7);
+        if (cDate !== customerMonthFilter) return false;
+      }
+      if (search) {
+        const matches =
+          `${c.first_name} ${c.last_name}`
+            .toLowerCase()
+            .includes(search.toLowerCase()) ||
+          (c.phone && c.phone.includes(search)) ||
+          (c.customer_code &&
+            c.customer_code.toLowerCase().includes(search.toLowerCase()));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [customers, search, customerMonthFilter]);
 
   // Dashboard strictly shows ACTIVE loans only (no completed/settled loans)
   const dashboardLoans = useMemo(() => {
     let result = loans.filter((l) => {
       if (l.status !== "ACTIVE" || Number(l.pending_dues_count ?? 1) <= 0)
         return false;
+
+      if (dashboardMonthFilter) {
+        const dueM = l.next_due_date ? String(l.next_due_date).slice(0, 7) : "";
+        const startM = String(l.start_date || l.created_at || "").slice(0, 7);
+        if (dueM !== dashboardMonthFilter && startM !== dashboardMonthFilter) return false;
+      }
 
       const matchesSearch =
         !search ||
@@ -463,7 +497,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     });
 
     return result;
-  }, [loans, search, statusFilter, sortConfig]);
+  }, [loans, search, statusFilter, dashboardMonthFilter, sortConfig]);
 
   // Vehicle Loans directory: show ACTIVE loans first, then COMPLETED loans
   const vehiclePageLoans = useMemo(() => {
@@ -489,6 +523,11 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       if (vehicleTypeFilter !== "ALL" && l.vehicle_type !== vehicleTypeFilter)
         return false;
 
+      if (loanMonthFilter) {
+        const startM = String(l.start_date || l.created_at || "").slice(0, 7);
+        if (startM !== loanMonthFilter) return false;
+      }
+
       return true;
     });
 
@@ -507,7 +546,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     });
 
     return list;
-  }, [loans, search, loanTabFilter, vehicleTypeFilter]);
+  }, [loans, search, loanTabFilter, vehicleTypeFilter, loanMonthFilter]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -552,6 +591,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           dashboardData={dashboardData}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
+          dashboardMonthFilter={dashboardMonthFilter}
+          setDashboardMonthFilter={setDashboardMonthFilter}
+          handleExportDashboardLoans={handleExportDashboardLoans}
           sortConfig={sortConfig}
           handleSort={handleSort}
           setShowCreateLoan={setShowCreateLoan}
@@ -565,6 +607,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       {activeMenu === "Customers" && (
         <AutoCustomers
           filteredCustomers={filteredCustomers}
+          customerMonthFilter={customerMonthFilter}
+          setCustomerMonthFilter={setCustomerMonthFilter}
           search={search}
           setSearch={setSearch}
           handleExportCustomers={handleExportCustomers}
@@ -596,12 +640,15 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           vehiclePageLoans={vehiclePageLoans}
           loanTabFilter={loanTabFilter}
           setLoanTabFilter={setLoanTabFilter}
+          loanMonthFilter={loanMonthFilter}
+          setLoanMonthFilter={setLoanMonthFilter}
           search={search}
           setSearch={setSearch}
           vehicleTypeFilter={vehicleTypeFilter}
           setVehicleTypeFilter={setVehicleTypeFilter}
           setShowCreateLoan={setShowCreateLoan}
           openLoanDetails={openLoanDetails}
+          handleExportVehicleLoans={handleExportVehicleLoans}
         />
       )}
 

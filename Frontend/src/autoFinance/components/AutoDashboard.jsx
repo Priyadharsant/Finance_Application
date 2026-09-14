@@ -7,6 +7,10 @@ import {
   Clock3,
   Plus,
   Zap,
+  Download,
+  Calendar,
+  X,
+  RotateCcw,
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money, dateLabel } from "../services/autoFinanceApi";
@@ -17,13 +21,31 @@ export default function AutoDashboard({
   dashboardData = {},
   statusFilter,
   setStatusFilter,
+  dashboardMonthFilter = "",
+  setDashboardMonthFilter,
+  handleExportDashboardLoans,
   sortConfig,
   handleSort,
   setShowCreateLoan,
   openLoanDetails,
   setPayEmiModal,
   setPayForm,
-}) {
+  const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter);
+
+  const dashDisbursed = dashboardLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
+  const dashCollected = dashboardLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const dashRemaining = Math.max(0, dashDisbursed - dashCollected);
+  const dashOverdueCount = dashboardLoans.filter((l) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return l.next_due_date && new Date(l.next_due_date) < new Date(todayStr);
+  }).length;
+  const dashDueTodayCount = dashboardLoans.filter((l) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dueStr = l.next_due_date ? new Date(l.next_due_date).toISOString().slice(0, 10) : "";
+    return dueStr === todayStr;
+  }).length;
+  const dashRecoveryRate = dashDisbursed > 0 ? Math.round((dashCollected / dashDisbursed) * 100) : 0;
+
   return (
     <section className="content">
       <div className="intro">
@@ -47,7 +69,7 @@ export default function AutoDashboard({
         </div>
       </div>
 
-      {/* EXECUTIVE KPI METRIC CARDS */}
+      {/* EXECUTIVE KPI METRIC CARDS (DYNAMIC BASED ON FILTERS) */}
       <div
         className="metricGrid"
         style={{
@@ -55,8 +77,8 @@ export default function AutoDashboard({
         }}
       >
         <div className="metric autoMetric blue">
-          <span>Total Disbursed (Principal)</span>
-          <b>{money(overview.total_disbursed || 0)}</b>
+          <span>Principal Disbursed</span>
+          <b>{money(dashDisbursed)}</b>
           <small
             style={{
               color: "#64748b",
@@ -65,13 +87,13 @@ export default function AutoDashboard({
               display: "block",
             }}
           >
-            Capital deployed across loans
+            {dashboardLoans.length} Loans in view
           </small>
         </div>
 
         <div className="metric autoMetric orange">
-          <span>Total Expected Return</span>
-          <b>{money(overview.total_expected || 0)}</b>
+          <span>Expected Return</span>
+          <b>{money(dashboardLoans.reduce((sum, l) => sum + Number(l.agreed_total_payable || l.total_payable || (Number(l.loan_amount || 0) + Number(l.total_interest || 0))), 0))}</b>
           <small
             style={{
               color: "#64748b",
@@ -80,13 +102,13 @@ export default function AutoDashboard({
               display: "block",
             }}
           >
-            Principal + Total Interest Scheduled
+            Principal + Scheduled Interest
           </small>
         </div>
 
         <div className="metric autoMetric green">
-          <span>Total EMI Collected</span>
-          <b>{money(overview.total_collected || 0)}</b>
+          <span>EMI Collected</span>
+          <b>{money(dashCollected)}</b>
           <small
             style={{
               color: "#059669",
@@ -96,13 +118,13 @@ export default function AutoDashboard({
               display: "block",
             }}
           >
-            {overview.recovery_rate || "0"}% Recovered
+            {dashRecoveryRate}% Recovered
           </small>
         </div>
 
         <div className="metric autoMetric red">
           <span>Remaining Portfolio</span>
-          <b>{money(overview.remaining || 0)}</b>
+          <b>{money(dashRemaining)}</b>
           <small
             style={{
               color: "#dc2626",
@@ -112,13 +134,13 @@ export default function AutoDashboard({
               display: "block",
             }}
           >
-            Balance left to recover
+            Outstanding balance in filter
           </small>
         </div>
 
         <div className="metric autoMetric teal">
-          <span>Projected Net Profit</span>
-          <b>{money(overview.total_profit || 0)}</b>
+          <span>Actionable Dues</span>
+          <b>{dashOverdueCount + dashDueTodayCount} Dues</b>
           <small
             style={{
               color: "#0f766e",
@@ -128,7 +150,7 @@ export default function AutoDashboard({
               display: "block",
             }}
           >
-            Interest earnings margin
+            {dashOverdueCount} Overdue · {dashDueTodayCount} Due Today
           </small>
         </div>
       </div>
@@ -180,6 +202,63 @@ export default function AutoDashboard({
               <option value="DUE_TODAY">Due Today</option>
               <option value="UPCOMING">Upcoming Dues</option>
             </select>
+
+            {/* Month Calendar Picker */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#ffffff",
+                padding: "4px 8px",
+                borderRadius: "6px",
+                border: "1px solid #cbd5e1",
+              }}
+              title="Filter dues by month calendar"
+            >
+              <Calendar size={14} color="#0f766e" />
+              <input
+                type="month"
+                value={dashboardMonthFilter}
+                onChange={(e) => setDashboardMonthFilter?.(e.target.value)}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  fontSize: "12px",
+                  color: "#1e293b",
+                  fontWeight: "500",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+                title="Filter dues by month"
+              />
+              {dashboardMonthFilter && (
+                <button
+                  type="button"
+                  onClick={() => setDashboardMonthFilter?.("")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "0 2px",
+                  }}
+                  title="Clear Month Filter"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <button
+              className="secondary autoBtn"
+              style={{ padding: "5px 10px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              onClick={handleExportDashboardLoans}
+              title="Export filtered active dues to Excel"
+            >
+              <Download size={13} /> Export Dues ({dashboardLoans.length})
+            </button>
+
             <span
               className="tag"
               style={{

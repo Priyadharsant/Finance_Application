@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Clock3, CarFront } from "lucide-react";
+import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money } from "../services/autoFinanceApi";
 
@@ -9,13 +9,36 @@ export default function AutoVehicleLoans({
   vehiclePageLoans = [],
   loanTabFilter,
   setLoanTabFilter,
+  loanMonthFilter = "",
+  setLoanMonthFilter,
   search,
   setSearch,
   vehicleTypeFilter,
   setVehicleTypeFilter,
   setShowCreateLoan,
   openLoanDetails,
+  handleExportVehicleLoans,
 }) {
+  const isFiltered =
+    loanTabFilter !== "ALL" ||
+    Boolean(loanMonthFilter) ||
+    vehicleTypeFilter !== "ALL" ||
+    Boolean(search);
+
+  const handleResetFilters = () => {
+    setLoanTabFilter("ALL");
+    setLoanMonthFilter?.("");
+    setVehicleTypeFilter("ALL");
+    setSearch("");
+  };
+
+  const filteredDisbursed = vehiclePageLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
+  const filteredCollected = vehiclePageLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const filteredActiveCount = vehiclePageLoans.filter((l) => l.status === "ACTIVE").length;
+  const filteredCompletedCount = vehiclePageLoans.filter((l) => l.status === "COMPLETED").length;
+  const filteredRecoveryRate = filteredDisbursed > 0 ? Math.round((filteredCollected / filteredDisbursed) * 100) : 0;
+  const filteredRemaining = Math.max(0, filteredDisbursed - filteredCollected);
+
   return (
     <section className="content">
       <div className="intro">
@@ -26,40 +49,67 @@ export default function AutoVehicleLoans({
             Comprehensive directory of all active and completed vehicle loan agreements, registered vehicles, and repayment status.
           </p>
         </div>
-        <button
-          className="primary autoBtn"
-          onClick={() => setShowCreateLoan(true)}
-        >
-          <Plus size={16} /> Create Vehicle Loan
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            className="secondary autoBtn"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            onClick={handleExportVehicleLoans}
+            title="Export Filtered Vehicle Loans to Excel"
+          >
+            <Download size={15} /> Export Report (Excel)
+            {vehiclePageLoans.length < loans.length ? ` (${vehiclePageLoans.length})` : ` (${loans.length})`}
+          </button>
+          <button
+            className="primary autoBtn"
+            onClick={() => setShowCreateLoan(true)}
+          >
+            <Plus size={16} /> Create Vehicle Loan
+          </button>
+        </div>
       </div>
 
-      {/* QUICK PORTFOLIO SUMMARY CARDS */}
+      {/* DYNAMIC GRID ANALYTICS CARDS (BASED ON ACTIVE FILTERS) */}
       <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "22px" }}>
         <div className="metric autoMetric blue">
-          <span>Total Disbursed</span>
-          <b>{money(overview.total_disbursed || 0)}</b>
-          <small style={{ color: "#64748b", fontSize: "11.5px", display: "block", marginTop: "4px" }}>{loans.length} Total Loans</small>
+          <span>{isFiltered ? "Filtered Disbursed" : "Total Disbursed"}</span>
+          <b>{money(filteredDisbursed)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", display: "block", marginTop: "4px" }}>
+            {isFiltered ? `${vehiclePageLoans.length} filtered / ${loans.length} total` : `${loans.length} Total Loans`}
+          </small>
         </div>
         <div className="metric autoMetric green">
           <span>Active Loans</span>
-          <b>{loans.filter(l => l.status === 'ACTIVE').length}</b>
-          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>Ongoing Repayments</small>
+          <b>{filteredActiveCount}</b>
+          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+            {isFiltered ? `${filteredActiveCount} of ${vehiclePageLoans.length} filtered` : "Ongoing Repayments"}
+          </small>
         </div>
         <div className="metric autoMetric teal">
           <span>Completed Loans</span>
-          <b>{loans.filter(l => l.status === 'COMPLETED').length}</b>
-          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>Fully Settled</small>
+          <b>{filteredCompletedCount}</b>
+          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+            {isFiltered ? `${filteredCompletedCount} of ${vehiclePageLoans.length} filtered` : "Fully Settled"}
+          </small>
         </div>
         <div className="metric autoMetric orange">
-          <span>Total EMI Collected</span>
-          <b>{money(overview.total_collected || 0)}</b>
-          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>{overview.recovery_rate || "0"}% Recovered</small>
+          <span>{isFiltered ? "Filtered Collected" : "Total EMI Collected"}</span>
+          <b>{money(filteredCollected)}</b>
+          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+            {filteredRecoveryRate}% Recovered
+          </small>
+        </div>
+        <div className="metric autoMetric red">
+          <span>{isFiltered ? "Filtered Remaining" : "Remaining Portfolio"}</span>
+          <b>{money(filteredRemaining)}</b>
+          <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+            Outstanding Balance
+          </small>
         </div>
       </div>
 
-      {/* ORGANIZED FILTER BAR: TABS + SEARCH + VEHICLE TYPE */}
+      {/* ORGANIZED FILTER BAR: TABS + MONTH CALENDAR + SEARCH + VEHICLE TYPE */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+        {/* Left: Status Switcher Tabs */}
         <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", padding: "4px", borderRadius: "10px" }}>
           <button
             type="button"
@@ -117,23 +167,86 @@ export default function AutoVehicleLoans({
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flex: 1, minWidth: "280px", maxWidth: "560px" }}>
-          <input
-            placeholder="Search by customer, phone, vehicle, or reg no..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, padding: "8px 14px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", outline: "none" }}
-          />
+        {/* Right: Month Calendar, Search, Vehicle Type, Reset */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Month Calendar Picker */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#ffffff",
+              padding: "4px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+            }}
+            title="Filter by Start Month Calendar"
+          >
+            <Calendar size={15} color="#0f766e" />
+            <input
+              type="month"
+              value={loanMonthFilter}
+              onChange={(e) => setLoanMonthFilter(e.target.value)}
+              style={{
+                border: "none",
+                outline: "none",
+                fontSize: "12.5px",
+                color: "#1e293b",
+                fontWeight: "500",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              title="Click calendar icon to filter by loan start month"
+            />
+            {loanMonthFilter && (
+              <button
+                type="button"
+                onClick={() => setLoanMonthFilter("")}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  padding: "0 2px",
+                }}
+                title="Clear Month Filter"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ minWidth: "220px", maxWidth: "340px", flex: 1 }}>
+            <input
+              placeholder="Search customer, phone, vehicle, reg no..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%", padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", outline: "none" }}
+            />
+          </div>
+
           <select
             value={vehicleTypeFilter}
             onChange={(e) => setVehicleTypeFilter(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", background: "#ffffff", fontWeight: 600, color: "#334155" }}
+            style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", background: "#ffffff", fontWeight: 600, color: "#334155" }}
           >
             <option value="ALL">All Vehicle Types</option>
             <option value="TWO_WHEELER">Two Wheeler</option>
             <option value="CAR">Car</option>
             <option value="COMMERCIAL">Commercial</option>
           </select>
+
+          {isFiltered && (
+            <button
+              type="button"
+              className="secondary autoBtn"
+              style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={handleResetFilters}
+              title="Reset all filters"
+            >
+              <RotateCcw size={12} /> Reset
+            </button>
+          )}
         </div>
       </div>
 

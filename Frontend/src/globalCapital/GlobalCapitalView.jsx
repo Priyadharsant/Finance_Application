@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
+import "./globalCapital.css";
 import { globalCapitalApi } from "./services/globalCapitalApi.js";
 
 // Tab Components
@@ -8,6 +9,7 @@ import PartnerManagement from "./components/PartnerManagement.jsx";
 import CapitalTransactionsTab from "./components/CapitalTransactionsTab.jsx";
 import ExpensesTab from "./components/ExpensesTab.jsx";
 import MonthlyClosingTab from "./components/MonthlyClosingTab.jsx";
+import GlobalReportsTab from "./components/GlobalReportsTab.jsx";
 
 // Modals
 import AddPartnerModal from "./modals/AddPartnerModal.jsx";
@@ -321,6 +323,12 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       fetchProfitCalcs();
       fetchCronStatus();
     }
+    if (activeMenu === "Reports") {
+      fetchPartners();
+      fetchTransactions();
+      fetchLedger();
+      fetchExpenses();
+    }
   }, [activeMenu, expenseFilterYear, expenseFilterMonth, expenseFilterCategory, expenseSearch]);
 
   // ----------------------------------------------------
@@ -595,6 +603,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       {activeMenu === "Capital Transactions" && (
         <CapitalTransactionsTab
           transactions={transactions}
+          partners={partners}
           txFilterType={txFilterType}
           setTxFilterType={setTxFilterType}
           onOpenCapitalAction={openCapitalAction}
@@ -645,6 +654,19 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           historyMonthData={historyMonthData}
           loadingHistoryMonth={loadingHistoryMonth}
           onFetchHistoryMonth={fetchHistoryMonthData}
+        />
+      )}
+
+      {/* ---------------- 6. REPORTS (EXCEL DOWNLOADS) ---------------- */}
+      {activeMenu === "Reports" && (
+        <GlobalReportsTab
+          ledgerData={ledgerData}
+          partners={partners}
+          transactions={transactions}
+          expenses={expenses}
+          closings={closings}
+          dailyLogsData={dailyLogsData}
+          setNotice={setNotice}
         />
       )}
 

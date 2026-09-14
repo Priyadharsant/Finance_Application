@@ -1,12 +1,18 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   Users,
   Plus,
   MinusCircle,
   Phone,
   Mail,
+  Download,
+  Search,
+  X,
+  Calendar,
+  RotateCcw,
 } from "lucide-react";
 import { money } from "../utils/formatters.js";
+import { exportPartnerBalances } from "../services/globalCapitalExportUtils.js";
 
 export default function PartnerManagement({
   partners,
@@ -14,15 +20,40 @@ export default function PartnerManagement({
   onOpenCapitalAction,
   onSelectRecord,
 }) {
-  const totalAvailableCapital = partners.reduce(
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredPartners = useMemo(() => {
+    return (partners || []).filter((p) => {
+      const pStatus = (p.status || "ACTIVE").toUpperCase();
+      if (statusFilter !== "ALL" && pStatus !== statusFilter) return false;
+      if (monthFilter) {
+        const joinDate = String(p.created_at || p.effective_date || "").slice(0, 7);
+        if (joinDate !== monthFilter) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = (p.name || p.partner_name || "").toLowerCase().includes(q);
+        const matchPhone = (p.phone || "").toLowerCase().includes(q);
+        const matchEmail = (p.email || "").toLowerCase().includes(q);
+        const matchPan = (p.pan_number || p.pan || "").toLowerCase().includes(q);
+        if (!matchName && !matchPhone && !matchEmail && !matchPan) return false;
+      }
+      return true;
+    });
+  }, [partners, statusFilter, monthFilter, searchQuery]);
+
+  const totalAvailableCapital = filteredPartners.reduce(
     (sum, p) => sum + Number(p.current_capital || 0),
     0
   );
-  const totalProfitEarned = partners.reduce(
+  const totalProfitEarned = filteredPartners.reduce(
     (sum, p) => sum + Number(p.profit_earned || 0),
     0
   );
-  const totalWithdrawn = partners.reduce(
+  const totalWithdrawn = filteredPartners.reduce(
     (sum, p) => sum + Number(p.total_withdrawn || 0),
     0
   );
@@ -53,6 +84,13 @@ export default function PartnerManagement({
             <Plus size={16} /> Add Money (Deposit)
           </button>
           <button
+            className="secondaryBtn"
+            onClick={() => exportPartnerBalances(filteredPartners)}
+            title="Export Filtered Partner Capital Report to Excel"
+          >
+            <Download size={16} /> Export Report (Excel){filteredPartners.length < (partners?.length || 0) ? ` (${filteredPartners.length})` : ""}
+          </button>
+          <button
             className="primaryBtn"
             onClick={onOpenAddPartner}
           >
@@ -63,16 +101,16 @@ export default function PartnerManagement({
 
       <div className="globalCapitalStats fourCol">
         <div>
-          <span>Active partners</span>
-          <strong>{partners.length}</strong>
-          <small>Registered partners</small>
+          <span>Filtered partners</span>
+          <strong>{filteredPartners.length}</strong>
+          <small>Total registered: {partners.length}</small>
         </div>
         <div>
           <span>Current Available Capital</span>
           <strong style={{ color: "#0f766e" }}>
             {money(totalAvailableCapital)}
           </strong>
-          <small>Total available capital</small>
+          <small>Filtered available capital</small>
         </div>
         <div>
           <span>Profit Earned</span>
@@ -90,14 +128,130 @@ export default function PartnerManagement({
         </div>
       </div>
 
-      <div className="financeCard globalCapitalCard mt-20">
+      {/* Partner Filters Bar */}
+      <div className="expenseFilterBar mt-20" style={{ margin: "20px 0 14px", padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {[
+            { id: "ALL", label: "All Statuses" },
+            { id: "ACTIVE", label: "Active" },
+            { id: "INACTIVE", label: "Inactive" },
+          ].map((st) => (
+            <button
+              key={st.id}
+              type="button"
+              className={`secondaryBtn ${statusFilter === st.id ? "active" : ""}`}
+              style={{
+                background: statusFilter === st.id ? "#0f766e" : "#ffffff",
+                color: statusFilter === st.id ? "#ffffff" : "#475569",
+                borderColor: statusFilter === st.id ? "#0f766e" : "#cbd5e1",
+                padding: "5px 12px",
+                fontSize: "12px",
+                fontWeight: "600",
+              }}
+              onClick={() => setStatusFilter(st.id)}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Month Calendar Picker (Join Month) */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#ffffff",
+              padding: "4px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+            }}
+            title="Filter by Join Month Calendar"
+          >
+            <Calendar size={15} color="#0f766e" />
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              style={{
+                border: "none",
+                outline: "none",
+                fontSize: "12px",
+                color: "#1e293b",
+                fontWeight: "500",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              title="Click calendar icon to filter by join month"
+            />
+            {monthFilter && (
+              <button
+                type="button"
+                onClick={() => setMonthFilter("")}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  padding: "0 2px",
+                }}
+                title="Clear Month Filter"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <div className="expenseSearchInput" style={{ minWidth: "240px" }}>
+            <Search size={14} color="#94a3b8" />
+            <input
+              type="text"
+              placeholder="Search partner, phone, PAN..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {(statusFilter !== "ALL" || monthFilter !== currentMonthStr || searchQuery) && (
+            <button
+              type="button"
+              className="secondaryBtn"
+              style={{ padding: "5px 10px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={() => {
+                setStatusFilter("ALL");
+                setMonthFilter(currentMonthStr);
+                setSearchQuery("");
+              }}
+            >
+              <RotateCcw size={12} /> Reset Filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="financeCard globalCapitalCard">
         <div
           className="cardHead"
           style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
         >
-          <h3>
-            <Users size={18} /> Partner Profiles &amp; Balances
-          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <h3 style={{ margin: 0 }}>
+              <Users size={18} /> Partner Profiles &amp; Balances
+            </h3>
+            <span className="tag autoTag" style={{ fontSize: "11px" }}>
+              {filteredPartners.length} of {partners.length}
+            </span>
+          </div>
           <span style={{ fontSize: "12px", color: "#64748b" }}>
             💡 Click any partner row to open full dossier &amp; transaction history
           </span>
@@ -116,7 +270,7 @@ export default function PartnerManagement({
               </tr>
             </thead>
             <tbody>
-              {partners.map((p) => (
+              {filteredPartners.map((p) => (
                 <tr
                   className="clickable globalClickableRow"
                   key={p.id}
@@ -230,10 +384,10 @@ export default function PartnerManagement({
                   </td>
                 </tr>
               ))}
-              {partners.length === 0 && (
+              {filteredPartners.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
-                    No partners found. Click &quot;Add Partner&quot; above to register the first partner.
+                  <td colSpan="7" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
+                    No partners match your selected filters or search query.
                   </td>
                 </tr>
               )}

@@ -588,9 +588,35 @@ export default function LedgerTransactionModal({ record, close }) {
                   <div className="txGrid">
                     <div className="txGridItem">
                       <span>Expense Reason (Why)</span>
-                      <strong style={{ fontSize: "14px" }}>
-                        {details.expense.description}
-                      </strong>
+                      {(() => {
+                        const d = details.expense.description || "";
+                        if (d.includes(" - ")) {
+                          const idx = d.indexOf(" - ");
+                          return (
+                            <div>
+                              <strong style={{ fontSize: "14px", display: "block" }}>
+                                {d.slice(0, idx).trim()}
+                              </strong>
+                              <small
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: "12px",
+                                  display: "block",
+                                  marginTop: "2px",
+                                  fontWeight: "400",
+                                }}
+                              >
+                                {d.slice(idx + 3).trim()}
+                              </small>
+                            </div>
+                          );
+                        }
+                        return (
+                          <strong style={{ fontSize: "14px" }}>
+                            {d}
+                          </strong>
+                        );
+                      })()}
                     </div>
                     <div className="txGridItem">
                       <span>Category</span>

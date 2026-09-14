@@ -1,9 +1,10 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
-// Some Windows graphics environments cannot start Electron's GPU process.
-// The finance UI is 2D, so software rendering is sufficient and more reliable.
-app.disableHardwareAcceleration();
+// Performance optimization: enable hardware acceleration & GPU rasterization
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-zero-copy");
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
 
 let mainWindow;
 
@@ -13,11 +14,20 @@ function createWindow() {
     height: 900,
     minWidth: 1000,
     minHeight: 700,
+    show: false, // Prevent flash and stutter while initial content loads
+    backgroundColor: "#f8fafc",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false, // Prevents high CPU overhead on large financial tables and numbers
+      backgroundThrottling: false, // Keep animations and calculations responsive
     },
+  });
+
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
   });
 
   if (app.isPackaged) {

@@ -8,6 +8,7 @@ import {
 } from "../services/loanService.js";
 import { pool } from "../config/db.js";
 import { createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
+import { ensureUnifiedExpensesTable } from "../../global_cash/services/expense.service.js";
 
 export async function addLoan(req, res) {
   try {
@@ -524,16 +525,18 @@ export async function closeLoanEarly(req, res) {
     const {
       principalAmount,
       interestAmount,
+      discountAmount,
       paymentMethod,
       referenceNumber,
     } = req.body;
 
     const paidPrincipal = Number(principalAmount || 0);
     const paidInterest = Number(interestAmount || 0);
+    const discountAmt = Math.max(0, Number(discountAmount || 0));
     const totalPaid = paidPrincipal + paidInterest;
 
-    if (!loanId || totalPaid <= 0) {
-      throw new Error("loanId and a valid closure amount are required");
+    if (!loanId || (totalPaid <= 0 && discountAmt <= 0)) {
+      throw new Error("loanId and a valid closure amount or discount are required");
     }
 
     // 1. Mark loan as COMPLETED
@@ -556,53 +559,95 @@ export async function closeLoanEarly(req, res) {
       [loanId]
     );
 
-    // 3. Insert Closure Payment Record
-    const payRes = await client.query(
-      `
-      INSERT INTO autofinance_payments (
-        loan_id,
-        payment_date,
-        amount_paid,
-        principal_paid,
-        interest_paid,
-        extra_principal_paid,
-        payment_method,
-        reference_number
-      )
-      VALUES (
-        $1, CURRENT_DATE, $2, $3, $4, 0, $5, $6
-      )
-      RETURNING *
-      `,
-      [
-        loanId,
-        totalPaid,
-        paidPrincipal,
-        paidInterest,
-        paymentMethod || "CASH",
-        referenceNumber || "LOAN_CLOSURE",
-      ]
-    );
+    // 3. Insert Closure Payment Record if any cash/amount was collected
+    let payment = null;
+    if (totalPaid > 0) {
+      const payRes = await client.query(
+        `
+        INSERT INTO autofinance_payments (
+          loan_id,
+          payment_date,
+          amount_paid,
+          principal_paid,
+          interest_paid,
+          extra_principal_paid,
+          payment_method,
+          reference_number
+        )
+        VALUES (
+          $1, CURRENT_DATE, $2, $3, $4, 0, $5, $6
+        )
+        RETURNING *
+        `,
+        [
+          loanId,
+          totalPaid,
+          paidPrincipal,
+          paidInterest,
+          paymentMethod || "CASH",
+          referenceNumber || "LOAN_CLOSURE",
+        ]
+      );
 
-    const payment = payRes.rows[0];
+      payment = payRes.rows[0];
 
-    // 4. Update Global Cash Ledger
-    await createLedgerEntry(client, {
-      type: "AUTO_COLLECTION",
-      amount: totalPaid,
-      direction: "CREDIT",
-      sourceModule: "AUTO",
-      referenceType: "LOAN_CLOSURE",
-      referenceId: payment.id,
-      notes: `Early Closure Payment for Loan ${loanId}`,
-    });
+      // 4. Update Global Cash Ledger (Credit for amount received)
+      await createLedgerEntry(client, {
+        type: "AUTO_COLLECTION",
+        amount: totalPaid,
+        direction: "CREDIT",
+        sourceModule: "AUTO",
+        referenceType: "LOAN_CLOSURE",
+        referenceId: payment.id,
+        notes: `Early Closure Payment for Auto Loan ${loanId}`,
+      });
+    }
+
+    // 5. If discount > 0, record in unified expenses table under category 'AUTO'
+    let expenseRecord = null;
+    if (discountAmt > 0) {
+      await ensureUnifiedExpensesTable(client);
+
+      const detailsRes = await client.query(
+        `
+        SELECT 
+          c.first_name, c.last_name, c.customer_code,
+          v.registration_number, v.make, v.model
+        FROM autofinance_loans l
+        LEFT JOIN autofinance_customers c ON l.customer_id = c.id
+        LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
+        WHERE l.id = $1
+        `,
+        [loanId]
+      );
+      const details = detailsRes.rows[0] || {};
+      const custName = `${details.first_name || ''} ${details.last_name || ''}`.trim() || 'Customer';
+      const vehicleInfo = details.registration_number ? ` (Vehicle: ${details.registration_number})` : '';
+      const expDesc = `Early Loan Closure Discount - ${custName}${vehicleInfo} [Loan ${loanId.slice(0, 8)}]`;
+
+      const expRes = await client.query(
+        `
+        INSERT INTO expenses (
+          expense_date, amount, category, expense_type, description, loan_id
+        )
+        VALUES (CURRENT_DATE, $1, 'AUTO', 'LOAN_CLOSURE_DISCOUNT', $2, $3)
+        RETURNING *
+        `,
+        [discountAmt, expDesc, loanId]
+      );
+      expenseRecord = expRes.rows[0];
+    }
 
     await client.query("COMMIT");
 
     return res.status(200).json({
       success: true,
       message: "Loan closed successfully",
-      data: payment,
+      data: {
+        payment,
+        expense: expenseRecord,
+        discountAmount: discountAmt,
+      },
     });
 
   } catch (error) {

@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, X, AlertCircle } from "lucide-react";
 
 export default function CloseLoanModal({
   closeLoanModal,
@@ -8,10 +8,34 @@ export default function CloseLoanModal({
 }) {
   if (!closeLoanModal) return null;
 
-  const p = Number(closeLoanModal.principalAmount || 0);
+  const remP = Number(closeLoanModal.remainingPrincipal ?? closeLoanModal.principalAmount ?? 0);
+  const p = Number(closeLoanModal.principalAmount ?? remP);
   const pct = Number(closeLoanModal.interestPercent || 0);
   const interestAmt = Math.round((p * pct) / 100);
+  const discountAmt = Number(closeLoanModal.discountAmount || 0);
   const totalAmt = p + interestAmt;
+
+  const handlePrincipalChange = (val) => {
+    const num = val === "" ? "" : Number(val);
+    const parsed = Number(val || 0);
+    const autoDisc = remP > parsed ? Number((remP - parsed).toFixed(2)) : 0;
+    setCloseLoanModal({
+      ...closeLoanModal,
+      principalAmount: num,
+      discountAmount: autoDisc,
+    });
+  };
+
+  const handleDiscountChange = (val) => {
+    const num = val === "" ? "" : Number(val);
+    const parsed = Number(val || 0);
+    const autoP = remP > parsed ? Number((remP - parsed).toFixed(2)) : 0;
+    setCloseLoanModal({
+      ...closeLoanModal,
+      discountAmount: num,
+      principalAmount: autoP,
+    });
+  };
 
   return (
     <div
@@ -26,11 +50,12 @@ export default function CloseLoanModal({
         className="closeLoanCard"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submitCloseLoan}
+        style={{ width: "min(460px, 94vw)" }}
       >
         <div className="closeLoanHeader">
           <h3>
             <CheckCircle2 size={19} style={{ color: "#dc2626" }} />
-            Close Loan Early
+            Close Auto Loan Early
           </h3>
           <button
             type="button"
@@ -42,33 +67,50 @@ export default function CloseLoanModal({
           </button>
         </div>
 
+        {(closeLoanModal.customerName || closeLoanModal.regNumber) && (
+          <div style={{ marginBottom: "14px", padding: "10px 12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#0f172a" }}>
+              {closeLoanModal.customerName || "Customer Loan"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              {closeLoanModal.regNumber ? `Vehicle: ${closeLoanModal.regNumber} · ` : ""}
+              Remaining Principal: <strong>₹{remP.toLocaleString()}</strong>
+            </div>
+          </div>
+        )}
+
         <div className="closeLoanGrid">
           <div className="closeLoanField">
-            <label className="closeLoanLabel">Principal (₹)</label>
+            <label className="closeLoanLabel">Outstanding Principal</label>
+            <div style={{ fontSize: "16px", fontWeight: "800", color: "#dc2626", padding: "8px 0" }}>
+              ₹{remP.toLocaleString()}
+            </div>
+          </div>
+
+          <div className="closeLoanField">
+            <label className="closeLoanLabel">Settlement Principal (₹)</label>
             <div className="closeLoanInputWrap">
               <span className="closeLoanPrefix">₹</span>
               <input
                 type="number"
                 min="0"
+                step="any"
                 required
                 className="closeLoanInput"
-                value={closeLoanModal.principalAmount}
-                onChange={(e) =>
-                  setCloseLoanModal({
-                    ...closeLoanModal,
-                    principalAmount: Number(e.target.value),
-                  })
-                }
+                value={closeLoanModal.principalAmount === "" ? "" : closeLoanModal.principalAmount}
+                onChange={(e) => handlePrincipalChange(e.target.value)}
               />
             </div>
           </div>
+        </div>
 
+        <div className="closeLoanGrid" style={{ marginTop: "4px" }}>
           <div className="closeLoanField">
-            <label className="closeLoanLabel">Interest (%)</label>
+            <label className="closeLoanLabel">Closing Interest (%)</label>
             <div className="closeLoanInputWrap">
               <input
                 type="number"
-                step="0.01"
+                step="any"
                 min="0"
                 placeholder="0"
                 className="closeLoanInputPercent"
@@ -83,13 +125,39 @@ export default function CloseLoanModal({
               <span className="closeLoanSuffix">%</span>
             </div>
           </div>
+
+          <div className="closeLoanField">
+            <label className="closeLoanLabel">Discount / Waiver (₹)</label>
+            <div className="closeLoanInputWrap">
+              <span className="closeLoanPrefix">₹</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="0"
+                className="closeLoanInput"
+                value={closeLoanModal.discountAmount === "" ? "" : closeLoanModal.discountAmount}
+                onChange={(e) => handleDiscountChange(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="closeLoanSummaryBox">
+        {discountAmt > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#d97706", background: "#fffbeb", padding: "8px 10px", borderRadius: "8px", border: "1px solid #fde68a", margin: "10px 0" }}>
+            <AlertCircle size={14} />
+            <span>
+              Waiver/Discount of <b>₹{discountAmt.toLocaleString()}</b> applied &amp; recorded in <b>Auto Finance Expenses</b>.
+            </span>
+          </div>
+        )}
+
+        <div className="closeLoanSummaryBox" style={{ marginTop: "10px" }}>
           <div>
-            <div className="closeLoanSummaryLabel">Total Settlement</div>
+            <div className="closeLoanSummaryLabel">Settlement Cash Collection</div>
             <div className="closeLoanSummarySub">
-              ₹{p.toLocaleString()} + {pct}% (₹{interestAmt.toLocaleString()})
+              Principal: ₹{p.toLocaleString()} {pct > 0 ? `+ ${pct}% (₹${interestAmt.toLocaleString()})` : ""}
+              {discountAmt > 0 ? ` · Discount: ₹${discountAmt.toLocaleString()} (Expense)` : ""}
             </div>
           </div>
           <div className="closeLoanSummaryValue">

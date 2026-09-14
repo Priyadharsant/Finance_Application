@@ -31,6 +31,10 @@ export async function ensureUnifiedExpensesTable(client = pool) {
       );
     `);
 
+    // Ensure columns exist on legacy installations
+    await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS loan_id UUID NULL;`);
+    await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS finance_id UUID NULL;`);
+
     // 2. Indexes for fast queries
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);

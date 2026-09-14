@@ -1,18 +1,123 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   Globe,
   Landmark,
   ArrowDownCircle,
   ArrowRightCircle,
+  Download,
+  Calendar,
+  Search,
+  X,
+  RotateCcw,
 } from "lucide-react";
 import { money } from "../utils/formatters.js";
+import { exportGlobalLedger } from "../services/globalCapitalExportUtils.js";
 
 export default function LedgerOverview({
-  ledgerData,
+  ledgerData = {},
   totalCredits,
   totalDebits,
   onSelectRecord,
 }) {
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  const [moduleFilter, setModuleFilter] = useState("ALL");
+  const [directionFilter, setDirectionFilter] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const rawLedger = ledgerData.ledger || [];
+
+  // Filtered ledger based on active in-page filters
+  const filteredLedger = useMemo(() => {
+    return rawLedger.filter((tx) => {
+      // 1. Month Calendar filter (YYYY-MM)
+      if (monthFilter) {
+        const txDate = String(tx.effective_date || tx.transaction_date || tx.created_at || "").slice(0, 7);
+        if (txDate !== monthFilter) return false;
+      }
+
+      // 2. Source Module filter
+      if (moduleFilter !== "ALL") {
+        const mod = (tx.source_module || tx.module || "GLOBAL").toUpperCase();
+        if (mod !== moduleFilter) return false;
+      }
+
+      // 3. Direction filter
+      if (directionFilter !== "ALL") {
+        const isCredit =
+          tx.direction === "CREDIT" ||
+          tx.type === "CREDIT" ||
+          tx.type === "PARTNER_CONTRIBUTION" ||
+          tx.type === "AUTO_COLLECTION" ||
+          tx.type === "DAILY_COLLECTION" ||
+          tx.type === "ADJUSTMENT_INCREASE";
+
+        if (directionFilter === "CREDIT" && !isCredit) return false;
+        if (directionFilter === "DEBIT" && isCredit) return false;
+      }
+
+      // 4. Live Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchNotes = (tx.notes || "").toLowerCase().includes(q);
+        const matchType = (tx.type || "").toLowerCase().includes(q);
+        const matchRef = (String(tx.reference_id || "") + " " + String(tx.reference_type || "")).toLowerCase().includes(q);
+        const matchDesc = (tx.description || "").toLowerCase().includes(q);
+        const matchMod = (tx.source_module || "").toLowerCase().includes(q);
+        if (!matchNotes && !matchType && !matchRef && !matchDesc && !matchMod) return false;
+      }
+
+      return true;
+    });
+  }, [rawLedger, monthFilter, moduleFilter, directionFilter, searchQuery]);
+
+  const filteredInflow = filteredLedger
+    .filter(
+      (tx) =>
+        tx.direction === "CREDIT" ||
+        tx.type === "CREDIT" ||
+        tx.type === "PARTNER_CONTRIBUTION" ||
+        tx.type === "AUTO_COLLECTION" ||
+        tx.type === "DAILY_COLLECTION" ||
+        tx.type === "ADJUSTMENT_INCREASE"
+    )
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+  const filteredOutflow = filteredLedger
+    .filter(
+      (tx) =>
+        tx.direction === "DEBIT" ||
+        tx.type === "DEBIT" ||
+        tx.type === "PARTNER_WITHDRAWAL" ||
+        tx.type === "AUTO_LOAN_DISBURSEMENT" ||
+        tx.type === "DAILY_LOAN_DISBURSEMENT" ||
+        tx.type === "BUSINESS_EXPENSE" ||
+        tx.type === "PROFIT_PAYMENT" ||
+        tx.type === "ADJUSTMENT_DECREASE"
+    )
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+  const isFiltered =
+    monthFilter !== currentMonthStr ||
+    moduleFilter !== "ALL" ||
+    directionFilter !== "ALL" ||
+    searchQuery.trim() !== "";
+
+  const handleResetFilters = () => {
+    setMonthFilter(currentMonthStr);
+    setModuleFilter("ALL");
+    setDirectionFilter("ALL");
+    setSearchQuery("");
+  };
+
+  const filteredAutoInflow = filteredLedger
+    .filter((tx) => (tx.source_module || "").toUpperCase() === "AUTO" && (tx.direction === "CREDIT" || tx.type === "CREDIT"))
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const filteredDailyInflow = filteredLedger
+    .filter((tx) => (tx.source_module || "").toUpperCase() === "DAILY" && (tx.direction === "CREDIT" || tx.type === "CREDIT"))
+    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const filteredNetFlow = filteredInflow - filteredOutflow;
+
   return (
     <div className="financeFadeIn globalCapitalView">
       {/* Top Hero Banner */}
@@ -30,60 +135,208 @@ export default function LedgerOverview({
         </p>
       </div>
 
-      {/* KPI Stats */}
+      {/* KPI Stats (Dynamic based on Active Filters) */}
       <div className="globalCapitalStats sixCol">
         <div>
-          <span>Gross Revenue</span>
+          <span>{isFiltered ? "Filtered Inflow" : "Gross Revenue"}</span>
           <strong style={{ color: "#059669" }}>
-            {money(ledgerData.revenue?.totalRevenue)}
+            {money(isFiltered ? filteredInflow : ledgerData.revenue?.totalRevenue)}
           </strong>
           <small>
-            Auto: {money(ledgerData.revenue?.autoRevenue)} • Daily: {money(ledgerData.revenue?.dailyRevenue)}
+            {isFiltered ? "Credits in active filter" : `Auto: ${money(ledgerData.revenue?.autoRevenue)} • Daily: ${money(ledgerData.revenue?.dailyRevenue)}`}
           </small>
         </div>
         <div>
-          <span>Total Expenses</span>
+          <span>{isFiltered ? "Filtered Outflow" : "Total Expenses"}</span>
           <strong style={{ color: "#e11d48" }}>
-            {money(ledgerData.expenses?.totalExpenses)}
+            {money(isFiltered ? filteredOutflow : ledgerData.expenses?.totalExpenses)}
           </strong>
           <small>
-            Auto: {money(ledgerData.expenses?.autoExpenses)} • Daily: {money(ledgerData.expenses?.dailyExpenses)} • Gen: {money(ledgerData.expenses?.generalExpenses)}
+            {isFiltered ? "Debits in active filter" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
           </small>
         </div>
         <div>
-          <span>Net Profit</span>
+          <span>{isFiltered ? "Filtered Net Movement" : "Net Profit"}</span>
           <strong
             style={{
-              color: Number(ledgerData.netProfit || 0) >= 0 ? "#0d9488" : "#e11d48",
+              color: (isFiltered ? filteredNetFlow : Number(ledgerData.netProfit || 0)) >= 0 ? "#0d9488" : "#e11d48",
             }}
           >
-            {money(ledgerData.netProfit)}
+            {isFiltered ? (filteredNetFlow >= 0 ? "+" : "") + money(filteredNetFlow) : money(ledgerData.netProfit)}
           </strong>
-          <small>Revenue minus All Expenses</small>
+          <small>{isFiltered ? "Inflow minus Outflow" : "Revenue minus All Expenses"}</small>
         </div>
         <div>
-          <span>Capital in</span>
-          <strong>
-            {money(ledgerData.totalCredits || totalCredits)}
+          <span>{isFiltered ? "Auto Module Inflow" : "Capital in"}</span>
+          <strong style={{ color: isFiltered ? "#2563eb" : undefined }}>
+            {isFiltered ? `+${money(filteredAutoInflow)}` : money(ledgerData.totalCredits || totalCredits)}
           </strong>
-          <small>Partner contributions</small>
+          <small>{isFiltered ? "Auto Finance Credits" : "Partner contributions"}</small>
         </div>
         <div>
-          <span>Capital deployed</span>
-          <strong>
-            {money(ledgerData.totalDebits || totalDebits)}
+          <span>{isFiltered ? "Daily Module Inflow" : "Capital deployed"}</span>
+          <strong style={{ color: isFiltered ? "#059669" : undefined }}>
+            {isFiltered ? `+${money(filteredDailyInflow)}` : money(ledgerData.totalDebits || totalDebits)}
           </strong>
-          <small>Finance disbursements</small>
+          <small>{isFiltered ? "Daily Finance Credits" : "Finance disbursements"}</small>
         </div>
         <div>
           <span>Ledger entries</span>
-          <strong>{ledgerData.ledger?.length || 0}</strong>
-          <small>Auditable transactions</small>
+          <strong>{filteredLedger.length}</strong>
+          <small>{isFiltered ? `Filtered of ${rawLedger.length}` : "Auditable transactions"}</small>
+        </div>
+      </div>
+
+      {/* In-Page Filters Bar with Month Calendar */}
+      <div
+        className="expenseFilterBar mt-20"
+        style={{
+          margin: "20px 0 16px",
+          padding: "12px 16px",
+          background: "#f8fafc",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        {/* Module Filter Tabs */}
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+          {[
+            { id: "ALL", label: "All Modules" },
+            { id: "AUTO", label: "Auto Finance" },
+            { id: "DAILY", label: "Daily Finance" },
+            { id: "GLOBAL", label: "Global Capital" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`secondaryBtn ${moduleFilter === m.id ? "active" : ""}`}
+              style={{
+                background: moduleFilter === m.id ? "#0f766e" : "#ffffff",
+                color: moduleFilter === m.id ? "#ffffff" : "#475569",
+                borderColor: moduleFilter === m.id ? "#0f766e" : "#cbd5e1",
+                fontSize: "12px",
+                fontWeight: "600",
+                padding: "6px 12px",
+              }}
+              onClick={() => setModuleFilter(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Right side: Direction tabs, Month Calendar, Search, and Reset */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Direction Filter */}
+          <select
+            value={directionFilter}
+            onChange={(e) => setDirectionFilter(e.target.value)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+              fontSize: "12px",
+              background: "#ffffff",
+              color: "#334155",
+              fontWeight: "500",
+              cursor: "pointer",
+            }}
+          >
+            <option value="ALL">All Cash Flows</option>
+            <option value="CREDIT">Inflow (Credits Only)</option>
+            <option value="DEBIT">Outflow (Debits Only)</option>
+          </select>
+
+          {/* Month Calendar Picker */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#ffffff",
+              padding: "4px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+            }}
+            title="Filter by Month Calendar"
+          >
+            <Calendar size={15} color="#0f766e" />
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              style={{
+                border: "none",
+                outline: "none",
+                fontSize: "12px",
+                color: "#1e293b",
+                fontWeight: "500",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              title="Click calendar icon to select month"
+            />
+            {monthFilter && (
+              <button
+                type="button"
+                onClick={() => setMonthFilter("")}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  padding: "0 2px",
+                }}
+                title="Clear Month Filter"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Live Search */}
+          <div className="expenseSearchInput" style={{ minWidth: "180px" }}>
+            <Search size={14} color="#94a3b8" />
+            <input
+              type="text"
+              placeholder="Search narration, ref, type..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ fontSize: "12px" }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Reset Filters */}
+          {isFiltered && (
+            <button
+              type="button"
+              className="secondaryBtn"
+              style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              onClick={handleResetFilters}
+              title="Reset all filters"
+            >
+              <RotateCcw size={13} /> Reset
+            </button>
+          )}
         </div>
       </div>
 
       {/* Recent Ledger Table */}
-      <div className="financeCard globalCapitalCard mt-20">
+      <div className="financeCard globalCapitalCard">
         <div
           className="cardHead"
           style={{
@@ -97,18 +350,29 @@ export default function LedgerOverview({
           <h3>
             <Landmark size={18} /> Global Cash Ledger
           </h3>
-          <span
-            style={{
-              fontSize: "12px",
-              color: "#64748b",
-              fontWeight: "500",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-          >
-            <span>💡 Click any row to view full transaction details</span>
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              className="secondaryBtn"
+              style={{ padding: "6px 12px", fontSize: "12px" }}
+              onClick={() => exportGlobalLedger(filteredLedger, { label: monthFilter || undefined })}
+              title="Export Filtered General Cash Ledger to Excel"
+            >
+              <Download size={14} /> Export Ledger (Excel)
+              {filteredLedger.length < rawLedger.length ? ` (${filteredLedger.length})` : ""}
+            </button>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "#64748b",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span>💡 Click any row to view full transaction details</span>
+            </span>
+          </div>
         </div>
         <div className="tableResponsive">
           <table className="financeTable">
@@ -123,7 +387,7 @@ export default function LedgerOverview({
               </tr>
             </thead>
             <tbody>
-              {ledgerData.ledger?.map((tx) => (
+              {filteredLedger.map((tx) => (
                 <tr
                   className="clickable globalClickableRow"
                   key={tx.id}
@@ -224,13 +488,13 @@ export default function LedgerOverview({
                   </td>
                 </tr>
               ))}
-              {(!ledgerData.ledger || ledgerData.ledger.length === 0) && (
+              {filteredLedger.length === 0 && (
                 <tr>
                   <td
                     colSpan="6"
                     style={{ textAlign: "center", color: "#64748b", padding: "24px" }}
                   >
-                    No ledger transactions yet.
+                    No ledger transactions found matching the applied filters.
                   </td>
                 </tr>
               )}
