@@ -35,10 +35,20 @@ export default function MonthlyClosingTab({
   loadingHistoryMonth,
   onFetchHistoryMonth,
 }) {
+  // Use historyMonthData if user selected a month or loaded, otherwise fallback to currentMonthEstimate
+  const displayData = historyMonthData || currentMonthEstimate;
+  const isLoading = loadingHistoryMonth || loadingEstimate;
+
+  const handleMonthChange = (y, m) => {
+    setHistoryYear(y);
+    setHistoryMonth(m);
+    onFetchHistoryMonth(y, m);
+  };
+
   return (
     <div className="financeFadeIn globalCapitalView">
       {/* ========================================================================= */}
-      {/* SECTION 1: CURRENT ONGOING MONTH (LIVE) */}
+      {/* SECTION 1: UNIFIED MONTHLY CLOSING & PARTNER PROFIT SHARES (FIRST)        */}
       {/* ========================================================================= */}
       <div>
         <div className="financeCard globalCapitalCard" style={{ marginBottom: "20px" }}>
@@ -54,98 +64,233 @@ export default function MonthlyClosingTab({
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <h3 style={{ margin: 0 }}>
-                    <Calendar size={18} /> {currentMonthEstimate?.monthName || "Current Month"}
+                    <Calendar size={18} /> {displayData?.monthName || "Monthly Closing"} {historyYear}
                   </h3>
-                  <span className="liveBadge">
-                    <span className="pulseDot"></span>
-                    LIVE ({currentMonthEstimate?.daysElapsed || 0} of {currentMonthEstimate?.totalDaysInMonth || 30} Days)
+                  <span
+                    className={`liveBadge ${
+                      displayData?.isCurrentMonth ? "accumulating" : "finalized"
+                    }`}
+                  >
+                    {displayData?.isCurrentMonth ? (
+                      <>
+                        <span className="pulseDot"></span>
+                        LIVE ({displayData?.daysElapsed || 0} of {displayData?.totalDaysInMonth || 30} Days) · Ongoing Month
+                      </>
+                    ) : (
+                      <>
+                        <Check size={12} /> Finalized Month
+                      </>
+                    )}
                   </span>
                 </div>
                 <small style={{ color: "#64748b" }}>
-                  Billing Period: {currentMonthEstimate?.periodStart} to {currentMonthEstimate?.asOfDate}
+                  Billing Period: {displayData?.periodStart} to {displayData?.asOfDate || displayData?.periodEnd}
                 </small>
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-              <div style={{ textAlign: "right" }}>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#64748b",
-                    fontWeight: "600",
-                    textTransform: "uppercase",
+            {/* In-Page Month Filter Controls & Export */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {/* Month Calendar Picker */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#ffffff",
+                  padding: "4px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                }}
+                title="Select month to view audit & profit shares"
+              >
+                <Calendar size={15} color="#0f766e" />
+                <input
+                  type="month"
+                  value={`${historyYear}-${String(historyMonth).padStart(2, "0")}`}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const [yStr, mStr] = e.target.value.split("-");
+                      handleMonthChange(parseInt(yStr, 10), parseInt(mStr, 10));
+                    }
                   }}
-                >
-                  Estimated Net Profit
-                </span>
-                <div style={{ fontSize: "20px", fontWeight: "800", color: "#059669" }}>
-                  {money(currentMonthEstimate?.expectedDistributableProfit)}
-                </div>
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    fontSize: "12.5px",
+                    color: "#1e293b",
+                    fontWeight: "600",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                />
               </div>
+
+              {/* Month Dropdown */}
+              <select
+                value={historyMonth}
+                onChange={(e) => handleMonthChange(historyYear, parseInt(e.target.value, 10))}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "12.5px",
+                  fontWeight: "600",
+                }}
+              >
+                {[
+                  "January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December"
+                ].map((name, idx) => (
+                  <option key={name} value={idx + 1}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Year Dropdown */}
+              <select
+                value={historyYear}
+                onChange={(e) => handleMonthChange(parseInt(e.target.value, 10), historyMonth)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "12.5px",
+                  fontWeight: "600",
+                }}
+              >
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              {/* Export Month Report */}
               <button
                 type="button"
                 className="secondaryBtn"
                 onClick={() =>
                   exportSingleMonthClosing(
-                    currentMonthEstimate,
-                    new Date().getFullYear(),
-                    new Date().getMonth() + 1
+                    displayData,
+                    historyYear,
+                    historyMonth
                   )
                 }
-                title="Export current month closing estimate to Excel"
+                title="Export selected month closing & partner profit shares to Excel"
               >
                 <Download size={13} />
                 <span>Export Month (Excel)</span>
               </button>
+
+              {/* Refresh Button */}
               <button
                 type="button"
                 className="secondaryBtn"
-                onClick={onRefreshEstimate}
-                title="Refresh current month"
+                onClick={() => {
+                  onFetchHistoryMonth(historyYear, historyMonth);
+                  if (displayData?.isCurrentMonth) onRefreshEstimate();
+                }}
+                title="Refresh month data"
               >
-                {loadingEstimate ? <RefreshCw size={13} className="spin" /> : <RefreshCw size={13} />}
+                {isLoading ? (
+                  <RefreshCw size={13} className="spin" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}
                 <span>Refresh</span>
               </button>
             </div>
           </div>
+
+          {/* Quick Past Months Pills */}
+          {passedMonthsList && passedMonthsList.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexWrap: "wrap",
+                padding: "8px 14px",
+                background: "#f8fafc",
+                borderTop: "1px solid #f1f5f9",
+                borderRadius: "0 0 10px 10px",
+              }}
+            >
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase" }}>
+                Quick Past Months:
+              </span>
+              {passedMonthsList.slice(0, 6).map((pm) => {
+                const isSelected = pm.year === historyYear && pm.month === historyMonth;
+                return (
+                  <button
+                    key={`${pm.year}-${pm.month}`}
+                    type="button"
+                    style={{
+                      background: isSelected ? "#0f766e" : "#ffffff",
+                      color: isSelected ? "#ffffff" : "#475569",
+                      border: `1px solid ${isSelected ? "#0f766e" : "#cbd5e1"}`,
+                      borderRadius: "6px",
+                      padding: "3px 8px",
+                      fontSize: "11.5px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    onClick={() => handleMonthChange(pm.year, pm.month)}
+                  >
+                    {pm.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* 4 Financial KPI Cards */}
+        {/* Dynamic Financial KPI Cards for the Selected Month */}
         <div className="globalCapitalStats fourCol" style={{ marginBottom: "20px" }}>
+          <div>
+            <span>Total Revenue</span>
+            <strong style={{ color: "#0f766e" }}>
+              +{money(
+                displayData?.financials?.totalRevenue != null
+                  ? displayData.financials.totalRevenue
+                  : (Number(displayData?.financials?.autoRevenue || 0) + Number(displayData?.financials?.dailyRevenue || 0))
+              )}
+            </strong>
+            <small>Auto: {money(displayData?.financials?.autoRevenue)} • Daily: {money(displayData?.financials?.dailyRevenue)}</small>
+          </div>
           <div>
             <span>Auto Revenue</span>
             <strong style={{ color: "#0f766e" }}>
-              +{money(currentMonthEstimate?.financials?.autoRevenue)}
+              +{money(displayData?.financials?.autoRevenue)}
             </strong>
-            <small>Auto loan interest</small>
-          </div>
-          <div>
-            <span>Daily Revenue</span>
-            <strong style={{ color: "#0f766e" }}>
-              +{money(currentMonthEstimate?.financials?.dailyRevenue)}
-            </strong>
-            <small>Daily loan interest</small>
+            <small>Auto loan interest collected</small>
           </div>
           <div>
             <span>Expenses</span>
             <strong style={{ color: "#e11d48" }}>
-              -{money(currentMonthEstimate?.financials?.expenses)}
+              -{money(displayData?.financials?.expenses)}
             </strong>
-            <small>Expenses logged</small>
+            <small>Total expenses in period</small>
           </div>
           <div>
-            <span>Net Profit (Live)</span>
+            <span>Net Profit ({displayData?.isCurrentMonth ? "Live" : "Finalized"})</span>
             <strong style={{ color: "#059669" }}>
-              {money(currentMonthEstimate?.financials?.netProfit)}
+              {money(
+                displayData?.expectedDistributableProfit != null
+                  ? displayData.expectedDistributableProfit
+                  : displayData?.financials?.netProfit
+              )}
             </strong>
-            <small>Total revenue - Expenses</small>
+            <small>Distributable to partners</small>
           </div>
         </div>
 
-        {/* Partner Expected Profit Table */}
+        {/* Partner Profit Shares Table for Selected Month */}
         <div className="financeCard globalCapitalCard">
           <div
             className="cardHead"
@@ -153,19 +298,21 @@ export default function MonthlyClosingTab({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              flexWrap: "wrap",
+              gap: "10px",
             }}
           >
             <div>
               <h3 style={{ margin: 0 }}>
-                <Users size={18} /> Partner Profit Shares (This Month)
+                <Users size={18} /> Partner Profit Shares ({displayData?.monthName || "Selected Month"} {historyYear})
               </h3>
               <small style={{ color: "#64748b" }}>
-                Calculated from active capital days up to today.
+                Time-weighted capital days allocation for {displayData?.monthName} {historyYear}.
               </small>
             </div>
-            <span style={{ fontSize: "12px", color: "#0f766e", fontWeight: "600" }}>
+            <span style={{ fontSize: "12.5px", color: "#0f766e", fontWeight: "600" }}>
               Total Capital Weight:{" "}
-              {Number(currentMonthEstimate?.totalCapitalWeight || 0).toLocaleString("en-IN", {
+              {Number(displayData?.totalCapitalWeight || 0).toLocaleString("en-IN", {
                 maximumFractionDigits: 0,
               })}{" "}
               Capital-Days
@@ -178,18 +325,18 @@ export default function MonthlyClosingTab({
                 <tr>
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Opening Capital</th>
-                  <th style={{ textAlign: "right" }}>Current Capital</th>
+                  <th style={{ textAlign: "right" }}>Closing / Current Capital</th>
                   <th style={{ textAlign: "center" }}>Share %</th>
-                  <th style={{ textAlign: "right" }}>Estimated Profit</th>
+                  <th style={{ textAlign: "right" }}>{displayData?.isCurrentMonth ? "Estimated Profit" : "Profit Earned"}</th>
                   <th style={{ textAlign: "center" }}>Status</th>
                   <th style={{ textAlign: "center" }}>Segments</th>
                 </tr>
               </thead>
               <tbody>
-                {(currentMonthEstimate?.allocations || []).map((alloc) => {
+                {(displayData?.allocations || []).map((alloc) => {
                   const ratio = Number(alloc.profitRatio || 0);
                   const weight = Number(alloc.capitalWeight || 0);
-                  const expProfit = Number(alloc.allocatedProfit || 0);
+                  const profitVal = Number(alloc.allocatedProfit != null ? alloc.allocatedProfit : alloc.expectedProfit || 0);
 
                   return (
                     <tr key={alloc.partnerId}>
@@ -217,11 +364,16 @@ export default function MonthlyClosingTab({
                           color: "#059669",
                         }}
                       >
-                        +{money(expProfit)}
+                        +{money(profitVal)}
                       </td>
                       <td style={{ textAlign: "center" }}>
-                        <span className="statusPill active" style={{ fontSize: "11px" }}>
-                          Auto-credits on 1st
+                        <span
+                          className={`statusPill ${
+                            displayData?.isCurrentMonth ? "active" : "completed"
+                          }`}
+                          style={{ fontSize: "11px" }}
+                        >
+                          {displayData?.isCurrentMonth ? "Auto-credits on 1st" : "Credited"}
                         </span>
                       </td>
                       <td style={{ textAlign: "center" }}>
@@ -232,8 +384,8 @@ export default function MonthlyClosingTab({
                           onClick={() =>
                             onOpenSegmentModal({
                               partnerName: alloc.partnerName,
-                              periodStart: currentMonthEstimate?.periodStart,
-                              periodEnd: currentMonthEstimate?.asOfDate,
+                              periodStart: displayData?.periodStart,
+                              periodEnd: displayData?.asOfDate || displayData?.periodEnd,
                               segments: alloc.segmentBreakdown || [],
                               totalWeight: weight,
                             })
@@ -245,14 +397,13 @@ export default function MonthlyClosingTab({
                     </tr>
                   );
                 })}
-                {(!currentMonthEstimate?.allocations ||
-                  currentMonthEstimate.allocations.length === 0) && (
+                {(!displayData?.allocations || displayData.allocations.length === 0) && (
                   <tr>
                     <td
                       colSpan="7"
                       style={{ textAlign: "center", padding: "28px", color: "#94a3b8" }}
                     >
-                      No active partner capital in this period.
+                      No active partner capital or profit recorded for {displayData?.monthName || "this month"}.
                     </td>
                   </tr>
                 )}
@@ -332,281 +483,6 @@ export default function MonthlyClosingTab({
               )}
               <span>{runningCron ? "Closing..." : "Run Monthly Closing Now"}</span>
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* SECTION 2: PAST MONTHS */}
-      {/* ========================================================================= */}
-      <div style={{ marginTop: "36px", paddingTop: "24px", borderTop: "2px dashed #cbd5e1" }}>
-        <div style={{ marginBottom: "16px" }}>
-          <span className="overline autoBadgeTag">HISTORY</span>
-          <h3
-            style={{
-              margin: "4px 0 0",
-              color: "#0f172a",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "18px",
-            }}
-          >
-            <Calendar size={18} color="#0f766e" />
-            Past Months
-          </h3>
-          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
-            Select any month and year below to view its finalized profit and partner shares.
-          </p>
-        </div>
-
-        {/* Month & Year Dropdown Bar */}
-        <div className="monthSelectBar">
-          <div className="monthSelectControls">
-            <span style={{ fontWeight: 600, color: "#334155", fontSize: "13px" }}>
-              Select Month:
-            </span>
-            <select
-              value={historyMonth}
-              onChange={(e) => {
-                const m = parseInt(e.target.value, 10);
-                setHistoryMonth(m);
-                onFetchHistoryMonth(historyYear, m);
-              }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                fontSize: "13px",
-              }}
-            >
-              {[
-                "January", "February", "March", "April", "May", "June",
-                "July", "August", "September", "October", "November", "December"
-              ].map((name, idx) => (
-                <option key={name} value={idx + 1}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={historyYear}
-              onChange={(e) => {
-                const y = parseInt(e.target.value, 10);
-                setHistoryYear(y);
-                onFetchHistoryMonth(y, historyMonth);
-              }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                fontSize: "13px",
-              }}
-            >
-              {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="primaryBtn"
-              style={{ padding: "6px 14px", fontSize: "13px" }}
-              onClick={() => onFetchHistoryMonth(historyYear, historyMonth)}
-            >
-              {loadingHistoryMonth ? (
-                <RefreshCw size={13} className="spin" />
-              ) : (
-                <Eye size={13} />
-              )}
-              <span>View Month</span>
-            </button>
-            <button
-              type="button"
-              className="secondaryBtn"
-              style={{ padding: "6px 14px", fontSize: "13px" }}
-              onClick={() =>
-                exportSingleMonthClosing(
-                  historyMonthData,
-                  historyYear,
-                  historyMonth
-                )
-              }
-              title="Export this historical monthly closing to Excel"
-            >
-              <Download size={13} />
-              <span>Export Month (Excel)</span>
-            </button>
-          </div>
-
-          <div>
-            <span
-              className={`liveBadge ${
-                historyMonthData?.isCurrentMonth ? "accumulating" : "finalized"
-              }`}
-            >
-              {historyMonthData?.isCurrentMonth ? (
-                <>
-                  <span className="pulseDot"></span> Ongoing Month
-                </>
-              ) : (
-                <>
-                  <Check size={12} /> Finalized Month
-                </>
-              )}
-            </span>
-          </div>
-        </div>
-
-        {/* Month Financial Overview */}
-        <div className="globalCapitalStats fourCol" style={{ marginBottom: "20px" }}>
-          <div>
-            <span>Total Revenue</span>
-            <strong style={{ color: "#0f766e" }}>
-              {money(historyMonthData?.financials?.totalRevenue)}
-            </strong>
-            <small>Auto + Daily operations</small>
-          </div>
-          <div>
-            <span>Auto Interest</span>
-            <strong style={{ color: "#0f766e" }}>
-              {money(historyMonthData?.financials?.autoRevenue)}
-            </strong>
-            <small>Collected</small>
-          </div>
-          <div>
-            <span>Expenses</span>
-            <strong style={{ color: "#e11d48" }}>
-              {money(historyMonthData?.financials?.expenses)}
-            </strong>
-            <small>Total expenses</small>
-          </div>
-          <div>
-            <span>Net Profit</span>
-            <strong style={{ color: "#059669" }}>
-              {money(historyMonthData?.financials?.netProfit)}
-            </strong>
-            <small>Distributed to partners</small>
-          </div>
-        </div>
-
-        {/* Partner Profit Allocations Table for Selected Month */}
-        <div className="financeCard globalCapitalCard">
-          <div
-            className="cardHead"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <h3 style={{ margin: 0 }}>
-                <Users size={18} /> Partner Profit Shares ({historyMonthData?.monthName || "Selected Month"})
-              </h3>
-              <small style={{ color: "#64748b" }}>
-                Period: {historyMonthData?.periodStart} to {historyMonthData?.asOfDate || historyMonthData?.periodEnd}
-              </small>
-            </div>
-            <span style={{ fontSize: "12px", color: "#64748b" }}>
-              Total Capital Weight:{" "}
-              {Number(historyMonthData?.totalCapitalWeight || 0).toLocaleString("en-IN", {
-                maximumFractionDigits: 0,
-              })}
-            </span>
-          </div>
-
-          <div className="tableResponsive tableScroll">
-            <table className="financeTable">
-              <thead>
-                <tr>
-                  <th>Partner</th>
-                  <th style={{ textAlign: "right" }}>Opening Capital</th>
-                  <th style={{ textAlign: "right" }}>Closing Capital</th>
-                  <th style={{ textAlign: "center" }}>Share %</th>
-                  <th style={{ textAlign: "right" }}>Profit Earned</th>
-                  <th style={{ textAlign: "center" }}>Status</th>
-                  <th style={{ textAlign: "center" }}>Segments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(historyMonthData?.allocations || []).map((alloc) => {
-                  const ratio = Number(alloc.profitRatio || 0);
-                  const weight = Number(alloc.capitalWeight || 0);
-                  const profit = Number(alloc.allocatedProfit || 0);
-
-                  return (
-                    <tr key={alloc.partnerId}>
-                      <td>
-                        <strong style={{ fontSize: "14px", color: "#0f172a" }}>
-                          {alloc.partnerName}
-                        </strong>
-                      </td>
-                      <td style={{ textAlign: "right", color: "#64748b" }}>
-                        {money(alloc.openingCapital)}
-                      </td>
-                      <td style={{ textAlign: "right", fontWeight: "600", color: "#0f766e" }}>
-                        {money(alloc.closingCapital)}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span className="profitRatioPill">
-                          {(ratio * 100).toFixed(2)}%
-                        </span>
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontWeight: "700",
-                          fontSize: "14px",
-                          color: "#059669",
-                        }}
-                      >
-                        +{money(profit)}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span
-                          className={`statusPill ${
-                            historyMonthData?.isCurrentMonth ? "active" : "completed"
-                          }`}
-                          style={{ fontSize: "11px" }}
-                        >
-                          {historyMonthData?.isCurrentMonth ? "Accumulating" : "Credited"}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button
-                          type="button"
-                          className="actionIconBtn"
-                          title="View Segment Breakdown"
-                          onClick={() =>
-                            onOpenSegmentModal({
-                              partnerName: alloc.partnerName,
-                              periodStart: historyMonthData?.periodStart,
-                              periodEnd: historyMonthData?.asOfDate || historyMonthData?.periodEnd,
-                              segments: alloc.segmentBreakdown || [],
-                              totalWeight: weight,
-                            })
-                          }
-                        >
-                          <Eye size={14} /> Segments
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {(!historyMonthData?.allocations || historyMonthData.allocations.length === 0) && (
-                  <tr>
-                    <td
-                      colSpan="7"
-                      style={{ textAlign: "center", padding: "28px", color: "#94a3b8" }}
-                    >
-                      No allocations recorded for this month.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       </div>

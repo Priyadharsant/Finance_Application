@@ -30,6 +30,39 @@ export default function DailyCustomers({
           <Plus size={16} /> Add customer
         </button>
       </div>
+
+      {/* DYNAMIC GRID ANALYTICS CARDS (BASED ON FILTERS) */}
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "18px" }}>
+        <div className="metric autoMetric blue">
+          <span>Filtered Customers</span>
+          <b>{customers.length}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+            {status ? `Status: ${status}` : "All Active & Completed"}
+          </small>
+        </div>
+        <div className="metric autoMetric green">
+          <span>Total Disbursed</span>
+          <b>{money(customers.reduce((s, c) => s + Number(c.net_disbursement || c.finance_amount || 0), 0))}</b>
+          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            Principal deployed
+          </small>
+        </div>
+        <div className="metric autoMetric teal">
+          <span>Total Collected</span>
+          <b>{money(customers.reduce((s, c) => s + Number(c.total_collected || 0), 0))}</b>
+          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            Collections to date
+          </small>
+        </div>
+        <div className="metric autoMetric red">
+          <span>Total Remaining</span>
+          <b>{money(customers.reduce((s, c) => s + Number(c.balance_amount || 0), 0))}</b>
+          <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            Outstanding balance
+          </small>
+        </div>
+      </div>
+
       <div className="filterBar">
         <input
           placeholder="Search customer name"

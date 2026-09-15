@@ -44,9 +44,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   // 2. Monthly Closing & Time-Weighted State
   const now = new Date();
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const [historyYear, setHistoryYear] = useState(prevMonthDate.getFullYear());
-  const [historyMonth, setHistoryMonth] = useState(prevMonthDate.getMonth() + 1);
+  const [historyYear, setHistoryYear] = useState(now.getFullYear());
+  const [historyMonth, setHistoryMonth] = useState(now.getMonth() + 1);
   const [historyMonthData, setHistoryMonthData] = useState(null);
   const [loadingHistoryMonth, setLoadingHistoryMonth] = useState(false);
 
