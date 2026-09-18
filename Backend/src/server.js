@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
-import { Pool } from 'pg';
+import { pool as db } from '../autoFinance/config/db.js';
 import { createDailyFinanceRouter, createSimpleFinanceRouter } from '../daily_finance/index.js';
 import authRoutes from '../autoFinance/routes/authRoutes.js';
 import customerRoutes from '../autoFinance/routes/customerRoutes.js';
@@ -9,14 +9,8 @@ import loanTypeRoutes from '../autoFinance/routes/loanTypeRoutes.js';
 import loanRoutes from '../autoFinance/routes/loanRoutes.js';
 import globalCashRoutes from '../global_cash/routes/globalCash.routes.js';
 import { initMonthlyClosingCron } from '../global_cash/services/monthlyClosingCron.service.js';
-const app=express();
-const db=new Pool({
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: process.env.POSTGRES_PORT || 5432,
-  database: process.env.POSTGRES_DB,
-  user: process.env.POSTGRES_USER,
-  password: process.env.POSTGRES_PASSWORD,
-});
+
+const app = express();
 app.use(express.json({limit:'1mb'}));
 app.use(session({
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'fallback_secret',

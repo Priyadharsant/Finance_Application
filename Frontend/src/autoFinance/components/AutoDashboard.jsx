@@ -30,6 +30,7 @@ export default function AutoDashboard({
   openLoanDetails,
   setPayEmiModal,
   setPayForm,
+}) {
   const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter);
 
   const dashDisbursed = dashboardLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);

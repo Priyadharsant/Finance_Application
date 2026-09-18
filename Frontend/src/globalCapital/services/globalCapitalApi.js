@@ -32,8 +32,8 @@ export const globalCapitalApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to register partner");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to register partner");
     return json;
   },
 
@@ -56,8 +56,8 @@ export const globalCapitalApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to create contribution");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to create contribution");
     return json;
   },
 
@@ -67,8 +67,8 @@ export const globalCapitalApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to create withdrawal");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to create withdrawal");
     return json;
   },
 
@@ -92,8 +92,8 @@ export const globalCapitalApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to record expense");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to record expense");
     return json;
   },
 
@@ -101,8 +101,8 @@ export const globalCapitalApi = {
     const res = await fetch(`${API}/expenses/${id}`, {
       method: "DELETE",
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to delete expense");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to delete expense");
     return json;
   },
 

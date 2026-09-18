@@ -63,7 +63,7 @@ router.get('/ledger', async (req, res) => {
   }
 });
 
-router.get('/ledger/:id', async (req, res) => {
+router.get(['/ledger/:id', '/transaction-details/:id'], async (req, res) => {
   try {
     const details = await getTransactionDetails(pool, req.params.id);
     res.json(details);
@@ -177,6 +177,15 @@ router.get('/partners/:id', async (req, res) => {
   }
 });
 
+router.get('/partners/:partnerId/current-capital', async (req, res) => {
+  try {
+    const currentCapital = await getPartnerCurrentCapital(pool, req.params.partnerId);
+    res.json({ partnerId: req.params.partnerId, currentCapital });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/partners', async (req, res) => {
   const client = await pool.connect();
   try {
@@ -285,7 +294,7 @@ router.get('/partner-transactions', async (req, res) => {
   }
 });
 
-router.post('/partner-transactions/contribution', async (req, res) => {
+const handleContribution = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -304,9 +313,12 @@ router.post('/partner-transactions/contribution', async (req, res) => {
   } finally {
     client.release();
   }
-});
+};
 
-router.post('/partner-transactions/withdrawal', async (req, res) => {
+router.post('/partner-transactions/contribution', handleContribution);
+router.post('/contributions', handleContribution);
+
+const handleWithdrawal = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -325,7 +337,10 @@ router.post('/partner-transactions/withdrawal', async (req, res) => {
   } finally {
     client.release();
   }
-});
+};
+
+router.post('/partner-transactions/withdrawal', handleWithdrawal);
+router.post('/withdrawals', handleWithdrawal);
 
 // --- MONTHLY CLOSINGS ---
 router.get('/monthly-closings', async (req, res) => {
@@ -576,7 +591,7 @@ router.post('/profit-calculations/:id/finalize', async (req, res) => {
 });
 
 // 7. Record Partner Profit Settlement Payment
-router.post('/partner-profit-payments', async (req, res) => {
+const handleProfitPayment = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -597,7 +612,10 @@ router.post('/partner-profit-payments', async (req, res) => {
   } finally {
     client.release();
   }
-});
+};
+
+router.post('/partner-profit-payments', handleProfitPayment);
+router.post('/profit-calculations/payments', handleProfitPayment);
 
 // --- DAY-TO-DAY CALCULATION LOGS ---
 router.get('/daily-profit-logs', async (req, res) => {
