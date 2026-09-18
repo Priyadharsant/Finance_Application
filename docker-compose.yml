@@ -11,10 +11,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - finance_pgdata:/var/lib/postgresql/data
-      - ./Backend/daily_finance/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_daily_finance.sql:ro
-      - ./Backend/daily_finance/migrations/000_extensions.sql:/docker-entrypoint-initdb.d/000_extensions.sql:ro
-      - ./Backend/daily_finance/migrations/003_operations.sql:/docker-entrypoint-initdb.d/003_operations.sql:ro
-      - ./Backend/daily_finance/migrations/004_interest_fields.sql:/docker-entrypoint-initdb.d/004_interest_fields.sql:ro
+      - ./Backend/docs/finance_database.sql:/docker-entrypoint-initdb.d/finance_database.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance} -d ${POSTGRES_DB:-finance}"]
       interval: 10s
