@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import "./autoFinance.css";
-import { apiCall } from "./services/autoFinanceApi";
+import { apiCall, API_BASE } from "./services/autoFinanceApi";
 import {
   exportToExcel,
   exportTotalPortfolio,
@@ -32,6 +32,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [customers, setCustomers] = useState([]);
   const [loanTypes, setLoanTypes] = useState([]);
   const [loans, setLoans] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -119,6 +120,22 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     permit: 0,
     brokerageCustomer: 0,
     brokerageHand: 0,
+    brokerName: "",
+    brokerPhone: "",
+    brokerAddress: "",
+    jaminName: "",
+    jaminPhone: "",
+    jaminRelation: "",
+    jaminAddress: "",
+    fundSource: "OWN", // 'OWN' or 'PARTNER'
+    partnerId: "",
+    partnerInterestRate: "0",
+    documents: {
+      aadhaar: null,
+      rc_book: null,
+      main_doc: null,
+      other: null
+    }
   });
 
   const [payForm, setPayForm] = useState({
@@ -144,11 +161,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [dashRes, custRes, typesRes, loansRes] = await Promise.allSettled([
+      const [dashRes, custRes, typesRes, loansRes, partnersRes] = await Promise.allSettled([
         apiCall("/loans/dashboard"),
         apiCall("/customers"),
         apiCall("/loan-types"),
         apiCall("/loans"),
+        fetch(`${API_BASE}/global-cash/partners`, { headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } }).then(r => r.json()),
       ]);
 
       if (dashRes.status === "fulfilled" && dashRes.value.success)
@@ -159,6 +177,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         setLoanTypes(typesRes.value.data || []);
       if (loansRes.status === "fulfilled" && loansRes.value.success)
         setLoans(loansRes.value.data || []);
+      if (partnersRes.status === "fulfilled")
+        setPartners(partnersRes.value || []);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     } finally {
@@ -198,13 +218,41 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const handleCreateLoan = async (e) => {
     e.preventDefault();
     try {
-      await apiCall("/loans", {
+      // 1. Create the loan
+      const createRes = await apiCall("/loans", {
         method: "POST",
         body: JSON.stringify(loanForm),
       });
+
+      const newLoanId = createRes.data?.id || createRes.id; // Depending on API response
+
+      // 2. Upload documents if any were selected
+      if (newLoanId && loanForm.documents) {
+        for (const docType of Object.keys(loanForm.documents)) {
+          const file = loanForm.documents[docType];
+          if (file) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("docType", docType);
+
+            try {
+              await fetch(`${API_BASE}/loans/${newLoanId}/documents`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token") || ""}`
+                },
+                body: formData,
+              });
+            } catch (err) {
+              console.error(`Failed to upload ${docType}:`, err);
+            }
+          }
+        }
+      }
+
       setNotice?.({
         type: "success",
-        text: "Vehicle Loan created with EMI schedule!",
+        text: "Vehicle Loan created with EMI schedule and documents!",
       });
       setShowCreateLoan(false);
       setLoanForm({
@@ -241,6 +289,22 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         permit: 0,
         brokerageCustomer: 0,
         brokerageHand: 0,
+        brokerName: "",
+        brokerPhone: "",
+        brokerAddress: "",
+        jaminName: "",
+        jaminPhone: "",
+        jaminRelation: "",
+        jaminAddress: "",
+        fundSource: "OWN",
+        partnerId: "",
+        partnerInterestRate: "0",
+        documents: {
+          aadhaar: null,
+          rc_book: null,
+          main_doc: null,
+          other: null
+        }
       });
       loadData();
     } catch (err) {
@@ -296,7 +360,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       regNumber: regNum,
       remainingPrincipal,
       principalAmount: remainingPrincipal,
-      interestPercent: 0,
+      interestAmount: 0,
       discountAmount: 0,
       paymentMethod: "CASH",
       referenceNumber: "",
@@ -308,8 +372,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     if (!closeLoanModal) return;
     try {
       const p = Number(closeLoanModal.principalAmount || 0);
-      const pct = Number(closeLoanModal.interestPercent || 0);
-      const interestAmt = Math.round((p * pct) / 100);
+      const interestAmt = Number(closeLoanModal.interestAmount || 0);
       const discount = Number(closeLoanModal.discountAmount || 0);
 
       await apiCall(`/loans/${closeLoanModal.loanId}/close`, {
@@ -338,7 +401,50 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const openLoanDetails = async (loanId) => {
     try {
       const res = await apiCall(`/loans/${loanId}`);
-      if (res.success) setSelectedLoan(res.data);
+      if (res.success) {
+        const docsRes = await apiCall(`/loans/${loanId}/documents`);
+        setSelectedLoan({ ...res.data, documents: docsRes.success ? docsRes.data : [] });
+      }
+    } catch (err) {
+      setNotice?.({ type: "error", text: err.message });
+    }
+  };
+
+  const handleEditVehicle = async (e, vehicleData) => {
+    e.preventDefault();
+    if (!selectedLoan) return;
+    try {
+      await apiCall(`/loans/${selectedLoan.loan.id}/vehicle`, {
+        method: "PUT",
+        body: JSON.stringify(vehicleData),
+      });
+      setNotice?.({ type: "success", text: "Vehicle details updated successfully!" });
+      openLoanDetails(selectedLoan.loan.id); // Refresh
+      loadData();
+    } catch (err) {
+      setNotice?.({ type: "error", text: err.message });
+    }
+  };
+
+  const handleUploadDocument = async (docType, file) => {
+    if (!selectedLoan || !file) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("docType", docType);
+
+      const res = await fetch(`${API_BASE}/loans/${selectedLoan.loan.id}/documents`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`
+        },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to upload document");
+      
+      setNotice?.({ type: "success", text: "Document uploaded successfully!" });
+      openLoanDetails(selectedLoan.loan.id); // Refresh
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     }
@@ -684,6 +790,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         customerOptions={customerOptions}
         schemeOptions={schemeOptions}
         handleCreateLoan={handleCreateLoan}
+        partners={partners}
       />
 
       {/* MODAL: LOAN DETAILS & EMI SCHEDULE TABLE */}
@@ -692,6 +799,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         setSelectedLoan={setSelectedLoan}
         handleOpenCloseLoan={handleOpenCloseLoan}
         handleExportIndividual={handleExportIndividual}
+        handleEditVehicle={handleEditVehicle}
+        handleUploadDocument={handleUploadDocument}
         setPayEmiModal={setPayEmiModal}
         setPayForm={setPayForm}
         setNotice={setNotice}

@@ -60,7 +60,9 @@ export async function createLoanWithVehicle(data) {
       chassisNumber,
       engineNumber,
       insuranceDetails,
-      incomeDue, documentFee, hirePurchase, taxAmount, insurance, insuranceFine, greenTax, fine, nationalTax, permit, brokerageCustomer, brokerageHand
+      incomeDue, documentFee, hirePurchase, taxAmount, insurance, insuranceFine, greenTax, fine, nationalTax, permit, brokerageCustomer, brokerageHand,
+      brokerName, brokerPhone, brokerAddress, jaminName, jaminPhone, jaminRelation, jaminAddress,
+      fundSource, partnerId, partnerInterestRate
     } = data;
 
     const startStr = startDate ? startDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -113,7 +115,12 @@ export async function createLoanWithVehicle(data) {
       incomeDue: Number(incomeDue||0), documentFee: Number(documentFee||0), hirePurchase: Number(hirePurchase||0),
       taxAmount: Number(taxAmount||0), insurance: Number(insurance||0), insuranceFine: Number(insuranceFine||0),
       greenTax: Number(greenTax||0), fine: Number(fine||0), nationalTax: Number(nationalTax||0),
-      permit: Number(permit||0), brokerageCustomer: Number(brokerageCustomer||0), brokerageHand: Number(brokerageHand||0)
+      permit: Number(permit||0), brokerageCustomer: Number(brokerageCustomer||0), brokerageHand: Number(brokerageHand||0),
+      brokerName: brokerName || "", brokerPhone: brokerPhone || "", brokerAddress: brokerAddress || "",
+      jaminName: jaminName || "", jaminPhone: jaminPhone || "", jaminRelation: jaminRelation || "", jaminAddress: jaminAddress || "",
+      fundSource: fundSource || "OWN",
+      partnerId: partnerId || null,
+      partnerInterestRate: Number(partnerInterestRate || 0)
     };
 
     // 1. Insert Loan

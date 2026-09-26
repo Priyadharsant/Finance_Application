@@ -9,6 +9,9 @@ import {
 import { pool } from "../config/db.js";
 import { createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
 import { ensureUnifiedExpensesTable } from "../../global_cash/services/expense.service.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 export async function addLoan(req, res) {
   try {
@@ -659,5 +662,130 @@ export async function closeLoanEarly(req, res) {
     });
   } finally {
     client.release();
+  }
+}
+
+// =====================================================
+// VEHICLE UPDATE
+// =====================================================
+export async function updateVehicle(req, res) {
+  try {
+    const { id: loanId } = req.params;
+    const { vehicleType, make, model, year, registrationNumber, chassisNumber, engineNumber, insuranceDetails } = req.body;
+    const result = await pool.query(
+      `UPDATE autofinance_vehicles
+       SET vehicle_type = COALESCE($1, vehicle_type),
+           make = COALESCE($2, make),
+           model = COALESCE($3, model),
+           year = COALESCE($4, year),
+           registration_number = COALESCE($5, registration_number),
+           chassis_number = COALESCE($6, chassis_number),
+           engine_number = COALESCE($7, engine_number),
+           insurance_details = COALESCE($8, insurance_details)
+       WHERE loan_id = $9
+       RETURNING *`,
+      [vehicleType || null, make || null, model || null, year ? parseInt(year) : null,
+       registrationNumber || null, chassisNumber || null, engineNumber || null,
+       insuranceDetails || null, loanId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ success: false, message: "Vehicle not found" });
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error("Error updating vehicle:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+// =====================================================
+// DOCUMENT UPLOAD / LIST / SERVE
+// =====================================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getUploadDir(loanId) {
+  const dir = path.join(__dirname, "../../../uploads/loans", loanId);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export async function uploadDocument(req, res) {
+  try {
+    const { id: loanId } = req.params;
+    const { docType } = req.body; // e.g. "aadhaar", "rc_book", "main_doc", "other"
+    if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
+
+    const uploadDir = getUploadDir(loanId);
+    const ext = path.extname(req.file.originalname);
+    const safeType = (docType || "other").replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+    const filename = `${safeType}_${Date.now()}${ext}`;
+    const destPath = path.join(uploadDir, filename);
+
+    fs.renameSync(req.file.path, destPath);
+
+    return res.json({
+      success: true,
+      data: {
+        docType: safeType,
+        filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        uploadedAt: new Date().toISOString(),
+      }
+    });
+  } catch (error) {
+    console.error("Error uploading document:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function getDocuments(req, res) {
+  try {
+    const { id: loanId } = req.params;
+    const uploadDir = getUploadDir(loanId);
+    if (!fs.existsSync(uploadDir)) return res.json({ success: true, data: [] });
+
+    const files = fs.readdirSync(uploadDir).map((filename) => {
+      const filePath = path.join(uploadDir, filename);
+      const stat = fs.statSync(filePath);
+      // Derive docType from filename prefix (before first underscore+timestamp)
+      const parts = filename.split("_");
+      // docType is everything before the last two underscore-separated parts (timestamp + ext)
+      const docType = parts.slice(0, parts.length - 1).join("_").replace(/_\d+$/, "") || "other";
+      return {
+        filename,
+        docType,
+        size: stat.size,
+        uploadedAt: stat.mtime.toISOString(),
+      };
+    });
+
+    return res.json({ success: true, data: files });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function serveDocument(req, res) {
+  try {
+    const { id: loanId, filename } = req.params;
+    // Sanitize filename to prevent path traversal
+    const safe = path.basename(filename);
+    const filePath = path.join(__dirname, "../../../uploads/loans", loanId, safe);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: "File not found" });
+    res.download(filePath, safe);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteDocument(req, res) {
+  try {
+    const { id: loanId, filename } = req.params;
+    const safe = path.basename(filename);
+    const filePath = path.join(__dirname, "../../../uploads/loans", loanId, safe);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 }
