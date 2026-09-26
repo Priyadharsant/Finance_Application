@@ -60,13 +60,35 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
 
     const inHandAmount = Number(l.loan_amount || 0) - totalDeductions;
 
+    // Partner Interest calculation
+    const fundSource = fees.fundSource || "OWN";
+    const partnerInterestRate = Number(fees.partnerInterestRate || 0);
+    const tenureMonths = Number(l.tenure_months || 0);
+    const loanAmount = Number(l.loan_amount || 0);
+    const customerInterestRate = Number(l.interest_rate || 0);
+    
+    // Total interest from customer (approx flat)
+    const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 1200);
+    // Partner's share of interest
+    const partnerInterestShare = fundSource === "PARTNER" ? Math.round((loanAmount * partnerInterestRate * tenureMonths) / 1200) : 0;
+    // Net profit for company
+    const netCompanyProfit = totalCustomerInterest - partnerInterestShare;
+
     return {
       "Customer Name": `${l.first_name || ""} ${l.last_name || ""}`.trim(),
       "Customer Code": l.customer_code || "—",
       "Phone": l.phone || "",
       "Vehicle": `${l.make || ""} ${l.model || ""}`.trim(),
       "Reg No": l.registration_number || "PENDING",
-      "Loan Amount (₹)": Number(l.loan_amount || 0),
+      "Fund Source": fundSource === "PARTNER" ? "PARTNER" : "OWN CAPITAL",
+      "Partner Interest Rate (%)": fundSource === "PARTNER" ? partnerInterestRate : 0,
+      "Partner Interest Amount (₹)": partnerInterestShare,
+      "Expected Company Net Profit (₹)": netCompanyProfit,
+      "Broker Name": fees.brokerName || "—",
+      "Broker Phone": fees.brokerPhone || "—",
+      "Guarantor (Jamin) Name": fees.jaminName || "—",
+      "Guarantor (Jamin) Phone": fees.jaminPhone || "—",
+      "Loan Amount (₹)": loanAmount,
       "Income Due (₹)": incomeDue,
       "Document Fee (₹)": documentFee,
       "Hire Purchase (₹)": hirePurchase,
@@ -81,8 +103,8 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
       "Brokerage (By Hand) (₹)": brokerageHand,
       "Total Deductions & Fees (₹)": totalDeductions,
       "Amount Given to Customer (After All Deductions) (₹)": inHandAmount,
-      "Interest Rate (%)": Number(l.interest_rate || 0),
-      "Tenure (Months)": Number(l.tenure_months || 0),
+      "Interest Rate (%)": customerInterestRate,
+      "Tenure (Months)": tenureMonths,
       "Start Date": dateLabel(l.start_date),
       "End Date": dateLabel(l.end_date),
       "Total Collected (₹)": Number(l.total_paid || 0),

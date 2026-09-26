@@ -56,6 +56,19 @@ export default function DailyDashboard({
           value={position.completed_accounts}
           count
         />
+        <Metric
+          title="Current In-Hand Amount"
+          value={position.collected}
+          tone="green"
+        />
+        <Metric
+          title="Next Month Projected Amount"
+          value={
+            Number(position.collected || 0) +
+            Math.round(Number(position.receivable || 0) * 0.5)
+          }
+          tone="orange"
+        />
       </div>
       <div className="dashboardGrid">
         <div className="card tableWrap">

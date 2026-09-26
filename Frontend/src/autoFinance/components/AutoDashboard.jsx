@@ -154,6 +154,44 @@ export default function AutoDashboard({
             {dashOverdueCount} Overdue · {dashDueTodayCount} Due Today
           </small>
         </div>
+
+        <div className="metric autoMetric indigo" style={{ background: "#f8fafc", borderLeft: "4px solid #6366f1" }}>
+          <span>Current In-Hand Cash</span>
+          <b style={{ color: "#4338ca" }}>{money(dashCollected)}</b>
+          <small
+            style={{
+              color: "#64748b",
+              fontSize: "11.5px",
+              marginTop: "4px",
+              display: "block",
+            }}
+          >
+            Opening balance for next month
+          </small>
+        </div>
+
+        <div className="metric autoMetric purple" style={{ background: "#f8fafc", borderLeft: "4px solid #a855f7" }}>
+          <span>Next Month Projected Amount</span>
+          <b style={{ color: "#7e22ce" }}>
+            {money(
+              dashCollected +
+              dashboardLoans
+                .filter(l => l.status === "ACTIVE")
+                .reduce((sum, l) => sum + (Number(l.monthly_installment || l.emi_amount || (Number(l.loan_amount || 0) * 0.1))), 0)
+            )}
+          </b>
+          <small
+            style={{
+              color: "#7e22ce",
+              fontWeight: 600,
+              fontSize: "11.5px",
+              marginTop: "4px",
+              display: "block",
+            }}
+          >
+            In-Hand + Next Month EMIs
+          </small>
+        </div>
       </div>
 
       {/* COMPREHENSIVE VEHICLE LOANS PORTFOLIO TABLE */}

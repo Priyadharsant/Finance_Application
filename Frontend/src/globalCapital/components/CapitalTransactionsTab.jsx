@@ -127,25 +127,17 @@ export default function CapitalTransactionsTab({
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             className="secondaryBtn"
-            style={{ color: "#dc2626", borderColor: "#fca5a5" }}
+            style={{ color: "#dc2626", borderColor: "#fca5a5", fontWeight: "700" }}
             onClick={() => onOpenCapitalAction(null, "WITHDRAWAL")}
           >
-            <MinusCircle size={16} /> Record Withdrawal
-          </button>
-          <button
-            className="secondaryBtn"
-            onClick={() => exportCapitalTransactions(filteredTransactions, { label: monthFilter || undefined })}
-            title="Export Filtered Capital Transactions to Excel"
-          >
-            <Download size={16} /> Export Report (Excel)
-            {filteredTransactions.length < transactions.length ? ` (${filteredTransactions.length})` : ""}
+            <MinusCircle size={16} /> Withdraw Money
           </button>
           <button
             className="primaryBtn"
-            style={{ background: "#059669", borderColor: "#059669" }}
+            style={{ background: "#059669", borderColor: "#059669", fontWeight: "700" }}
             onClick={() => onOpenCapitalAction(null, "CONTRIBUTION")}
           >
-            <Plus size={16} /> Record Contribution
+            <Plus size={16} /> Add Money (In)
           </button>
         </div>
       </div>

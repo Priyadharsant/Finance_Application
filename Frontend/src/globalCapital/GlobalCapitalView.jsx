@@ -101,6 +101,9 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     amount: "",
     effectiveDate: new Date().toISOString().slice(0, 10),
     notes: "",
+    fundSourceType: "OWN", // 'OWN' or 'LEND'
+    lenderName: "",
+    interestRate: "",
   });
 
   const [showAddExpense, setShowAddExpense] = useState(false);
@@ -387,6 +390,9 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           amount: parseFloat(capitalFormData.amount),
           effectiveDate: capitalFormData.effectiveDate,
           notes: capitalFormData.notes,
+          fundSourceType: capitalFormData.fundSourceType,
+          lenderName: capitalFormData.lenderName,
+          interestRate: capitalFormData.interestRate,
         });
         setNotice({ type: "success", text: "Capital contribution added successfully" });
       }

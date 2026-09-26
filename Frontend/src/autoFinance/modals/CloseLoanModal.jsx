@@ -10,8 +10,7 @@ export default function CloseLoanModal({
 
   const remP = Number(closeLoanModal.remainingPrincipal ?? closeLoanModal.principalAmount ?? 0);
   const p = Number(closeLoanModal.principalAmount ?? remP);
-  const pct = Number(closeLoanModal.interestPercent || 0);
-  const interestAmt = Math.round((p * pct) / 100);
+  const interestAmt = Number(closeLoanModal.interestAmount || 0);
   const discountAmt = Number(closeLoanModal.discountAmount || 0);
   const totalAmt = p + interestAmt;
 
@@ -88,7 +87,7 @@ export default function CloseLoanModal({
           </div>
 
           <div className="closeLoanField">
-            <label className="closeLoanLabel">Settlement Principal (₹)</label>
+            <label className="closeLoanLabel">Asal (Principal) Settlement (₹)</label>
             <div className="closeLoanInputWrap">
               <span className="closeLoanPrefix">₹</span>
               <input
@@ -106,23 +105,23 @@ export default function CloseLoanModal({
 
         <div className="closeLoanGrid" style={{ marginTop: "4px" }}>
           <div className="closeLoanField">
-            <label className="closeLoanLabel">Closing Interest (%)</label>
+            <label className="closeLoanLabel">Interest Amount (₹)</label>
             <div className="closeLoanInputWrap">
+              <span className="closeLoanPrefix">₹</span>
               <input
                 type="number"
                 step="any"
                 min="0"
                 placeholder="0"
-                className="closeLoanInputPercent"
-                value={closeLoanModal.interestPercent === "" ? "" : closeLoanModal.interestPercent}
+                className="closeLoanInput"
+                value={closeLoanModal.interestAmount === "" ? "" : closeLoanModal.interestAmount}
                 onChange={(e) =>
                   setCloseLoanModal({
                     ...closeLoanModal,
-                    interestPercent: e.target.value === "" ? "" : Number(e.target.value),
+                    interestAmount: e.target.value === "" ? "" : Number(e.target.value),
                   })
                 }
               />
-              <span className="closeLoanSuffix">%</span>
             </div>
           </div>
 
@@ -156,7 +155,7 @@ export default function CloseLoanModal({
           <div>
             <div className="closeLoanSummaryLabel">Settlement Cash Collection</div>
             <div className="closeLoanSummarySub">
-              Principal: ₹{p.toLocaleString()} {pct > 0 ? `+ ${pct}% (₹${interestAmt.toLocaleString()})` : ""}
+              Principal: ₹{p.toLocaleString()} {interestAmt > 0 ? `+ Interest: ₹${interestAmt.toLocaleString()}` : ""}
               {discountAmt > 0 ? ` · Discount: ₹${discountAmt.toLocaleString()} (Expense)` : ""}
             </div>
           </div>

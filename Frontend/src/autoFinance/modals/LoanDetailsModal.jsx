@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   X,
   IdCard,
@@ -14,19 +14,55 @@ import {
   Wrench,
   Zap,
   ShieldCheck,
+  Edit,
+  Save,
+  Upload,
+  FileText,
+  Trash
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
-import { money, dateLabel } from "../services/autoFinanceApi";
+import { money, dateLabel, API_BASE } from "../services/autoFinanceApi";
 
 export default function LoanDetailsModal({
   selectedLoan,
   setSelectedLoan,
   handleOpenCloseLoan,
   handleExportIndividual,
+  handleEditVehicle,
+  handleUploadDocument,
   setPayEmiModal,
   setPayForm,
   setNotice,
 }) {
+  const [isEditingVehicle, setIsEditingVehicle] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({});
+
+  const handleEditVehicleToggle = () => {
+    if (!isEditingVehicle) {
+      setVehicleForm({
+        vehicleType: selectedLoan.loan.vehicle_type || "",
+        make: selectedLoan.loan.make || "",
+        model: selectedLoan.loan.model || "",
+        year: selectedLoan.loan.year || "",
+        registrationNumber: selectedLoan.loan.registration_number || "",
+        chassisNumber: selectedLoan.loan.chassis_number || "",
+        engineNumber: selectedLoan.loan.engine_number || "",
+        insuranceDetails: selectedLoan.loan.insurance_details || ""
+      });
+    }
+    setIsEditingVehicle(!isEditingVehicle);
+  };
+
+  const submitVehicleEdit = (e) => {
+    handleEditVehicle(e, vehicleForm);
+    setIsEditingVehicle(false);
+  };
+
+  const handleFileChange = (docType, e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleUploadDocument(docType, e.target.files[0]);
+    }
+  };
   if (!selectedLoan) return null;
 
   return (
@@ -167,62 +203,114 @@ export default function LoanDetailsModal({
           </div>
         </div>
 
-        {/* VEHICLE ASSET SPECIFICATIONS */}
-        <div
-          style={{
-            background: "#f8fafc",
-            padding: "14px 18px",
-            borderRadius: "12px",
-            border: "1px solid #e2e8f0",
-            margin: "16px 0",
-            fontSize: "13px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "16px 28px",
-          }}
-        >
-          <div>
-            <span>
-              <CarFront size={14} /> Vehicle:
-            </span>{" "}
-            <b>
-              {selectedLoan.loan.make} {selectedLoan.loan.model} (
-              {selectedLoan.loan.year || "2026"})
-            </b>
-          </div>
-          <div>
-            <span>
-              <Tags size={14} /> Type:
-            </span>{" "}
-            <b>{selectedLoan.loan.vehicle_type || "TWO_WHEELER"}</b>
-          </div>
-          <div>
-            <span>
-              <IdCard size={14} /> Reg No:
-            </span>{" "}
-            <b className="autoRegNo">
-              {selectedLoan.loan.registration_number || "PENDING"}
-            </b>
-          </div>
-          <div>
-            <span>
-              <Wrench size={14} /> Chassis No:
-            </span>{" "}
-            <b>{selectedLoan.loan.chassis_number || "—"}</b>
-          </div>
-          <div>
-            <span>
-              <Zap size={14} /> Engine No:
-            </span>{" "}
-            <b>{selectedLoan.loan.engine_number || "—"}</b>
-          </div>
-          {selectedLoan.loan.insurance_details && (
-            <div>
-              <span>
-                <ShieldCheck size={14} /> Insurance:
-              </span>{" "}
-              <b>{selectedLoan.loan.insurance_details}</b>
+        {/* BROKER & GUARANTOR DETAILS */}
+        {selectedLoan.loan.fees_details && (selectedLoan.loan.fees_details.brokerName || selectedLoan.loan.fees_details.jaminName || selectedLoan.loan.fees_details.fundSource === "PARTNER") && (
+          <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
+            <h4 style={{ margin: "0 0 10px 0", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+              🤝 Stakeholders, Broker & Guarantor
+            </h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px" }}>
+              <div>
+                <span style={{ color: "#64748b" }}>Fund Source:</span>{" "}
+                <b style={{ color: selectedLoan.loan.fees_details.fundSource === "PARTNER" ? "#7c3aed" : "#0284c7" }}>
+                  {selectedLoan.loan.fees_details.fundSource === "PARTNER" ? "PARTNER CAPITAL" : "OWN CAPITAL (COMPANY)"}
+                </b>
+                {selectedLoan.loan.fees_details.fundSource === "PARTNER" && (
+                  <span style={{ marginLeft: "6px", color: "#64748b" }}>
+                    (Partner Interest Rate: <b>{selectedLoan.loan.fees_details.partnerInterestRate || 0}%</b>)
+                  </span>
+                )}
+              </div>
+              {selectedLoan.loan.fees_details.brokerName && (
+                <div>
+                  <span style={{ color: "#64748b" }}>Broker:</span> <b>{selectedLoan.loan.fees_details.brokerName}</b>
+                  {selectedLoan.loan.fees_details.brokerPhone && <span style={{ marginLeft: "8px" }}><Phone size={12} /> {selectedLoan.loan.fees_details.brokerPhone}</span>}
+                </div>
+              )}
+              {selectedLoan.loan.fees_details.jaminName && (
+                <div>
+                  <span style={{ color: "#64748b" }}>Guarantor (Jamin):</span> <b>{selectedLoan.loan.fees_details.jaminName}</b>
+                  {selectedLoan.loan.fees_details.jaminRelation && <span style={{ color: "#64748b", marginLeft: "4px" }}>({selectedLoan.loan.fees_details.jaminRelation})</span>}
+                  {selectedLoan.loan.fees_details.jaminPhone && <span style={{ marginLeft: "8px" }}><Phone size={12} /> {selectedLoan.loan.fees_details.jaminPhone}</span>}
+                </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* VEHICLE ASSET SPECIFICATIONS */}
+        <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <h4 style={{ margin: 0, color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+              <CarFront size={16} /> Vehicle Asset Specifications
+            </h4>
+            <button className="secondary autoBtn" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={handleEditVehicleToggle}>
+              {isEditingVehicle ? <><X size={12}/> Cancel</> : <><Edit size={12}/> Edit Vehicle</>}
+            </button>
+          </div>
+
+          {isEditingVehicle ? (
+            <form onSubmit={submitVehicleEdit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
+              <label>Vehicle Type <input className="autoInput" value={vehicleForm.vehicleType} onChange={(e) => setVehicleForm({...vehicleForm, vehicleType: e.target.value})} /></label>
+              <label>Make <input className="autoInput" value={vehicleForm.make} onChange={(e) => setVehicleForm({...vehicleForm, make: e.target.value})} /></label>
+              <label>Model <input className="autoInput" value={vehicleForm.model} onChange={(e) => setVehicleForm({...vehicleForm, model: e.target.value})} /></label>
+              <label>Year <input type="number" className="autoInput" value={vehicleForm.year} onChange={(e) => setVehicleForm({...vehicleForm, year: e.target.value})} /></label>
+              <label>Reg Number <input className="autoInput" value={vehicleForm.registrationNumber} onChange={(e) => setVehicleForm({...vehicleForm, registrationNumber: e.target.value})} /></label>
+              <label>Chassis No <input className="autoInput" value={vehicleForm.chassisNumber} onChange={(e) => setVehicleForm({...vehicleForm, chassisNumber: e.target.value})} /></label>
+              <label>Engine No <input className="autoInput" value={vehicleForm.engineNumber} onChange={(e) => setVehicleForm({...vehicleForm, engineNumber: e.target.value})} /></label>
+              <label>Insurance Details <input className="autoInput" value={vehicleForm.insuranceDetails} onChange={(e) => setVehicleForm({...vehicleForm, insuranceDetails: e.target.value})} /></label>
+              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
+                <button type="submit" className="primary autoBtn"><Save size={14} /> Save Changes</button>
+              </div>
+            </form>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px" }}>
+              <div><span><CarFront size={14} /> Vehicle:</span> <b>{selectedLoan.loan.make} {selectedLoan.loan.model} ({selectedLoan.loan.year || "2026"})</b></div>
+              <div><span><Tags size={14} /> Type:</span> <b>{selectedLoan.loan.vehicle_type || "TWO_WHEELER"}</b></div>
+              <div><span><IdCard size={14} /> Reg No:</span> <b className="autoRegNo">{selectedLoan.loan.registration_number || "PENDING"}</b></div>
+              <div><span><Wrench size={14} /> Chassis No:</span> <b>{selectedLoan.loan.chassis_number || "—"}</b></div>
+              <div><span><Zap size={14} /> Engine No:</span> <b>{selectedLoan.loan.engine_number || "—"}</b></div>
+              {selectedLoan.loan.insurance_details && <div><span><ShieldCheck size={14} /> Insurance:</span> <b>{selectedLoan.loan.insurance_details}</b></div>}
+            </div>
+          )}
+        </div>
+
+        {/* LOAN DOCUMENTS */}
+        <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
+          <h4 style={{ margin: "0 0 10px 0", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+            <FileText size={16} /> Loan Documents
+          </h4>
+          
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+            {["aadhaar", "rc_book", "main_doc", "other"].map(docType => {
+              const label = docType === "aadhaar" ? "Aadhaar" : docType === "rc_book" ? "RC Book" : docType === "main_doc" ? "Main Doc" : "Other";
+              return (
+                <div key={docType} style={{ position: "relative" }}>
+                  <input type="file" id={`upload_${docType}`} style={{ display: "none" }} onChange={(e) => handleFileChange(docType, e)} />
+                  <label htmlFor={`upload_${docType}`} className="secondary autoBtn" style={{ padding: "4px 10px", fontSize: "12px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <Upload size={13} /> Upload {label}
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedLoan.documents && selectedLoan.documents.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+              {selectedLoan.documents.map(doc => (
+                <div key={doc.filename} style={{ padding: "8px 12px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontWeight: "bold", fontSize: "12px", textTransform: "capitalize", color: "#0f766e" }}>{doc.docType.replace("_", " ")}</div>
+                    <small style={{ color: "#64748b" }}>{(doc.size / 1024).toFixed(1)} KB</small>
+                  </div>
+                  <a href={`${API_BASE}/loans/${selectedLoan.loan.id}/documents/${doc.filename}`} download target="_blank" rel="noreferrer" className="primary autoBtn" style={{ padding: "4px 8px", fontSize: "11px", textDecoration: "none" }}>
+                    Download
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "#64748b", fontSize: "12px", fontStyle: "italic" }}>No documents uploaded yet.</div>
           )}
         </div>
 

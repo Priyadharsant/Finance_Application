@@ -10,6 +10,9 @@ import {
   X,
   Calendar,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import { money } from "../utils/formatters.js";
 import { exportPartnerBalances } from "../services/globalCapitalExportUtils.js";
@@ -24,6 +27,7 @@ export default function PartnerManagement({
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [monthFilter, setMonthFilter] = useState(currentMonthStr);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedPartnerId, setExpandedPartnerId] = useState(null);
 
   const filteredPartners = useMemo(() => {
     return (partners || []).filter((p) => {
@@ -281,9 +285,39 @@ export default function PartnerManagement({
                 >
                   <td>
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                      <strong style={{ fontSize: "14px", color: "#0f172a" }}>
-                        {p.name}
-                      </strong>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <strong style={{ fontSize: "14px", color: "#0f172a" }}>
+                          {p.name}
+                        </strong>
+                        {p.borrowed_funds && p.borrowed_funds.length > 0 && (
+                          <button
+                            type="button"
+                            className="tag"
+                            style={{
+                              background: expandedPartnerId === p.id ? "#7c3aed" : "#f5f3ff",
+                              color: expandedPartnerId === p.id ? "#ffffff" : "#7c3aed",
+                              border: "1px solid #ddd6fe",
+                              borderRadius: "6px",
+                              padding: "2px 8px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedPartnerId(expandedPartnerId === p.id ? null : p.id);
+                            }}
+                            title="Click to view borrowed money sources and interest"
+                          >
+                            <span>Lend Money ({p.borrowed_funds.length})</span>
+                            {expandedPartnerId === p.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                          </button>
+                        )}
+                      </div>
+
                       <div className="partnerContactPills">
                         {p.phone && (
                           <a
@@ -302,6 +336,58 @@ export default function PartnerManagement({
                           </a>
                         )}
                       </div>
+
+                      {/* COLLAPSIBLE BORROWED FUNDS DROPDOWN */}
+                      {expandedPartnerId === p.id && p.borrowed_funds && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            padding: "10px 12px",
+                            background: "#faf5ff",
+                            border: "1px solid #e9d5ff",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ fontWeight: "700", color: "#6b21a8", marginBottom: "6px", display: "flex", justifyContent: "space-between" }}>
+                            <span>Borrowed / Lend Money Breakdown:</span>
+                            <span>Total: ₹{Number(p.borrowed_total || 0).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            {p.borrowed_funds.map((bf) => (
+                              <div
+                                key={bf.id}
+                                style={{
+                                  background: "#ffffff",
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #f3e8ff",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <div>
+                                  <strong style={{ color: "#0f172a" }}>{bf.lender_name || "Lender"}</strong>
+                                  <div style={{ color: "#64748b", fontSize: "11px" }}>
+                                    Date: {bf.effective_date ? new Date(bf.effective_date).toLocaleDateString("en-IN") : "—"}
+                                    {bf.notes ? ` · ${bf.notes}` : ""}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontWeight: "700", color: "#7c3aed" }}>
+                                    ₹{Number(bf.amount || 0).toLocaleString("en-IN")}
+                                  </div>
+                                  <span style={{ fontSize: "11px", color: "#b91c1c", fontWeight: "600" }}>
+                                    Interest: {bf.interest_rate || 0}%
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td>

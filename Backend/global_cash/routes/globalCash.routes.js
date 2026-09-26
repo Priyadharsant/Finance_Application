@@ -130,7 +130,7 @@ router.get('/partners', async (req, res) => {
     const partnersRes = await pool.query('SELECT * FROM global_partners ORDER BY created_at ASC');
     const partners = partnersRes.rows;
 
-    // Attach comprehensive stats
+    // Attach comprehensive stats and any borrowed capital items
     for (const p of partners) {
       const stats = await getPartnerStats(pool, p.id);
       p.current_capital = stats.currentCapital;
@@ -138,6 +138,16 @@ router.get('/partners', async (req, res) => {
       p.profit_earned = stats.totalProfitEarned;
       p.total_contributed = stats.totalContributed;
       p.total_withdrawn = stats.totalWithdrawn;
+
+      const borrowedRes = await pool.query(
+        `SELECT id, amount, effective_date, lender_name, interest_rate, notes 
+         FROM partner_capital_transactions 
+         WHERE partner_id = $1 AND fund_source_type = 'LEND' 
+         ORDER BY effective_date DESC`,
+        [p.id]
+      );
+      p.borrowed_funds = borrowedRes.rows;
+      p.borrowed_total = borrowedRes.rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
     }
 
     res.json(partners);
@@ -298,12 +308,16 @@ const handleContribution = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { partnerId, amount, effectiveDate, notes } = req.body;
+    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate } = req.body;
     
     if (!partnerId) throw new Error('Partner is required');
     if (!amount || Number(amount) <= 0) throw new Error('Valid contribution amount is required');
 
-    const tx = await createContribution(client, partnerId, Number(amount), effectiveDate, notes);
+    const tx = await createContribution(client, partnerId, Number(amount), effectiveDate, notes, {
+      fundSourceType,
+      lenderName,
+      interestRate
+    });
     
     await client.query('COMMIT');
     res.json(tx);

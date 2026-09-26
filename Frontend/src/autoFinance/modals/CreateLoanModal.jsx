@@ -11,6 +11,7 @@ export default function CreateLoanModal({
   customerOptions,
   schemeOptions,
   handleCreateLoan,
+  partners = [],
 }) {
   if (!showCreateLoan) return null;
 
@@ -158,6 +159,54 @@ export default function CreateLoanModal({
           />
 
           <div className="formSectionHeader">
+            🏦 Source of Funds
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
+            <label>
+              Fund Source
+              <select
+                value={loanForm.fundSource}
+                onChange={(e) => setLoanForm({ ...loanForm, fundSource: e.target.value })}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+              >
+                <option value="OWN">Own Capital (Company)</option>
+                <option value="PARTNER">Partner Capital</option>
+              </select>
+            </label>
+            
+            {loanForm.fundSource === "PARTNER" && (
+              <>
+                <label>
+                  Select Partner *
+                  <select
+                    required
+                    value={loanForm.partnerId}
+                    onChange={(e) => setLoanForm({ ...loanForm, partnerId: e.target.value })}
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                  >
+                    <option value="">-- Choose Partner --</option>
+                    {partners?.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Partner Interest Share (%) *
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    placeholder="e.g. 2.0"
+                    value={loanForm.partnerInterestRate}
+                    onChange={(e) => setLoanForm({ ...loanForm, partnerInterestRate: e.target.value })}
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          <div className="formSectionHeader">
             💰 Loan Parameters & Calculations
           </div>
 
@@ -230,6 +279,21 @@ export default function CreateLoanModal({
           </label>
 
           <div className="formSectionHeader" style={{ marginTop: "24px" }}>
+            🤝 Broker & Guarantor (Jamin) Details
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+            <label>Broker Name <input placeholder="Name" value={loanForm.brokerName} onChange={(e) => setLoanForm({ ...loanForm, brokerName: e.target.value })} /></label>
+            <label>Broker Phone <input placeholder="Phone" value={loanForm.brokerPhone} onChange={(e) => setLoanForm({ ...loanForm, brokerPhone: e.target.value })} /></label>
+            <label>Broker Address <input placeholder="Address" value={loanForm.brokerAddress} onChange={(e) => setLoanForm({ ...loanForm, brokerAddress: e.target.value })} /></label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "10px" }}>
+            <label>Jamin (Guarantor) Name <input placeholder="Name" value={loanForm.jaminName} onChange={(e) => setLoanForm({ ...loanForm, jaminName: e.target.value })} /></label>
+            <label>Jamin Phone <input placeholder="Phone" value={loanForm.jaminPhone} onChange={(e) => setLoanForm({ ...loanForm, jaminPhone: e.target.value })} /></label>
+            <label>Jamin Relation <input placeholder="Relation (e.g. Brother)" value={loanForm.jaminRelation} onChange={(e) => setLoanForm({ ...loanForm, jaminRelation: e.target.value })} /></label>
+            <label>Jamin Address <input placeholder="Address" value={loanForm.jaminAddress} onChange={(e) => setLoanForm({ ...loanForm, jaminAddress: e.target.value })} /></label>
+          </div>
+
+          <div className="formSectionHeader" style={{ marginTop: "24px" }}>
             💰 Deductions & Fees
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
@@ -245,6 +309,37 @@ export default function CreateLoanModal({
             <label>Permit <input type="number" className="autoInput" value={loanForm.permit} onChange={(e) => setLoanForm({ ...loanForm, permit: Number(e.target.value) })} /></label>
             <label>Brokerage (Cust.) <input type="number" className="autoInput" value={loanForm.brokerageCustomer} onChange={(e) => setLoanForm({ ...loanForm, brokerageCustomer: Number(e.target.value) })} /></label>
             <label>Brokerage (Hand) <input type="number" className="autoInput" value={loanForm.brokerageHand} onChange={(e) => setLoanForm({ ...loanForm, brokerageHand: Number(e.target.value) })} /></label>
+          </div>
+
+          <div className="formSectionHeader" style={{ marginTop: "24px" }}>
+            📎 Loan Documents (Optional)
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", background: "#f8fafc", padding: "16px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            {[
+              { id: 'aadhaar', label: 'Aadhaar Card' },
+              { id: 'rc_book', label: 'RC Book' },
+              { id: 'main_doc', label: 'Main Agreement' },
+              { id: 'other', label: 'Other Document' }
+            ].map(doc => (
+              <div key={doc.id} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>{doc.label}</label>
+                <input 
+                  type="file" 
+                  style={{ fontSize: "12px" }}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setLoanForm({
+                        ...loanForm,
+                        documents: {
+                          ...(loanForm.documents || {}),
+                          [doc.id]: e.target.files[0]
+                        }
+                      });
+                    }
+                  }} 
+                />
+              </div>
+            ))}
           </div>
 
           {/* LIVE EMI CALCULATION PREVIEW BOX (FLAT & REDUCING) */}
