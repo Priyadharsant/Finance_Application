@@ -290,7 +290,8 @@ export default function MonthlyClosingTab({
           </div>
         </div>
 
-        {/* Partner Profit Shares Table for Selected Month */}
+        {/* Historical partner allocations remain readable only when old data exists. */}
+        {(displayData?.allocations || []).length > 0 && (
         <div className="financeCard globalCapitalCard">
           <div
             className="cardHead"
@@ -411,6 +412,7 @@ export default function MonthlyClosingTab({
             </table>
           </div>
         </div>
+        )}
 
         {/* Day-to-Day Income / Loss Calculation Log */}
         <DayToDayCalculationLog

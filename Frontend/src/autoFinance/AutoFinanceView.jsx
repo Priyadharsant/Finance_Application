@@ -670,22 +670,6 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     }));
   }, [customers]);
 
-  const schemeOptions = useMemo(() => {
-    return [
-      {
-        value: "",
-        label: "-- Custom / Manual Entry (No Template) --",
-        subtext: "Manually fill all interest rates & terms",
-      },
-      ...loanTypes.map((t) => ({
-        value: t.id,
-        label: `${t.name} (${t.base_interest_rate}% p.a.)`,
-        subtext: `Method: ${t.interest_type} · Default Rate: ${t.base_interest_rate}% · Tenure: ${t.default_tenure_months} Mo`,
-        scheme: t,
-      })),
-    ];
-  }, [loanTypes]);
-
   const overview = dashboardData.overview || {};
 
   return (
@@ -788,7 +772,6 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         loanForm={loanForm}
         setLoanForm={setLoanForm}
         customerOptions={customerOptions}
-        schemeOptions={schemeOptions}
         handleCreateLoan={handleCreateLoan}
         partners={partners}
       />
