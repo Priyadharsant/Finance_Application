@@ -120,9 +120,7 @@ export default function CapitalTransactionsTab({
         <div>
           <span className="overline autoBadgeTag">CAPITAL ACTIVITY</span>
           <h2>Capital Transactions</h2>
-          <p className="globalSectionDescription">
-            Complete record of partner capital deposits, injections, withdrawals, and exit settlements.
-          </p>
+          <p className="globalSectionDescription">Partner money added and withdrawn.</p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -142,15 +140,8 @@ export default function CapitalTransactionsTab({
         </div>
       </div>
 
-      {/* KPI Stats Reflecting Active Filters */}
+      {/* Simple summary */}
       <div className="globalCapitalStats fourCol">
-        <div>
-          <span>Transactions</span>
-          <strong>{filteredTransactions.length}</strong>
-          <small>
-            {isFiltered ? `Filtered from ${transactions.length} records` : `Total recorded records`}
-          </small>
-        </div>
         <div>
           <span>Capital In (Deposits)</span>
           <strong style={{ color: "#059669" }}>
@@ -164,13 +155,6 @@ export default function CapitalTransactionsTab({
             -{money(totalWithdrawals)}
           </strong>
           <small>Partner capital withdrawn</small>
-        </div>
-        <div>
-          <span>Net Movement</span>
-          <strong style={{ color: "#0f766e" }}>
-            {money(netMovement)}
-          </strong>
-          <small>Net capital flow</small>
         </div>
       </div>
 
@@ -331,10 +315,6 @@ export default function CapitalTransactionsTab({
               <tr>
                 <th>Date</th>
                 <th>Partner</th>
-                <th>Transaction Type</th>
-                <th>Direction</th>
-                <th>Narration / Notes</th>
-                <th>Status</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
               </tr>
             </thead>
@@ -345,67 +325,12 @@ export default function CapitalTransactionsTab({
                   t.transaction_type === "ADJUSTMENT_INCREASE" ||
                   t.transaction_type === "PROFIT_SHARE";
                 return (
-                  <tr
-                    className="clickable globalClickableRow"
-                    key={t.id}
-                    onClick={() =>
-                      onSelectRecord({ type: "transaction", record: t })
-                    }
-                  >
+                  <tr key={t.id}>
                     <td>
                       {new Date(t.effective_date).toLocaleDateString("en-IN")}
                     </td>
                     <td style={{ fontWeight: "600", color: "#0f172a" }}>
                       {t.partner_name}
-                    </td>
-                    <td>
-                      <span
-                        className="analyticsPill"
-                        style={{
-                          background: isContrib ? "#ecfdf5" : "#fff1f2",
-                          color: isContrib ? "#047857" : "#be123c",
-                          fontWeight: "700",
-                        }}
-                      >
-                        {t.transaction_type === "PROFIT_SHARE"
-                          ? "AUTO PROFIT SHARE"
-                          : t.transaction_type}
-                      </span>
-                    </td>
-                    <td>
-                      {isContrib ? (
-                        <span
-                          style={{
-                            color: "#059669",
-                            fontWeight: "600",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <ArrowDownCircle size={14} /> IN
-                        </span>
-                      ) : (
-                        <span
-                          style={{
-                            color: "#e11d48",
-                            fontWeight: "600",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <ArrowRightCircle size={14} /> OUT
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <small style={{ color: "#64748b" }}>
-                        {formatTxNotes(t.notes)}
-                      </small>
-                    </td>
-                    <td>
-                      <span className="statusPill active">{t.status}</span>
                     </td>
                     <td
                       style={{
@@ -423,7 +348,7 @@ export default function CapitalTransactionsTab({
               })}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+                  <td colSpan="3" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
                     No capital transactions found matching the applied filters.
                   </td>
                 </tr>

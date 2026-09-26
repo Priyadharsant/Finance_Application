@@ -24,15 +24,12 @@ export default function PartnerManagement({
   onSelectRecord,
 }) {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [statusFilter, setStatusFilter] = useState("ALL");
   const [monthFilter, setMonthFilter] = useState(currentMonthStr);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPartnerId, setExpandedPartnerId] = useState(null);
 
   const filteredPartners = useMemo(() => {
     return (partners || []).filter((p) => {
-      const pStatus = (p.status || "ACTIVE").toUpperCase();
-      if (statusFilter !== "ALL" && pStatus !== statusFilter) return false;
       if (monthFilter) {
         const joinDate = String(p.created_at || p.effective_date || "").slice(0, 7);
         if (joinDate !== monthFilter) return false;
@@ -47,14 +44,10 @@ export default function PartnerManagement({
       }
       return true;
     });
-  }, [partners, statusFilter, monthFilter, searchQuery]);
+  }, [partners, monthFilter, searchQuery]);
 
   const totalAvailableCapital = filteredPartners.reduce(
     (sum, p) => sum + Number(p.current_capital || 0),
-    0
-  );
-  const totalProfitEarned = filteredPartners.reduce(
-    (sum, p) => sum + Number(p.profit_earned || 0),
     0
   );
   const totalWithdrawn = filteredPartners.reduce(
@@ -68,9 +61,7 @@ export default function PartnerManagement({
         <div>
           <span className="overline autoBadgeTag">CAPITAL NETWORK</span>
           <h2>Business Partners</h2>
-          <p className="globalSectionDescription">
-            Manage partner capital portfolios, track lifetime contributions and withdrawals, and disburse partner capital.
-          </p>
+          <p className="globalSectionDescription">Manage partner capital simply.</p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -103,7 +94,7 @@ export default function PartnerManagement({
         </div>
       </div>
 
-      <div className="globalCapitalStats fourCol">
+      <div className="globalCapitalStats compact">
         <div>
           <span>Filtered partners</span>
           <strong>{filteredPartners.length}</strong>
@@ -117,13 +108,6 @@ export default function PartnerManagement({
           <small>Filtered available capital</small>
         </div>
         <div>
-          <span>Profit Earned</span>
-          <strong style={{ color: "#7c3aed" }}>
-            +{money(totalProfitEarned)}
-          </strong>
-          <small>Net profit credited</small>
-        </div>
-        <div>
           <span>Total Withdrawn (Out)</span>
           <strong style={{ color: "#e11d48" }}>
             -{money(totalWithdrawn)}
@@ -134,31 +118,6 @@ export default function PartnerManagement({
 
       {/* Partner Filters Bar */}
       <div className="expenseFilterBar mt-20" style={{ margin: "20px 0 14px", padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          {[
-            { id: "ALL", label: "All Statuses" },
-            { id: "ACTIVE", label: "Active" },
-            { id: "INACTIVE", label: "Inactive" },
-          ].map((st) => (
-            <button
-              key={st.id}
-              type="button"
-              className={`secondaryBtn ${statusFilter === st.id ? "active" : ""}`}
-              style={{
-                background: statusFilter === st.id ? "#0f766e" : "#ffffff",
-                color: statusFilter === st.id ? "#ffffff" : "#475569",
-                borderColor: statusFilter === st.id ? "#0f766e" : "#cbd5e1",
-                padding: "5px 12px",
-                fontSize: "12px",
-                fontWeight: "600",
-              }}
-              onClick={() => setStatusFilter(st.id)}
-            >
-              {st.label}
-            </button>
-          ))}
-        </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           {/* Month Calendar Picker (Join Month) */}
           <div
@@ -226,13 +185,12 @@ export default function PartnerManagement({
             )}
           </div>
 
-          {(statusFilter !== "ALL" || monthFilter !== currentMonthStr || searchQuery) && (
+          {(monthFilter !== currentMonthStr || searchQuery) && (
             <button
               type="button"
               className="secondaryBtn"
               style={{ padding: "5px 10px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
               onClick={() => {
-                setStatusFilter("ALL");
                 setMonthFilter(currentMonthStr);
                 setSearchQuery("");
               }}
@@ -265,9 +223,6 @@ export default function PartnerManagement({
             <thead>
               <tr>
                 <th>Partner &amp; Contact</th>
-                <th>Status</th>
-                <th>Joined</th>
-                <th style={{ textAlign: "right" }}>Profit Earned</th>
                 <th style={{ textAlign: "right" }}>Total Out</th>
                 <th style={{ textAlign: "right" }}>Current Available Capital</th>
                 <th style={{ textAlign: "center", width: "220px" }}>Actions</th>
@@ -390,23 +345,6 @@ export default function PartnerManagement({
                       )}
                     </div>
                   </td>
-                  <td>
-                    <span className="statusPill active">{p.status}</span>
-                  </td>
-                  <td>
-                    {p.created_at
-                      ? new Date(p.created_at).toLocaleDateString("en-IN")
-                      : "—"}
-                  </td>
-                  <td
-                    style={{
-                      textAlign: "right",
-                      fontWeight: "600",
-                      color: "#7c3aed",
-                    }}
-                  >
-                    +{money(p.profit_earned)}
-                  </td>
                   <td
                     style={{
                       textAlign: "right",
@@ -472,7 +410,7 @@ export default function PartnerManagement({
               ))}
               {filteredPartners.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
+                  <td colSpan="4" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
                     No partners match your selected filters or search query.
                   </td>
                 </tr>

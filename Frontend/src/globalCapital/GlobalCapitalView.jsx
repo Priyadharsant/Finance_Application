@@ -18,7 +18,6 @@ import AddExpenseModal from "./modals/AddExpenseModal.jsx";
 import DraftClosingModal from "./modals/DraftClosingModal.jsx";
 import LedgerTransactionModal from "./modals/LedgerTransactionModal.jsx";
 import GlobalRecordDetailsModal from "./modals/GlobalRecordDetailsModal.jsx";
-import DailyPartnerBreakdownModal from "./modals/DailyPartnerBreakdownModal.jsx";
 import SegmentBreakdownModal from "./modals/SegmentBreakdownModal.jsx";
 import ProfitPaymentModal from "./modals/ProfitPaymentModal.jsx";
 import PartnerDetailsModal from "./modals/PartnerDetailsModal.jsx";
@@ -122,7 +121,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   });
 
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [selectedDailyDetail, setSelectedDailyDetail] = useState(null);
   const [segmentModalData, setSegmentModalData] = useState(null);
   const [profitPaymentModal, setProfitPaymentModal] = useState(null);
   const [profitPaymentForm, setProfitPaymentForm] = useState({
@@ -157,9 +155,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     if (showDraftModal) {
       return `Draft Monthly Closing · Global Capital | FinFlow`;
     }
-    if (selectedDailyDetail) {
-      return `Daily Breakdown (${selectedDailyDetail.calculation_date}) · Global Capital | FinFlow`;
-    }
     if (segmentModalData) {
       return `Time-Weighted Segments · Global Capital | FinFlow`;
     }
@@ -173,7 +168,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     capitalActionType,
     showAddExpense,
     showDraftModal,
-    selectedDailyDetail,
     segmentModalData,
   ]);
 
@@ -649,7 +643,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           runningDailyCalc={runningDailyCalc}
           onRefreshDailyLogs={fetchDailyLogs}
           onRunDailyCalc={handleRunDailyCalc}
-          onViewDailyDetail={setSelectedDailyDetail}
           onOpenSegmentModal={setSegmentModalData}
           passedMonthsList={passedMonthsList}
           historyYear={historyYear}
@@ -745,12 +738,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
             close={() => setSelectedRecord(null)}
           />
         )}
-
-      {/* Daily Partner Breakdown Modal */}
-      <DailyPartnerBreakdownModal
-        record={selectedDailyDetail}
-        close={() => setSelectedDailyDetail(null)}
-      />
 
       {/* Segment Breakdown Modal */}
       <SegmentBreakdownModal

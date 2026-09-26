@@ -3,7 +3,6 @@ import {
   Calendar,
   RefreshCw,
   Calculator,
-  Eye,
   Download,
   Search,
   X,
@@ -18,7 +17,6 @@ export default function DayToDayCalculationLog({
   runningDailyCalc,
   onRefresh,
   onRunDailyCalc,
-  onViewDetails,
 }) {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
   const [monthFilter, setMonthFilter] = useState(currentMonthStr);
@@ -398,10 +396,6 @@ export default function DayToDayCalculationLog({
                 -{money(todayLog.expenses)}
               </strong>
             </span>
-            <span>
-              Active Capital:{" "}
-              <strong>{money(todayLog.totalActiveCapital)}</strong>
-            </span>
           </div>
         </div>
       )}
@@ -417,8 +411,6 @@ export default function DayToDayCalculationLog({
               <th style={{ textAlign: "right" }}>Total Rev</th>
               <th style={{ textAlign: "right" }}>Expenses</th>
               <th style={{ textAlign: "right" }}>Net Income / Loss</th>
-              <th style={{ textAlign: "right" }}>Active Capital</th>
-              <th style={{ textAlign: "center" }}>Partner Shares</th>
             </tr>
           </thead>
           <tbody>
@@ -478,19 +470,6 @@ export default function DayToDayCalculationLog({
                       {isProfit ? "+" : ""}
                       {money(log.netProfit)}
                     </span>
-                  </td>
-                  <td style={{ textAlign: "right", fontSize: "12px", fontFamily: "monospace" }}>
-                    {money(log.totalActiveCapital)}
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <button
-                      type="button"
-                      className="actionIconBtn"
-                      title="View each partner's share for this day"
-                      onClick={() => onViewDetails(log)}
-                    >
-                      <Eye size={13} /> {log.allocations?.length || 0} Partners
-                    </button>
                   </td>
                 </tr>
               );

@@ -60,9 +60,7 @@ export default function ExpensesTab({
         <div>
           <span className="overline autoBadgeTag">EXPENSE CONTROL</span>
           <h2>Company Expenses</h2>
-          <p className="globalSectionDescription">
-            Track, categorize, and audit all company expenses across Auto, Daily, and General operations.
-          </p>
+          <p className="globalSectionDescription">A simple list of company expenses.</p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -82,7 +80,7 @@ export default function ExpensesTab({
         </div>
       </div>
 
-      {/* Metric Cards (Dynamic Based on Filtered Records) */}
+      {/* Simple total */}
       <div
         className="globalCapitalStats compact"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}
@@ -93,40 +91,6 @@ export default function ExpensesTab({
             {money(filteredTotal)}
           </strong>
           <small>{expenseList.length} filtered entries in view</small>
-        </div>
-        <div>
-          <span>All-time total</span>
-          <strong>
-            {money(expenseSummary?.allTimeTotal ?? filteredTotal)}
-          </strong>
-          <small>{expenseSummary?.allTimeCount || expenseList.length} total recorded</small>
-        </div>
-        <div>
-          <span>Auto Finance</span>
-          <strong style={{ color: "#2563eb" }}>
-            {money(categoryBreakdown.AUTO.total)}
-          </strong>
-          <small>
-            Brokerage &amp; vehicle fees ({categoryBreakdown.AUTO.count})
-          </small>
-        </div>
-        <div>
-          <span>Daily Finance</span>
-          <strong style={{ color: "#059669" }}>
-            {money(categoryBreakdown.DAILY.total)}
-          </strong>
-          <small>
-            Operational expenses ({categoryBreakdown.DAILY.count})
-          </small>
-        </div>
-        <div>
-          <span>General Expenses</span>
-          <strong style={{ color: "#7c3aed" }}>
-            {money(categoryBreakdown.GENERAL.total)}
-          </strong>
-          <small>
-            Office, rent &amp; overheads ({categoryBreakdown.GENERAL.count})
-          </small>
         </div>
       </div>
 
@@ -315,23 +279,14 @@ export default function ExpensesTab({
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Reason (Why)</th>
-                <th>Category</th>
-                <th>Type</th>
-                <th>Reference / Vehicle</th>
-                <th style={{ textAlign: "right" }}>Amount (How much)</th>
+                <th>Reason</th>
+                <th style={{ textAlign: "right" }}>Amount</th>
                 <th style={{ textAlign: "center", width: "80px" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {expenseList.map((exp) => (
-                <tr
-                  className="clickable globalClickableRow"
-                  key={exp.id}
-                  onClick={() =>
-                    onSelectRecord({ type: "expense", record: exp })
-                  }
-                >
+                <tr key={exp.id}>
                   <td>{new Date(exp.expense_date).toLocaleDateString("en-IN")}</td>
                   <td>
                     {(() => {
@@ -357,36 +312,6 @@ export default function ExpensesTab({
                         </span>
                       );
                     })()}
-                  </td>
-                  <td>
-                    <span
-                      className={`expenseCategoryPill ${
-                        exp.category ? exp.category.toLowerCase() : "general"
-                      }`}
-                    >
-                      {exp.category || "GENERAL"}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className="analyticsPill"
-                      style={{ background: "#f1f5f9", color: "#475569" }}
-                    >
-                      {exp.expense_type || "GENERAL"}
-                    </span>
-                  </td>
-                  <td>
-                    {exp.auto_loan_reg ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <CarFront size={13} color="#2563eb" />
-                        <strong>{exp.auto_loan_reg}</strong>
-                        <small style={{ color: "#64748b" }}>({exp.auto_loan_vehicle})</small>
-                      </span>
-                    ) : exp.loan_id ? (
-                      <small style={{ color: "#64748b" }}>Auto Loan #{exp.loan_id.slice(0, 8)}</small>
-                    ) : (
-                      <span style={{ color: "#94a3b8" }}>—</span>
-                    )}
                   </td>
                   <td
                     style={{
@@ -415,7 +340,7 @@ export default function ExpensesTab({
               ))}
               {expenseList.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "42px 20px" }}>
+                  <td colSpan="4" style={{ textAlign: "center", padding: "42px 20px" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
                       <Receipt size={32} color="#94a3b8" />
                       <strong style={{ color: "#334155" }}>No expenses found</strong>

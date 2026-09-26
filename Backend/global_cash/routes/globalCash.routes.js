@@ -487,29 +487,8 @@ router.get('/this-month-estimate', async (req, res) => {
     const netProfit = financials.netProfit || 0;
     const expectedDistributableProfit = Math.max(0, netProfit);
 
-    // 2. Expected partner shares using time-weighted capital up to effective date
-    let distribution = { allocations: [], totalCapitalWeight: 0 };
-    if (expectedDistributableProfit > 0) {
-      distribution = await calculatePartnerProfitDistribution(pool, {
-        periodStart,
-        periodEnd: effectivePeriodEnd,
-        distributableProfit: expectedDistributableProfit,
-      });
-    } else {
-      const sampleDist = await calculatePartnerProfitDistribution(pool, {
-        periodStart,
-        periodEnd: effectivePeriodEnd,
-        distributableProfit: 1000,
-      });
-      distribution = {
-        totalCapitalWeight: sampleDist.totalCapitalWeight,
-        allocations: sampleDist.allocations.map((a) => ({
-          ...a,
-          allocatedProfit: 0,
-          payableAmount: 0,
-        })),
-      };
-    }
+    // Partner profit sharing is disabled; this endpoint now returns company-only data.
+    const distribution = { allocations: [], totalCapitalWeight: 0 };
 
     const monthDate = new Date(Date.UTC(y, m - 1, 1));
     const monthName = monthDate.toLocaleString('default', {

@@ -9,7 +9,6 @@ export default function CreateLoanModal({
   loanForm,
   setLoanForm,
   customerOptions,
-  schemeOptions,
   handleCreateLoan,
   partners = [],
 }) {
@@ -130,33 +129,6 @@ export default function CreateLoanModal({
               </label>
             </>
           )}
-
-          <div className="formSectionHeader">
-            Loan Scheme Configuration
-          </div>
-          <SearchableSelect
-            label="Loan Scheme Template (Optional)"
-            placeholder="🔍 Choose scheme template or custom..."
-            options={schemeOptions}
-            value={loanForm.loanTypeId}
-            onChange={(val, opt) => {
-              const scheme = opt?.scheme;
-              setLoanForm({
-                ...loanForm,
-                loanTypeId: val,
-                interestType: scheme
-                  ? scheme.interest_type
-                  : loanForm.interestType,
-                interestRate: scheme
-                  ? scheme.base_interest_rate
-                  : loanForm.interestRate,
-                tenureMonths: scheme
-                  ? scheme.default_tenure_months
-                  : loanForm.tenureMonths,
-              });
-            }}
-            hint="Loads default rate, method & tenure. You can still modify any value below!"
-          />
 
           <div className="formSectionHeader">
             🏦 Source of Funds
@@ -284,13 +256,11 @@ export default function CreateLoanModal({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
             <label>Broker Name <input placeholder="Name" value={loanForm.brokerName} onChange={(e) => setLoanForm({ ...loanForm, brokerName: e.target.value })} /></label>
             <label>Broker Phone <input placeholder="Phone" value={loanForm.brokerPhone} onChange={(e) => setLoanForm({ ...loanForm, brokerPhone: e.target.value })} /></label>
-            <label>Broker Address <input placeholder="Address" value={loanForm.brokerAddress} onChange={(e) => setLoanForm({ ...loanForm, brokerAddress: e.target.value })} /></label>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "10px" }}>
             <label>Jamin (Guarantor) Name <input placeholder="Name" value={loanForm.jaminName} onChange={(e) => setLoanForm({ ...loanForm, jaminName: e.target.value })} /></label>
             <label>Jamin Phone <input placeholder="Phone" value={loanForm.jaminPhone} onChange={(e) => setLoanForm({ ...loanForm, jaminPhone: e.target.value })} /></label>
             <label>Jamin Relation <input placeholder="Relation (e.g. Brother)" value={loanForm.jaminRelation} onChange={(e) => setLoanForm({ ...loanForm, jaminRelation: e.target.value })} /></label>
-            <label>Jamin Address <input placeholder="Address" value={loanForm.jaminAddress} onChange={(e) => setLoanForm({ ...loanForm, jaminAddress: e.target.value })} /></label>
           </div>
 
           <div className="formSectionHeader" style={{ marginTop: "24px" }}>

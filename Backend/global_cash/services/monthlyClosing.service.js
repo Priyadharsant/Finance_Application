@@ -1,4 +1,3 @@
-import { calculateMonthlyWeightedCapital } from './partnerCapital.service.js';
 
 export async function calculateCompanyNetProfit(client, year, month) {
   // 1. Auto Finance Profit: Interest + Penalties collected in this month
@@ -48,26 +47,6 @@ export async function createDraftMonthlyClosing(client, year, month) {
   const insertRes = await client.query(insertQuery, [periodLabel, calculatedProfit]);
   const closing = insertRes.rows[0];
 
-  // 4. Calculate partner capital and create allocations
-  const partnerStats = await calculateMonthlyWeightedCapital(client, year, month);
-
-  for (const stat of partnerStats) {
-    const partnerProfit = stat.ownershipRatio * calculatedProfit;
-
-    await client.query(`
-      INSERT INTO partner_monthly_allocations (
-        closing_id, partner_id, closing_capital, weighted_capital, ownership_ratio, profit_amount, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'PROFIT_ALLOCATED')
-    `, [
-      closing.id,
-      stat.partnerId,
-      stat.closingCapital,
-      stat.weightedCapital,
-      stat.ownershipRatio,
-      partnerProfit
-    ]);
-  }
-
   return closing;
 }
 
@@ -90,24 +69,6 @@ export async function finalizeMonthlyClosing(client, closingId, manualAdjustment
   }
 
   const closing = closingRes.rows[0];
-
-  // 2. Recalculate allocations based on final profit
-  const allocationsRes = await client.query(`
-    SELECT * FROM partner_monthly_allocations WHERE closing_id = $1;
-  `, [closingId]);
-
-  for (const alloc of allocationsRes.rows) {
-    const finalPartnerProfit = parseFloat(alloc.ownership_ratio) * parseFloat(closing.final_company_profit);
-
-    await client.query(`
-      UPDATE partner_monthly_allocations
-      SET profit_amount = $2, status = 'PROFIT_PAYABLE'
-      WHERE id = $1;
-    `, [alloc.id, finalPartnerProfit]);
-
-    // Note: This does NOT automatically reinvest. It remains as 'PROFIT_PAYABLE'.
-    // A separate action will be needed if a partner wants to withdraw or reinvest this payable amount.
-  }
 
   return closing;
 }

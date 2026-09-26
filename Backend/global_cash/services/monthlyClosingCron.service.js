@@ -1,10 +1,7 @@
 import cron from 'node-cron';
 import { pool } from '../../autoFinance/config/db.js';
 import { calculatePeriodFinancials } from './globalCash.service.js';
-import {
-  ensureProfitCalculationTables,
-  calculatePartnerProfitDistribution,
-} from './profitCalculation.service.js';
+import { ensureProfitCalculationTables } from './profitCalculation.service.js';
 
 let cronTask = null;
 let dailyCronTask = null;
@@ -33,11 +30,9 @@ export function getPreviousMonthPeriod(referenceDate = new Date()) {
 /**
  * Executes the automated Date 1 Monthly Closing:
  * 1. Calculates operational revenue, expenses, and net profit for the previous month.
- * 2. If net profit > 0, calculates time-weighted capital weights and partner shares.
- * 3. Finalizes the profit calculation record.
- * 4. Automatically credits each partner's share to their partner account (partner_capital_transactions)
- *    so it is immediately available in their account balance for withdrawal or compounding.
- * 5. Logs profit payment records.
+ * 2. Records the company-level net result for the previous month.
+ * Partner capital remains available for contributions and withdrawals, but is not
+ * used to allocate or automatically credit monthly profits.
  */
 export async function executeAutomatedMonthlyClosing({
   year,
@@ -100,18 +95,9 @@ export async function executeAutomatedMonthlyClosing({
 
   console.log(`[MonthlyClosingCron] Period Financials: Revenue=₹${totalRevenue}, Expenses=₹${expenses}, NetProfit=₹${netProfit}`);
 
-  // 4. Calculate Partner Distribution using Time-Weighted Capital
-  let distributionPreview = { allocations: [], totalCapitalWeight: 0 };
-  if (distributableProfit > 0) {
-    distributionPreview = await calculatePartnerProfitDistribution(
-      client,
-      {
-        periodStart,
-        periodEnd,
-        distributableProfit,
-      }
-    );
-  }
+  // Partner profit allocation is intentionally disabled. Keep the closing record
+  // for idempotency and reporting, but do not calculate weights or create credits.
+  const distributionPreview = { allocations: [], totalCapitalWeight: 0 };
 
   // 5. Persist or Update Partner Profit Calculation record as FINALIZED
   let calculationId = existingCalc?.id;
@@ -159,92 +145,6 @@ export async function executeAutomatedMonthlyClosing({
     calculationId = existingCalc.id;
   }
 
-  // 6. Save Allocations and credit each partner's account
-  const partnerResults = [];
-  const creditEffectiveDate = new Date().toISOString().slice(0, 10); // Date 1
-
-  for (const alloc of distributionPreview.allocations) {
-    const allocatedProfit = alloc.allocatedProfit || 0;
-
-    // Insert allocation record with status 'CREDITED_TO_CAPITAL' and paid_amount = allocatedProfit
-    const allocInsertRes = await client.query(
-      `INSERT INTO partner_profit_allocations (
-         calculation_id, partner_id, opening_capital, closing_capital,
-         capital_weight, profit_ratio, allocated_profit, payable_amount,
-         paid_amount, status
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, 'CREDITED_TO_CAPITAL')
-       RETURNING *;`,
-      [
-        calculationId,
-        alloc.partnerId,
-        alloc.openingCapital,
-        alloc.closingCapital,
-        alloc.capitalWeight,
-        alloc.profitRatio,
-        allocatedProfit,
-        allocatedProfit,
-      ]
-    );
-    const savedAlloc = allocInsertRes.rows[0];
-
-    // If profit > 0, credit the partner's account (partner_capital_transactions)
-    let capitalTxId = null;
-    if (allocatedProfit > 0) {
-      // Check if profit share transaction already exists for this calculation & partner
-      const txCheck = await client.query(
-        `SELECT id FROM partner_capital_transactions 
-         WHERE partner_id = $1 
-           AND transaction_type = 'PROFIT_SHARE' 
-           AND notes LIKE $2;`,
-        [alloc.partnerId, `%Calculation: ${calculationId}%`]
-      );
-
-      if (txCheck.rowCount === 0) {
-        const txInsertRes = await client.query(
-          `INSERT INTO partner_capital_transactions (
-             partner_id, transaction_type, amount, effective_date, status, notes
-           )
-           VALUES ($1, 'PROFIT_SHARE', $2, $3, 'COMPLETED', $4)
-           RETURNING *;`,
-          [
-            alloc.partnerId,
-            allocatedProfit,
-            creditEffectiveDate,
-            `Automated Net Profit Share for ${periodStart} to ${periodEnd} (Calculation: ${calculationId})`,
-          ]
-        );
-        capitalTxId = txInsertRes.rows[0].id;
-
-        // Also record in partner_profit_payments for comprehensive auditing
-        await client.query(
-          `INSERT INTO partner_profit_payments (
-             partner_id, allocation_id, amount, payment_date, reference, notes
-           )
-           VALUES ($1, $2, $3, $4, 'AUTO_PROFIT_CREDIT', $5);`,
-          [
-            alloc.partnerId,
-            savedAlloc.id,
-            allocatedProfit,
-            creditEffectiveDate,
-            `Automated monthly net income credited to partner capital on date 1`,
-          ]
-        );
-      } else {
-        capitalTxId = txCheck.rows[0].id;
-      }
-    }
-
-    partnerResults.push({
-      partnerId: alloc.partnerId,
-      partnerName: alloc.partnerName,
-      profitRatio: alloc.profitRatio,
-      allocatedProfit,
-      capitalTransactionId: capitalTxId,
-      creditedToAccount: allocatedProfit > 0,
-    });
-  }
-
   const result = {
     success: true,
     alreadyProcessed: false,
@@ -260,9 +160,9 @@ export async function executeAutomatedMonthlyClosing({
     },
     distributableProfit,
     totalCapitalWeight: distributionPreview.totalCapitalWeight,
-    partnersCount: partnerResults.length,
-    partnerAllocations: partnerResults,
-    message: `Successfully calculated revenue (₹${totalRevenue.toLocaleString('en-IN')}) and distributed net profit (₹${netProfit.toLocaleString('en-IN')}) to ${partnerResults.length} partners. Capital credited & available.`,
+    partnersCount: 0,
+    partnerAllocations: [],
+    message: `Successfully recorded company revenue (₹${totalRevenue.toLocaleString('en-IN')}) and net profit (₹${netProfit.toLocaleString('en-IN')}). No partner profit shares were created.`,
   };
 
   lastExecutionResult = {
@@ -299,42 +199,9 @@ export async function executeDailyOngoingCalculation({ client = pool, targetDate
     const expenses = parseFloat(dayFin.expenses || 0);
     const netProfit = parseFloat((totalRevenue - expenses).toFixed(2)); // > 0 = Income, < 0 = Loss
 
-    // 2. Query each active partner's effective capital balance on todayStr
-    const partnersRes = await client.query(`
-      SELECT 
-        p.id AS partner_id,
-        p.name AS partner_name,
-        COALESCE(SUM(CASE WHEN t.transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE', 'PROFIT_SHARE', 'PROFIT_CREDIT') THEN t.amount ELSE 0 END), 0) -
-        COALESCE(SUM(CASE WHEN t.transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN t.amount ELSE 0 END), 0) AS capital_balance
-      FROM global_partners p
-      LEFT JOIN partner_capital_transactions t 
-        ON p.id = t.partner_id 
-        AND t.status = 'COMPLETED' 
-        AND t.effective_date <= $1
-      WHERE p.status = 'ACTIVE'
-      GROUP BY p.id, p.name
-      ORDER BY p.name ASC;
-    `, [todayStr]);
-
-    const partnerRows = partnersRes.rows;
-    const totalActiveCapital = partnerRows.reduce(
-      (sum, r) => sum + Math.max(0, parseFloat(r.capital_balance || 0)),
-      0
-    );
-
-    // 3. Allocate today's income or loss to active partners
-    const allocations = partnerRows.map((r) => {
-      const cap = Math.max(0, parseFloat(r.capital_balance || 0));
-      const shareRatio = totalActiveCapital > 0 ? cap / totalActiveCapital : 0;
-      const shareAmount = Math.round(netProfit * shareRatio * 100) / 100;
-      return {
-        partnerId: r.partner_id,
-        partnerName: r.partner_name,
-        capitalBalance: cap,
-        capitalSharePercent: parseFloat((shareRatio * 100).toFixed(2)),
-        dailyShare: shareAmount, // positive = income share, negative = loss share
-      };
-    });
+    // Partner-level daily allocation is intentionally disabled.
+    const totalActiveCapital = 0;
+    const allocations = [];
 
     // 4. Persist / Upsert into daily_profit_logs
     const insertRes = await client.query(`
@@ -406,7 +273,7 @@ export async function executeDailyOngoingCalculation({ client = pool, targetDate
       message: `Daily calculation for ${todayStr} recorded: ${netProfit >= 0 ? 'Income' : 'Loss'} = ₹${Math.abs(netProfit).toLocaleString('en-IN')}`,
     };
 
-    console.log(`[DailyProfitCron] Daily calculation for ${todayStr}: ${netProfit >= 0 ? 'Income' : 'Loss'} = ₹${netProfit.toFixed(2)}, Active Capital = ₹${totalActiveCapital.toFixed(2)}`);
+    console.log(`[DailyProfitCron] Daily company calculation for ${todayStr}: ${netProfit >= 0 ? 'Income' : 'Loss'} = ₹${netProfit.toFixed(2)}`);
     return lastDailyCalculationResult;
   } catch (err) {
     console.error('[DailyProfitCron] Daily calculation failed:', err);
@@ -521,7 +388,7 @@ export function getCronStatus() {
   return {
     active: !!cronTask,
     monthlySchedule: '1 0 1 * *',
-    monthlyDescription: 'At 00:01 AM on Date 1: Finalize Month & Credit Profit to Partner Accounts',
+    monthlyDescription: 'At 00:01 AM on Date 1: Finalize the previous month’s company result',
     dailySchedule: '59 23 * * *',
     dailyDescription: 'At 11:59 PM Every Day: Calculate Daily Accumulated Profit & Active Days',
     nextScheduledRun: nextRunDate,
