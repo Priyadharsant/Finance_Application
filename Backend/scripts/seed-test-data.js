@@ -37,14 +37,14 @@ async function seedData() {
     // Insert Partners
     const partner1Res = await client.query(`
       INSERT INTO global_partners (name, phone, status)
-      VALUES ('John Doe', '1234567890', 'ACTIVE')
+      VALUES ('Muthukumar', '9876543210', 'ACTIVE')
       RETURNING id
     `);
     const p1Id = partner1Res.rows[0].id;
 
     const partner2Res = await client.query(`
       INSERT INTO global_partners (name, phone, status)
-      VALUES ('Jane Smith', '0987654321', 'ACTIVE')
+      VALUES ('Senthil', '8765432109', 'ACTIVE')
       RETURNING id
     `);
     const p2Id = partner2Res.rows[0].id;
@@ -53,21 +53,21 @@ async function seedData() {
     // Partner 1: Own Money
     await client.query(`
       INSERT INTO partner_capital_transactions (partner_id, transaction_type, amount, effective_date, status, fund_source_type)
-      VALUES ($1, 'CONTRIBUTION', 500000, '2026-07-01', 'COMPLETED', 'OWN')
+      VALUES ($1, 'CONTRIBUTION', 1000000, '2026-08-01', 'COMPLETED', 'OWN')
     `, [p1Id]);
 
     // Partner 2: Lend Money
     await client.query(`
       INSERT INTO partner_capital_transactions (partner_id, transaction_type, amount, effective_date, status, fund_source_type, lender_name, interest_rate)
-      VALUES ($1, 'CONTRIBUTION', 300000, '2026-07-15', 'COMPLETED', 'LEND', 'External Lender Inc', 2.5)
+      VALUES ($1, 'CONTRIBUTION', 500000, '2026-08-15', 'COMPLETED', 'LEND', 'Ramesh Finance', 2.0)
     `, [p2Id]);
 
     // Update Global Cash Ledger
     await client.query(`
       INSERT INTO global_cash_ledger (type, amount, reference_id, reference_type, effective_date, direction, source_module)
       VALUES 
-      ('PARTNER_CONTRIBUTION', 500000, $1, 'PARTNER_CAPITAL', '2026-07-01', 'CREDIT', 'GLOBAL_CASH'),
-      ('PARTNER_CONTRIBUTION', 300000, $2, 'PARTNER_CAPITAL', '2026-07-15', 'CREDIT', 'GLOBAL_CASH')
+      ('PARTNER_CONTRIBUTION', 1000000, $1, 'PARTNER_CAPITAL', '2026-08-01', 'CREDIT', 'GLOBAL_CASH'),
+      ('PARTNER_CONTRIBUTION', 500000, $2, 'PARTNER_CAPITAL', '2026-08-15', 'CREDIT', 'GLOBAL_CASH')
     `, [p1Id, p2Id]);
 
 
@@ -75,21 +75,21 @@ async function seedData() {
     // Auto Finance Customer 1
     const ac1Res = await client.query(`
       INSERT INTO autofinance_customers (customer_code, first_name, last_name, phone, address, city)
-      VALUES ('CUST-001', 'Alice', 'Brown', '1112223333', '123 Main St', 'CityA')
+      VALUES ('CUST-001', 'Karthik', 'Raj', '9988776655', '12 Cross Street', 'Chennai')
       RETURNING id
     `);
     const ac1Id = ac1Res.rows[0].id;
 
     const al1Res = await client.query(`
       INSERT INTO autofinance_loans (customer_id, loan_amount, interest_rate, tenure_months, start_date, end_date, status, fees_details)
-      VALUES ($1, 50000, 1.5, 12, '2026-07-20', '2027-07-20', 'ACTIVE', '{"brokerName": "Broker X", "jaminName": "Jamin Y"}')
+      VALUES ($1, 200000, 1.5, 24, '2026-08-20', '2028-08-20', 'ACTIVE', '{"brokerName": "Anbu", "jaminName": "Murugan"}')
       RETURNING id
     `, [ac1Id]);
     const al1Id = al1Res.rows[0].id;
     
     const av1Res = await client.query(`
       INSERT INTO autofinance_vehicles (loan_id, make, model, year, registration_number)
-      VALUES ($1, 'Honda', 'Civic', 2020, 'AB123CD')
+      VALUES ($1, 'Maruti Suzuki', 'Swift', 2022, 'TN01AB1234')
       RETURNING id
     `, [al1Id]);
     const av1Id = av1Res.rows[0].id;
@@ -97,7 +97,7 @@ async function seedData() {
     // Auto Finance Payments
     const ap1Res = await client.query(`
       INSERT INTO autofinance_payments (loan_id, amount_paid, payment_date, payment_method, reference_number)
-      VALUES ($1, 5000, '2026-08-20', 'CASH', 'REF-001')
+      VALUES ($1, 10000, '2026-09-20', 'CASH', 'REF-001')
       RETURNING id
     `, [al1Id]);
     const ap1Id = ap1Res.rows[0].id;
@@ -106,22 +106,22 @@ async function seedData() {
     await client.query(`
       INSERT INTO global_cash_ledger (type, amount, reference_id, reference_type, effective_date, direction, source_module, notes)
       VALUES 
-      ('AUTO_DISBURSEMENT', 50000, $1, 'AUTO_LOAN', '2026-07-20', 'DEBIT', 'AUTO_FINANCE', 'Auto Loan Disbursement'),
-      ('AUTO_COLLECTION', 5000, $2, 'AUTO_PAYMENT', '2026-08-20', 'CREDIT', 'AUTO_FINANCE', 'Auto Loan Payment')
+      ('AUTO_DISBURSEMENT', 200000, $1, 'AUTO_LOAN', '2026-08-20', 'DEBIT', 'AUTO_FINANCE', 'Auto Loan Disbursement'),
+      ('AUTO_COLLECTION', 10000, $2, 'AUTO_PAYMENT', '2026-09-20', 'CREDIT', 'AUTO_FINANCE', 'Auto Loan Payment')
     `, [al1Id, ap1Id]);
 
     console.log('Inserting Daily Finance Data...');
     // Daily Finance Customer 1
     const dc1Res = await client.query(`
       INSERT INTO daily_finance_customers (customer_name, mobile_number, address, status)
-      VALUES ('Bob White', '4445556666', '456 Side St', 'ACTIVE')
+      VALUES ('Priya Venkatesh', '9876123450', 'Main Bazaar', 'ACTIVE')
       RETURNING customer_id
     `);
     const dc1Id = dc1Res.rows[0].customer_id;
 
     const da1Res = await client.query(`
       INSERT INTO daily_finance_accounts (customer_id, finance_date, gross_finance_amount, daily_agreed_due, expected_collection_days, status, interest_type, interest_value, initial_deduction, agreed_total_payable, expected_completion_date)
-      VALUES ($1, '2026-08-01', 10000, 100, 100, 'ACTIVE', 'PERCENT', 0, 0, 10000, '2026-11-09')
+      VALUES ($1, '2026-09-01', 50000, 500, 100, 'ACTIVE', 'PERCENT', 10, 5000, 50000, '2026-12-09')
       RETURNING finance_id
     `, [dc1Id]);
     const da1Id = da1Res.rows[0].finance_id;
@@ -130,21 +130,24 @@ async function seedData() {
     const dp1Res = await client.query(`
       INSERT INTO daily_finance_payments (customer_id, finance_id, amount, collection_date, payment_method)
       VALUES 
-      ($2, $1, 100, '2026-08-02', 'CASH'),
-      ($2, $1, 100, '2026-08-03', 'CASH')
+      ($2, $1, 500, '2026-09-02', 'CASH'),
+      ($2, $1, 500, '2026-09-03', 'CASH'),
+      ($2, $1, 500, '2026-09-04', 'CASH')
       RETURNING payment_id
     `, [da1Id, dc1Id]);
     const dp1Id = dp1Res.rows[0].payment_id;
     const dp2Id = dp1Res.rows[1].payment_id;
+    const dp3Id = dp1Res.rows[2].payment_id;
 
     // Daily Ledger Entries
     await client.query(`
       INSERT INTO global_cash_ledger (type, amount, reference_id, reference_type, effective_date, direction, source_module, notes)
       VALUES 
-      ('DAILY_DISBURSEMENT', 10000, $1, 'DAILY_ACCOUNT', '2026-08-01', 'DEBIT', 'DAILY_FINANCE', 'Daily Finance Disbursement'),
-      ('DAILY_COLLECTION', 100, $2, 'DAILY_PAYMENT', '2026-08-02', 'CREDIT', 'DAILY_FINANCE', 'Daily Finance Collection'),
-      ('DAILY_COLLECTION', 100, $3, 'DAILY_PAYMENT', '2026-08-03', 'CREDIT', 'DAILY_FINANCE', 'Daily Finance Collection')
-    `, [da1Id, dp1Id, dp2Id]);
+      ('DAILY_DISBURSEMENT', 45000, $1, 'DAILY_ACCOUNT', '2026-09-01', 'DEBIT', 'DAILY_FINANCE', 'Daily Finance Disbursement'),
+      ('DAILY_COLLECTION', 500, $2, 'DAILY_PAYMENT', '2026-09-02', 'CREDIT', 'DAILY_FINANCE', 'Daily Finance Collection'),
+      ('DAILY_COLLECTION', 500, $3, 'DAILY_PAYMENT', '2026-09-03', 'CREDIT', 'DAILY_FINANCE', 'Daily Finance Collection'),
+      ('DAILY_COLLECTION', 500, $4, 'DAILY_PAYMENT', '2026-09-04', 'CREDIT', 'DAILY_FINANCE', 'Daily Finance Collection')
+    `, [da1Id, dp1Id, dp2Id, dp3Id]);
 
     await client.query('COMMIT');
     console.log('Test data seeded successfully!');

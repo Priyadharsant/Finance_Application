@@ -20,6 +20,12 @@ export const globalCapitalApi = {
   },
 
   // 2. Partners
+  getMonthlyStats: async () => {
+    const res = await fetch(`${API}/monthly-stats`);
+    if (!res.ok) throw new Error("Failed to fetch monthly stats");
+    return res.json();
+  },
+
   getPartners: async () => {
     const res = await fetch(`${API}/partners`);
     if (!res.ok) throw new Error("Failed to fetch partners");

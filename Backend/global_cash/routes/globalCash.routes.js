@@ -1,6 +1,6 @@
 import express from 'express';
 import { pool } from '../../autoFinance/config/db.js';
-import { getAvailableCapital, getCapitalBreakdown, getTransactionDetails, calculatePeriodFinancials } from '../services/globalCash.service.js';
+import { getAvailableCapital, getCapitalBreakdown, getTransactionDetails, calculatePeriodFinancials, getMonthlyStats } from '../services/globalCash.service.js';
 import {
   createContribution,
   createWithdrawal,
@@ -43,6 +43,15 @@ ensureProfitCalculationTables(pool).catch((e) =>
 );
 
 // --- DASHBOARD & LEDGER ---
+router.get('/monthly-stats', async (req, res) => {
+  try {
+    const stats = await getMonthlyStats(pool);
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/ledger', async (req, res) => {
   try {
     const breakdown = await getCapitalBreakdown(pool);

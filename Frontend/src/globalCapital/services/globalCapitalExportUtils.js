@@ -802,3 +802,34 @@ export const exportMasterFinancialReport = ({
     `MASTER_FINANCIAL_REPORT_ALL_PASSED_MONTHS_${new Date().toISOString().slice(0, 10)}.xlsx`
   );
 };
+
+/**
+ * Export Monthly Stats (Irupu / Carry-Forward Report) to Excel
+ */
+export const exportMonthlyStats = (stats = []) => {
+  if (!stats.length) return;
+
+  const rows = stats.map((s) => ({
+    "Month": s.month,
+    "Opening Balance (₹)": s.openingCash,
+    "Closing Balance / Irupu (₹)": s.closingCash,
+    "Global IN (Partner Contributions) (₹)": s.globalIn,
+    "Global OUT (Withdrawals) (₹)": s.globalOut,
+    "Auto Finance: Amount Collected (₹)": s.autoIn,
+    "Auto Finance: Amount Disbursed (₹)": s.autoOut,
+    "Auto Finance: Outstanding Investment (₹)": s.closingAutoInv,
+    "Daily Finance: Amount Collected (₹)": s.dailyIn,
+    "Daily Finance: Amount Disbursed (₹)": s.dailyOut,
+    "Daily Finance: Outstanding Investment (₹)": s.closingDailyInv,
+    "Total IN for Month (₹)": s.totalIn,
+    "Total OUT for Month (₹)": s.totalOut,
+    "Net Cash Flow (₹)": s.totalIn - s.totalOut,
+    "Next Month Opening Investment (₹)": s.closingCash,
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  autoFitColumns(worksheet, rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Stats");
+  XLSX.writeFile(workbook, `Monthly_Stats_Irupu_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+};

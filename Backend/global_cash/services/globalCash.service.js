@@ -19,6 +19,89 @@ export async function getAvailableCapital(client) {
   return grossCapital - totalExpenses;
 }
 
+export async function getMonthlyStats(client) {
+  const query = `
+    WITH months AS (
+      SELECT DISTINCT TO_CHAR(effective_date, 'YYYY-MM') as month_label
+      FROM global_cash_ledger
+      UNION
+      SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+    ),
+    ledger_agg AS (
+      SELECT 
+        TO_CHAR(effective_date, 'YYYY-MM') as month_label,
+        SUM(CASE WHEN source_module IN ('GLOBAL_CASH', 'GLOBAL') AND direction = 'CREDIT' THEN amount ELSE 0 END) as global_in,
+        SUM(CASE WHEN source_module IN ('GLOBAL_CASH', 'GLOBAL') AND direction = 'DEBIT' THEN amount ELSE 0 END) as global_out,
+        SUM(CASE WHEN source_module = 'AUTO_FINANCE' AND direction = 'CREDIT' THEN amount ELSE 0 END) as auto_in,
+        SUM(CASE WHEN source_module = 'AUTO_FINANCE' AND direction = 'DEBIT' THEN amount ELSE 0 END) as auto_out,
+        SUM(CASE WHEN source_module = 'DAILY_FINANCE' AND direction = 'CREDIT' THEN amount ELSE 0 END) as daily_in,
+        SUM(CASE WHEN source_module = 'DAILY_FINANCE' AND direction = 'DEBIT' THEN amount ELSE 0 END) as daily_out,
+        SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE 0 END) as total_in,
+        SUM(CASE WHEN direction = 'DEBIT' THEN amount ELSE 0 END) as total_out
+      FROM global_cash_ledger
+      GROUP BY TO_CHAR(effective_date, 'YYYY-MM')
+    )
+    SELECT 
+      m.month_label,
+      COALESCE(l.global_in, 0) as global_in,
+      COALESCE(l.global_out, 0) as global_out,
+      COALESCE(l.auto_in, 0) as auto_in,
+      COALESCE(l.auto_out, 0) as auto_out,
+      COALESCE(l.daily_in, 0) as daily_in,
+      COALESCE(l.daily_out, 0) as daily_out,
+      COALESCE(l.total_in, 0) as total_in,
+      COALESCE(l.total_out, 0) as total_out
+    FROM months m
+    LEFT JOIN ledger_agg l ON m.month_label = l.month_label
+    ORDER BY m.month_label ASC;
+  `;
+  const res = await client.query(query);
+  
+  let currentCashIrupu = 0;
+  let currentAutoInvestment = 0;
+  let currentDailyInvestment = 0;
+  
+  const stats = res.rows.map(row => {
+    const openingCash = currentCashIrupu;
+    const openingAutoInv = currentAutoInvestment;
+    const openingDailyInv = currentDailyInvestment;
+
+    const netCash = parseFloat(row.total_in) - parseFloat(row.total_out);
+    const closingCash = openingCash + netCash;
+
+    // Auto Investment: OUT (disbursed) increases investment, IN (collected) decreases it
+    const netAutoInv = parseFloat(row.auto_out) - parseFloat(row.auto_in);
+    const closingAutoInv = openingAutoInv + netAutoInv;
+
+    const netDailyInv = parseFloat(row.daily_out) - parseFloat(row.daily_in);
+    const closingDailyInv = openingDailyInv + netDailyInv;
+
+    currentCashIrupu = closingCash;
+    currentAutoInvestment = closingAutoInv;
+    currentDailyInvestment = closingDailyInv;
+
+    return {
+      month: row.month_label,
+      openingCash,
+      closingCash,
+      openingAutoInv,
+      closingAutoInv,
+      openingDailyInv,
+      closingDailyInv,
+      autoIn: parseFloat(row.auto_in),
+      autoOut: parseFloat(row.auto_out),
+      dailyIn: parseFloat(row.daily_in),
+      dailyOut: parseFloat(row.daily_out),
+      globalIn: parseFloat(row.global_in),
+      globalOut: parseFloat(row.global_out),
+      totalIn: parseFloat(row.total_in),
+      totalOut: parseFloat(row.total_out),
+    };
+  });
+
+  return stats.reverse(); // Latest month first
+}
+
 export async function getCapitalBreakdown(client) {
   const ledgerRes = await client.query(`
     SELECT 
