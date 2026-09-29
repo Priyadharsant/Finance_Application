@@ -37,6 +37,11 @@
   "build": {
     "appId": "com.finance.application",
     "productName": "FinFlow",
+    "publish": {
+      "provider": "github",
+      "owner": "Priyadharsant",
+      "repo": "Finance_Application"
+    },
     "directories": {
       "output": "../App"
     },

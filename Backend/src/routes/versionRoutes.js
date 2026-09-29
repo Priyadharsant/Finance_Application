@@ -23,9 +23,8 @@ router.get("/", (req, res) => {
   const latestVersion = (process.env.LATEST_APP_VERSION || "1.2.0").trim();
   const repoOwner = process.env.GITHUB_REPO_OWNER || "Priyadharsant";
   const repoName = process.env.GITHUB_REPO_NAME || "Finance_Application";
-  const repoBranch = process.env.GITHUB_REPO_BRANCH || "main";
-  const defaultRawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${repoBranch}/App/FinFlow-Setup-${latestVersion}.exe`;
-  const downloadUrl = process.env.APP_DOWNLOAD_URL || defaultRawUrl;
+  const defaultReleaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
+  const downloadUrl = process.env.APP_DOWNLOAD_URL || defaultReleaseUrl;
   const minSupportedVersion = (process.env.MIN_SUPPORTED_VERSION || "1.0.0").trim();
 
   const hasUpdate = compareSemver(latestVersion, currentClientVersion) > 0;
