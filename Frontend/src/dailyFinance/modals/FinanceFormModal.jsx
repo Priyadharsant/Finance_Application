@@ -117,8 +117,27 @@ export default function FinanceFormModal({
             Profit<b>{money(interest)}</b>
           </span>
         </div>
-        <button className="primary full" disabled={busy}>
-          Save finance
+        <button
+          type="submit"
+          className="primary full"
+          disabled={busy}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            opacity: busy ? 0.75 : 1,
+            cursor: busy ? "not-allowed" : "pointer",
+          }}
+        >
+          {busy ? (
+            <>
+              <span className="autoBtnSpinner" />
+              Saving Finance...
+            </>
+          ) : (
+            "Save finance"
+          )}
         </button>
       </form>
     </div>

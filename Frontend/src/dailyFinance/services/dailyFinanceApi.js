@@ -1,5 +1,14 @@
-const API =
-  import.meta.env.VITE_API_URL || "http://localhost:3000/api/daily-finance";
+const resolveApi = () => {
+  const url =
+    import.meta.env.VITE_API_URL ||
+    (import.meta.env.VITE_BACKEND_URL
+      ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")}/api/daily-finance`
+      : "https://finance-application-y6oo.onrender.com/api/daily-finance");
+  const clean = url.replace(/\/$/, "");
+  return clean.endsWith("/api/daily-finance") ? clean : `${clean}/api/daily-finance`;
+};
+
+const API = resolveApi();
 
 export const today = () => new Date().toISOString().slice(0, 10);
 

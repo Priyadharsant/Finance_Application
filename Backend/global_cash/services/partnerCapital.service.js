@@ -1,5 +1,22 @@
 import { createLedgerEntry } from './globalCash.service.js';
 
+export async function ensurePartnerCapitalColumns(client) {
+  try {
+    await client.query(`
+      ALTER TABLE partner_capital_transactions 
+      ADD COLUMN IF NOT EXISTS fund_source_type VARCHAR(50) DEFAULT 'OWN';
+      
+      ALTER TABLE partner_capital_transactions 
+      ADD COLUMN IF NOT EXISTS lender_name VARCHAR(255);
+      
+      ALTER TABLE partner_capital_transactions 
+      ADD COLUMN IF NOT EXISTS interest_rate NUMERIC(10,2) DEFAULT 0;
+    `);
+  } catch (err) {
+    console.error('Failed to ensure partner_capital_transactions columns:', err);
+  }
+}
+
 export async function createContribution(client, partnerId, amount, effectiveDate, notes, extraFields = {}) {
   if (amount <= 0) throw new Error("Contribution amount must be > 0");
 

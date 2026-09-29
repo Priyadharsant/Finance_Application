@@ -2,7 +2,7 @@ import React from "react";
 import { X, Coins } from "lucide-react";
 import { money } from "../utils/formatters.js";
 
-export default function ProfitPaymentModal({ allocation, form, setForm, submit, close }) {
+export default function ProfitPaymentModal({ allocation, form, setForm, submit, close, submitting = false }) {
   if (!allocation) return null;
 
   const payable = Number(allocation.payable_amount || allocation.allocated_profit || 0);
@@ -118,11 +118,33 @@ export default function ProfitPaymentModal({ allocation, form, setForm, submit, 
           </div>
 
           <div className="modalActions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-            <button type="button" className="secondaryBtn" onClick={close}>
+            <button type="button" className="secondaryBtn" disabled={submitting} onClick={close}>
               Cancel
             </button>
-            <button type="submit" className="primaryBtn" style={{ background: "#059669", borderColor: "#059669" }}>
-              <Coins size={15} /> Confirm Payout
+            <button
+              type="submit"
+              className="primaryBtn"
+              disabled={submitting}
+              style={{
+                background: "#059669",
+                borderColor: "#059669",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: submitting ? 0.75 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? (
+                <>
+                  <span className="autoBtnSpinner" />
+                  Recording Settlement...
+                </>
+              ) : (
+                <>
+                  <Coins size={15} /> Confirm Payout
+                </>
+              )}
             </button>
           </div>
         </form>

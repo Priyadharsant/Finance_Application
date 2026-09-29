@@ -1,11 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { FileSpreadsheet, Download, Printer, Filter } from "lucide-react";
+import { FileSpreadsheet, Printer, Filter } from "lucide-react";
 import { Metric, Empty } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
-import {
-  exportDailyFinancePeriodReport,
-  exportTotalDailyPortfolio,
-} from "../services/dailyExportUtils.js";
+import { exportDailyCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 
 export default function DailyReports({
   report,
@@ -23,6 +21,20 @@ export default function DailyReports({
   setSearch,
 }) {
   const [activePreset, setActivePreset] = useState("day");
+  const [downloadingDailyReport, setDownloadingDailyReport] = useState(false);
+
+  const handleExportDailyCategoryReport = async () => {
+    try {
+      setDownloadingDailyReport(true);
+      const reportData = await globalCapitalApi.getMasterBusinessLedger();
+      exportDailyCategoryReport(reportData, { customers });
+    } catch (e) {
+      console.error(e);
+      alert("Failed to export Daily Category Report: " + e.message);
+    } finally {
+      setDownloadingDailyReport(false);
+    }
+  };
 
   const preset = (kind) => {
     setActivePreset(kind);
@@ -106,59 +118,6 @@ export default function DailyReports({
     );
   }, [displayedCustomers]);
 
-  const handleExportExcel = () => {
-    if (!report) return;
-    exportDailyFinancePeriodReport({
-      ...report,
-      customers: displayedCustomers,
-      totals: displayedTotals,
-    });
-  };
-
-  const exportCsv = () => {
-    if (!report) return;
-    const rows = [
-      [
-        "Customer",
-        "Finance Date",
-        "Finance Amount",
-        "Interest",
-        "Amount Given",
-        "Total Return",
-        "Period Collected",
-        "Total Collected",
-        "Remaining",
-        "Profit",
-        "Status",
-      ],
-      ...displayedCustomers.map((row) => [
-        row.customer_name,
-        dateLabel(row.finance_date),
-        row.gross_finance_amount,
-        row.initial_deduction,
-        row.net_disbursement,
-        row.agreed_total_payable,
-        row.period_collected,
-        row.total_collected,
-        row.remaining,
-        row.profit,
-        row.status,
-      ]),
-    ];
-    const csv = rows
-      .map((row) =>
-        row
-          .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
-          .join(","),
-      )
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `finance-report-${report.from}-to-${report.to}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
 
   return (
     <section className="content">
@@ -168,13 +127,30 @@ export default function DailyReports({
           <h2>Daily Finance Reports</h2>
           <p>Period collections, disbursements, and Excel financial exports.</p>
         </div>
-        <button
-          className="primary"
-          onClick={() => exportTotalDailyPortfolio(customers)}
-          title="Download complete customer finance portfolio in Excel (.xlsx)"
-        >
-          <FileSpreadsheet size={16} /> Export Total Portfolio (Excel)
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            className="primary"
+            style={{
+              background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+              borderColor: "#059669",
+              fontWeight: "700",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 18px",
+              fontSize: "13.5px",
+              borderRadius: "10px",
+              boxShadow: "0 2px 8px rgba(5, 150, 105, 0.25)",
+              cursor: "pointer",
+            }}
+            onClick={handleExportDailyCategoryReport}
+            disabled={downloadingDailyReport}
+            title="Download dedicated Daily Finance Report (.xlsx) containing all 4 essential sheets: Daily Ledger, Customer Portfolio, Collection Logs, and Operating Expenses"
+          >
+            <FileSpreadsheet size={16} />
+            <span>{downloadingDailyReport ? "Compiling Report..." : "Download Daily Finance Report (.xlsx)"}</span>
+          </button>
+        </div>
       </div>
 
       <div className="reportBar" style={{ flexWrap: "wrap", gap: "10px" }}>
@@ -319,19 +295,20 @@ export default function DailyReports({
             />
           </div>
 
-          <div className="exportBar">
+          <div className="exportBar" style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
-              className="primary"
-              style={{ background: "#059669", borderColor: "#059669" }}
-              onClick={handleExportExcel}
+              type="button"
+              onClick={() => window.print()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
             >
-              <FileSpreadsheet size={15} /> Export Report (Excel .xlsx)
-            </button>
-            <button onClick={exportCsv}>
-              <Download size={14} /> Export CSV
-            </button>
-            <button onClick={() => window.print()}>
-              <Printer size={14} /> Export PDF / Print
+              <Printer size={14} /> Print View
             </button>
           </div>
 
@@ -408,6 +385,7 @@ export default function DailyReports({
       ) : (
         <Empty text="Choose a period and generate a report." />
       )}
+
     </section>
   );
 }

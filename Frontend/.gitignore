@@ -1,3 +1,8 @@
+# Environment files (Never expose on GitHub)
+.env
+.env.*
+!.env.example
+
 # Logs
 logs
 *.log
@@ -10,9 +15,18 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
 release
 *.tmp
 *.local
+
+# Packaging & executables (Ignored - exceeds GitHub 100MB file limit)
+*.exe
+*.blockmap
+builder-debug.yml
+builder-effective-config.yaml
+win-unpacked
+*.xlsx
 
 # Editor directories and files
 .vscode/*

@@ -8,6 +8,7 @@ export default function PayEmiModal({
   payForm,
   setPayForm,
   handlePayEmi,
+  submitting = false,
 }) {
   if (!payEmiModal) return null;
 
@@ -15,7 +16,7 @@ export default function PayEmiModal({
     <div
       className="modal"
       onClick={(event) => {
-        if (event.target === event.currentTarget) setPayEmiModal(null);
+        if (!submitting && event.target === event.currentTarget) setPayEmiModal(null);
       }}
     >
       <form
@@ -26,7 +27,9 @@ export default function PayEmiModal({
         <button
           type="button"
           className="close"
-          onClick={() => setPayEmiModal(null)}
+          disabled={submitting}
+          onClick={() => !submitting && setPayEmiModal(null)}
+          style={{ opacity: submitting ? 0.4 : 1, cursor: submitting ? "not-allowed" : "pointer" }}
         >
           <X size={18} />
         </button>
@@ -42,6 +45,7 @@ export default function PayEmiModal({
           <input
             type="number"
             required
+            disabled={submitting}
             value={payForm.amountPaid}
             onChange={(e) =>
               setPayForm({ ...payForm, amountPaid: e.target.value })
@@ -51,6 +55,7 @@ export default function PayEmiModal({
         <label>
           Payment Method
           <select
+            disabled={submitting}
             value={payForm.paymentMethod}
             onChange={(e) =>
               setPayForm({ ...payForm, paymentMethod: e.target.value })
@@ -65,6 +70,7 @@ export default function PayEmiModal({
           Reference / UTR No
           <input
             placeholder="Transaction ID (optional)"
+            disabled={submitting}
             value={payForm.referenceNumber}
             onChange={(e) =>
               setPayForm({ ...payForm, referenceNumber: e.target.value })
@@ -72,10 +78,27 @@ export default function PayEmiModal({
           />
         </label>
         <button
+          type="submit"
           className="primary autoBtn full"
-          style={{ marginTop: "14px" }}
+          disabled={submitting}
+          style={{
+            marginTop: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            opacity: submitting ? 0.75 : 1,
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}
         >
-          Confirm Payment
+          {submitting ? (
+            <>
+              <span className="autoBtnSpinner" />
+              Recording Payment...
+            </>
+          ) : (
+            "Confirm Payment"
+          )}
         </button>
       </form>
     </div>

@@ -1,7 +1,11 @@
-const BASE_API =
-  (import.meta.env.VITE_API_URL
-    ? import.meta.env.VITE_API_URL.replace("/daily-finance", "")
-    : "http://localhost:3000") + "/api/global-cash";
+const BASE_BACKEND =
+  import.meta.env.VITE_BACKEND_URL
+    ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")
+    : import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/daily-finance\/?$/, "").replace(/\/daily-finance\/?$/, "")
+    : "https://finance-application-y6oo.onrender.com";
+
+const BASE_API = `${BASE_BACKEND}/api/global-cash`;
 
 export const API = BASE_API;
 
@@ -255,5 +259,16 @@ export const globalCapitalApi = {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Failed to sync daily logs");
     return json;
+  },
+
+  // 12. Master Business Ledger & Reconciliation Report (latest.xlsx)
+  getMasterBusinessLedger: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetch(`${API}/reports/master-business-ledger${query ? `?${query}` : ''}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to fetch master business ledger");
+    }
+    return res.json();
   },
 };

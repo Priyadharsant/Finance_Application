@@ -6,6 +6,7 @@ export default function AddLoanSchemeModal({
   typeForm,
   setTypeForm,
   onSubmit,
+  submitting = false,
 }) {
   if (!show) return null;
 
@@ -86,7 +87,28 @@ export default function AddLoanSchemeModal({
             />
           </label>
         </div>
-        <button className="primary autoBtn full">Create Scheme</button>
+        <button
+          type="submit"
+          className="primary autoBtn full"
+          disabled={submitting}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            opacity: submitting ? 0.75 : 1,
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}
+        >
+          {submitting ? (
+            <>
+              <span className="autoBtnSpinner" />
+              Creating Scheme...
+            </>
+          ) : (
+            "Create Scheme"
+          )}
+        </button>
       </form>
     </div>
   );

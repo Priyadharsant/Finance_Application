@@ -1,5 +1,6 @@
 {
     "name": "finance-application-backend",
+    "version": "1.2.0",
     "private": true,
     "type": "module",
     "scripts": {
@@ -10,6 +11,7 @@
         "db:export": "node docs/export-database.js"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.117.2",
         "bcrypt": "^6.0.0",
         "dotenv": "^17.4.2",
         "express": "^5.1.0",

@@ -293,7 +293,10 @@ export async function getAllLoans() {
       CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_due_date END as next_due_date,
       CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_amount END as next_emi_amount,
       CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_emi_id END as next_emi_id,
-      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_installment_number END as next_installment_number
+      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_installment_number END as next_installment_number,
+      CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_emi_status END as next_emi_status,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_total END as next_emi_total,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_collected END as next_emi_collected
     FROM autofinance_loans l
     JOIN autofinance_customers c ON l.customer_id = c.id
     LEFT JOIN autofinance_loan_types lt ON l.loan_type_id = lt.id
@@ -319,7 +322,10 @@ export async function getAllLoans() {
         MIN(due_date) as next_due_date,
         (array_agg(GREATEST(0, total_emi - COALESCE(collected_amount, 0)) ORDER BY due_date ASC))[1] as next_emi_amount,
         (array_agg(id ORDER BY due_date ASC))[1] as next_emi_id,
-        (array_agg(installment_number ORDER BY due_date ASC))[1] as next_installment_number
+        (array_agg(installment_number ORDER BY due_date ASC))[1] as next_installment_number,
+        (array_agg(status ORDER BY due_date ASC))[1] as next_emi_status,
+        (array_agg(total_emi ORDER BY due_date ASC))[1] as next_emi_total,
+        (array_agg(COALESCE(collected_amount, 0) ORDER BY due_date ASC))[1] as next_emi_collected
       FROM autofinance_emi_schedules
       WHERE status IN ('PENDING', 'PARTIAL')
       GROUP BY loan_id

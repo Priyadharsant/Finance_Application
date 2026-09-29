@@ -1,5 +1,18 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
+
+// IPC handlers for external links and version checks
+ipcMain.handle("open-external", async (event, url) => {
+  if (url && typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"))) {
+    await shell.openExternal(url);
+  }
+});
+
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
+app.name = "Finance Application";
 
 // Performance optimization: enable hardware acceleration & GPU rasterization
 app.commandLine.appendSwitch("enable-gpu-rasterization");

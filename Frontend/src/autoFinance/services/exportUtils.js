@@ -113,6 +113,135 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
     };
   });
 
+  if (exportData.length > 0) {
+    const totalDisbursed = loans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
+    const totalCollected = loans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+    const activeLoans = loans.filter((l) => (l.status || "ACTIVE").toUpperCase() === "ACTIVE");
+    const nextMonthEmis = activeLoans.reduce((sum, l) => {
+      const loanAmt = Number(l.loan_amount || 0);
+      const tenure = Number(l.tenure_months || 0);
+      const emi = Number(l.monthly_installment || l.emi_amount || (tenure > 0 ? Math.round(loanAmt / tenure) : (loanAmt * 0.1)));
+      return sum + emi;
+    }, 0);
+
+    const currentInHand = totalCollected;
+    const nextMonthProjected = currentInHand + nextMonthEmis;
+
+    exportData.push({
+      "Customer Name": "TOTAL",
+      "Customer Code": `${loans.length} Loans`,
+      "Phone": "",
+      "Vehicle": "",
+      "Reg No": "",
+      "Fund Source": "",
+      "Partner Interest Rate (%)": "",
+      "Partner Interest Amount (₹)": "",
+      "Expected Company Net Profit (₹)": "",
+      "Broker Name": "",
+      "Broker Phone": "",
+      "Guarantor (Jamin) Name": "",
+      "Guarantor (Jamin) Phone": "",
+      "Loan Amount (₹)": totalDisbursed,
+      "Income Due (₹)": "",
+      "Document Fee (₹)": "",
+      "Hire Purchase (₹)": "",
+      "Tax Amount (₹)": "",
+      "Insurance (₹)": "",
+      "Insurance Fine (₹)": "",
+      "Green Tax (₹)": "",
+      "Fine (₹)": "",
+      "National Tax (₹)": "",
+      "Permit (₹)": "",
+      "Brokerage (Customer) (₹)": "",
+      "Brokerage (By Hand) (₹)": "",
+      "Total Deductions & Fees (₹)": "",
+      "Amount Given to Customer (After All Deductions) (₹)": "",
+      "Interest Rate (%)": "",
+      "Tenure (Months)": "",
+      "Start Date": "",
+      "End Date": "",
+      "Total Collected (₹)": totalCollected,
+      "Pending Dues": "",
+      "Status": "",
+    });
+
+    exportData.push({
+      "Customer Name": "CURRENT IN-HAND CASH",
+      "Customer Code": "Opening balance for next month",
+      "Phone": "",
+      "Vehicle": "",
+      "Reg No": "",
+      "Fund Source": "",
+      "Partner Interest Rate (%)": "",
+      "Partner Interest Amount (₹)": "",
+      "Expected Company Net Profit (₹)": "",
+      "Broker Name": "",
+      "Broker Phone": "",
+      "Guarantor (Jamin) Name": "",
+      "Guarantor (Jamin) Phone": "",
+      "Loan Amount (₹)": currentInHand,
+      "Income Due (₹)": "",
+      "Document Fee (₹)": "",
+      "Hire Purchase (₹)": "",
+      "Tax Amount (₹)": "",
+      "Insurance (₹)": "",
+      "Insurance Fine (₹)": "",
+      "Green Tax (₹)": "",
+      "Fine (₹)": "",
+      "National Tax (₹)": "",
+      "Permit (₹)": "",
+      "Brokerage (Customer) (₹)": "",
+      "Brokerage (By Hand) (₹)": "",
+      "Total Deductions & Fees (₹)": "",
+      "Amount Given to Customer (After All Deductions) (₹)": "",
+      "Interest Rate (%)": "",
+      "Tenure (Months)": "",
+      "Start Date": "",
+      "End Date": "",
+      "Total Collected (₹)": currentInHand,
+      "Pending Dues": "",
+      "Status": "IN-HAND CASH",
+    });
+
+    exportData.push({
+      "Customer Name": "NEXT MONTH PROJECTED AMOUNT",
+      "Customer Code": "In-Hand + Next Month EMIs",
+      "Phone": "",
+      "Vehicle": "",
+      "Reg No": "",
+      "Fund Source": "",
+      "Partner Interest Rate (%)": "",
+      "Partner Interest Amount (₹)": "",
+      "Expected Company Net Profit (₹)": "",
+      "Broker Name": "",
+      "Broker Phone": "",
+      "Guarantor (Jamin) Name": "",
+      "Guarantor (Jamin) Phone": "",
+      "Loan Amount (₹)": nextMonthProjected,
+      "Income Due (₹)": "",
+      "Document Fee (₹)": "",
+      "Hire Purchase (₹)": "",
+      "Tax Amount (₹)": "",
+      "Insurance (₹)": "",
+      "Insurance Fine (₹)": "",
+      "Green Tax (₹)": "",
+      "Fine (₹)": "",
+      "National Tax (₹)": "",
+      "Permit (₹)": "",
+      "Brokerage (Customer) (₹)": "",
+      "Brokerage (By Hand) (₹)": "",
+      "Total Deductions & Fees (₹)": "",
+      "Amount Given to Customer (After All Deductions) (₹)": "",
+      "Interest Rate (%)": "",
+      "Tenure (Months)": "",
+      "Start Date": "",
+      "End Date": "",
+      "Total Collected (₹)": nextMonthProjected,
+      "Pending Dues": "",
+      "Status": "PROJECTED LIQUIDITY",
+    });
+  }
+
   const fileName = `Auto_Loans_Report_${label ? label + "_" : ""}${new Date().toISOString().slice(0, 10)}`;
   exportToExcel(
     exportData.length ? exportData : [{ Message: "No vehicle loans found matching the applied filters." }],

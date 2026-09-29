@@ -5,6 +5,7 @@ export default function CloseLoanModal({
   closeLoanModal,
   setCloseLoanModal,
   submitCloseLoan,
+  submitting = false,
 }) {
   if (!closeLoanModal) return null;
 
@@ -217,12 +218,32 @@ export default function CloseLoanModal({
           <button
             type="button"
             className="closeLoanCancelBtn"
-            onClick={() => setCloseLoanModal(null)}
+            disabled={submitting}
+            onClick={() => !submitting && setCloseLoanModal(null)}
           >
             Cancel
           </button>
-          <button type="submit" className="closeLoanSubmitBtn">
-            Confirm &amp; Close
+          <button
+            type="submit"
+            className="closeLoanSubmitBtn"
+            disabled={submitting}
+            style={{
+              opacity: submitting ? 0.75 : 1,
+              cursor: submitting ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              justifyContent: "center",
+            }}
+          >
+            {submitting ? (
+              <>
+                <span className="autoBtnSpinner" />
+                Closing Loan...
+              </>
+            ) : (
+              "Confirm & Close"
+            )}
           </button>
         </div>
       </form>

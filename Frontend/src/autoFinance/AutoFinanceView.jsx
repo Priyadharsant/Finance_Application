@@ -35,7 +35,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [partners, setPartners] = useState([]);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [reportMonth, setReportMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
@@ -45,6 +45,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [showCreateLoan, setShowCreateLoan] = useState(false);
   const [payEmiModal, setPayEmiModal] = useState(null);
   const [closeLoanModal, setCloseLoanModal] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
 
   const dynamicTitle = useMemo(() => {
     if (selectedLoan) {
@@ -193,6 +194,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   // Handlers
   const handleAddLoanType = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading("Creating Loan Scheme...");
     try {
       await apiCall("/loan-types", {
         method: "POST",
@@ -209,14 +212,18 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         baseInterestRate: "12",
         defaultTenureMonths: "12",
       });
-      loadData();
+      await loadData();
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleCreateLoan = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading("Creating Vehicle Loan & Schedules...");
     try {
       // 1. Create the loan
       const createRes = await apiCall("/loans", {
@@ -306,15 +313,18 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           other: null
         }
       });
-      loadData();
+      await loadData();
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handlePayEmi = async (e) => {
     e.preventDefault();
-    if (!payEmiModal) return;
+    if (!payEmiModal || actionLoading) return;
+    setActionLoading("Recording EMI Payment...");
     try {
       await apiCall("/loans/pay-emi", {
         method: "POST",
@@ -337,9 +347,11 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
         if (details.success) setSelectedLoan(details.data);
       }
-      loadData();
+      await loadData();
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -369,7 +381,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
   const submitCloseLoan = async (e) => {
     e.preventDefault();
-    if (!closeLoanModal) return;
+    if (!closeLoanModal || actionLoading) return;
+    setActionLoading("Closing Loan Early...");
     try {
       const p = Number(closeLoanModal.principalAmount || 0);
       const interestAmt = Number(closeLoanModal.interestAmount || 0);
@@ -392,9 +405,11 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
         if (details.success) setSelectedLoan(details.data);
       }
-      loadData();
+      await loadData();
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -445,6 +460,26 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       
       setNotice?.({ type: "success", text: "Document uploaded successfully!" });
       openLoanDetails(selectedLoan.loan.id); // Refresh
+    } catch (err) {
+      setNotice?.({ type: "error", text: err.message });
+    }
+  };
+
+  const handleDeleteDocument = async (filename) => {
+    if (!selectedLoan || !filename) return;
+    if (!window.confirm("Are you sure you want to delete this document?")) return;
+    try {
+      const res = await fetch(`${API_BASE}/loans/${selectedLoan.loan.id}/documents/${encodeURIComponent(filename)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete document");
+
+      setNotice?.({ type: "success", text: "Document deleted successfully!" });
+      openLoanDetails(selectedLoan.loan.id);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     }
@@ -755,6 +790,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         typeForm={typeForm}
         setTypeForm={setTypeForm}
         onSubmit={handleAddLoanType}
+        submitting={Boolean(actionLoading)}
       />
 
       {/* MODAL: CREATE VEHICLE LOAN */}
@@ -766,6 +802,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         customerOptions={customerOptions}
         handleCreateLoan={handleCreateLoan}
         partners={partners}
+        submitting={Boolean(actionLoading)}
       />
 
       {/* MODAL: LOAN DETAILS & EMI SCHEDULE TABLE */}
@@ -776,6 +813,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         handleExportIndividual={handleExportIndividual}
         handleEditVehicle={handleEditVehicle}
         handleUploadDocument={handleUploadDocument}
+        handleDeleteDocument={handleDeleteDocument}
         setPayEmiModal={setPayEmiModal}
         setPayForm={setPayForm}
         setNotice={setNotice}
@@ -788,6 +826,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         payForm={payForm}
         setPayForm={setPayForm}
         handlePayEmi={handlePayEmi}
+        submitting={Boolean(actionLoading)}
       />
 
       {/* MODAL: CLOSE LOAN EARLY */}
@@ -795,7 +834,25 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         closeLoanModal={closeLoanModal}
         setCloseLoanModal={setCloseLoanModal}
         submitCloseLoan={submitCloseLoan}
+        submitting={Boolean(actionLoading)}
       />
+
+      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
+      {(actionLoading || loading) && (
+        <div className="autoLoadingScreenOverlay">
+          <div className="autoLoadingCard">
+            <div className="autoLoadingSpinner" />
+            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
+              {actionLoading || "Loading Auto Finance..."}
+            </h4>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+              {actionLoading
+                ? "Processing transaction and securing records. Please wait..."
+                : "Fetching active loans, dues, and payment schedules..."}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

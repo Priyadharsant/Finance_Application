@@ -30,6 +30,7 @@ export default function LoanDetailsModal({
   handleExportIndividual,
   handleEditVehicle,
   handleUploadDocument,
+  handleDeleteDocument,
   setPayEmiModal,
   setPayForm,
   setNotice,
@@ -296,18 +297,49 @@ export default function LoanDetailsModal({
           </div>
 
           {selectedLoan.documents && selectedLoan.documents.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
-              {selectedLoan.documents.map(doc => (
-                <div key={doc.filename} style={{ padding: "8px 12px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <div style={{ fontWeight: "bold", fontSize: "12px", textTransform: "capitalize", color: "#0f766e" }}>{doc.docType.replace("_", " ")}</div>
-                    <small style={{ color: "#64748b" }}>{(doc.size / 1024).toFixed(1)} KB</small>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" }}>
+              {selectedLoan.documents.map(doc => {
+                const downloadUrl = doc.url || `${API_BASE}/loans/${selectedLoan.loan.id}/documents/${doc.filename}`;
+                const isSupabase = doc.storage === "supabase" || Boolean(doc.url);
+                return (
+                  <div key={doc.filename} style={{ padding: "10px 12px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                        <span style={{ fontWeight: "bold", fontSize: "12px", textTransform: "capitalize", color: "#0f766e" }}>{doc.docType.replace("_", " ")}</span>
+                        <span style={{ fontSize: "10px", background: isSupabase ? "#ecfdf5" : "#f1f5f9", color: isSupabase ? "#059669" : "#64748b", padding: "1px 5px", borderRadius: "4px", fontWeight: "600" }}>
+                          {isSupabase ? "☁️ Supabase" : "💾 Local"}
+                        </span>
+                      </div>
+                      <small style={{ color: "#64748b", fontSize: "11px" }}>{(doc.size / 1024).toFixed(1)} KB</small>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <a href={downloadUrl} download target="_blank" rel="noreferrer" className="primary autoBtn" style={{ padding: "4px 8px", fontSize: "11px", textDecoration: "none" }}>
+                        Download
+                      </a>
+                      {handleDeleteDocument && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDocument(doc.filename)}
+                          title="Delete document"
+                          style={{
+                            background: "transparent",
+                            border: "1px solid #fca5a5",
+                            color: "#ef4444",
+                            padding: "4px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                          }}
+                        >
+                          <Trash size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <a href={`${API_BASE}/loans/${selectedLoan.loan.id}/documents/${doc.filename}`} download target="_blank" rel="noreferrer" className="primary autoBtn" style={{ padding: "4px 8px", fontSize: "11px", textDecoration: "none" }}>
-                    Download
-                  </a>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div style={{ color: "#64748b", fontSize: "12px", fontStyle: "italic" }}>No documents uploaded yet.</div>

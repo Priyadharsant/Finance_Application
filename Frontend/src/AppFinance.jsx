@@ -24,6 +24,8 @@ import AutoFinanceView from "./AutoFinance.jsx";
 import GlobalCapitalView from "./GlobalCapital.jsx";
 import useDocumentTitle from "./hooks/useDocumentTitle.js";
 import { dateLabel, today } from "./dailyFinance/services/dailyFinanceApi.js";
+import VersionUpdateModal from "./components/VersionUpdateModal.jsx";
+import { APP_VERSION, checkForAppUpdates } from "./version.js";
 
 export default function AppFinance() {
   const [appModule, setAppModule] = useState("DAILY"); // 'DAILY' | 'AUTO' | 'GLOBAL'
@@ -31,6 +33,8 @@ export default function AppFinance() {
   const [entryDate, setEntryDate] = useState(today());
   const [notice, setNotice] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
 
   const dynamicTitle = useMemo(() => {
     const moduleLabel =
@@ -50,6 +54,19 @@ export default function AppFinance() {
     const timeout = window.setTimeout(() => setNotice(null), 4200);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  // Check for application updates on launch
+  useEffect(() => {
+    let isMounted = true;
+    checkForAppUpdates().then((res) => {
+      if (isMounted && res?.hasUpdate) {
+        setUpdateAvailable(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleModuleSwitch = (targetModule) => {
     setAppModule(targetModule);
@@ -174,12 +191,37 @@ export default function AppFinance() {
           </button>
         ))}
 
-        <div className="sidebarBottom">
-          <span>V</span>
-          <div>
-            VEXORA Technologies
-            <small>Production Workspace</small>
-          </div>
+        <div className="sidebarBottom" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+
+          <button
+            type="button"
+            onClick={() => setShowVersionModal(true)}
+            style={{
+              background: updateAvailable ? "linear-gradient(135deg, #fef3c7, #fde68a)" : "rgba(255,255,255,0.06)",
+              border: updateAvailable ? "1px solid #f59e0b" : "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "6px",
+              padding: "5px 8px",
+              fontSize: "11px",
+              color: updateAvailable ? "#92400e" : "#94a3b8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              fontWeight: 500,
+              transition: "all 0.2s ease",
+            }}
+            title="Click to check version updates"
+          >
+            <span>v{APP_VERSION}</span>
+            {updateAvailable ? (
+              <span style={{ background: "#f59e0b", color: "#fff", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 700 }}>
+                UPDATE
+              </span>
+            ) : (
+              <span style={{ opacity: 0.7, fontSize: "10px" }}>Check Updates</span>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -195,6 +237,55 @@ export default function AppFinance() {
           </div>
 
           <div className="headerRight">
+            <span className="systemStatusBadge">
+              <span className="livePulseDot" /> Live Systems Active
+            </span>
+
+            <button
+              type="button"
+              className="headerToggleBtn"
+              onClick={() => setShowVersionModal(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "11px",
+                padding: "3px 8px",
+                borderRadius: "6px",
+                border: updateAvailable ? "1px solid #f59e0b" : "1px solid #cbd5e1",
+                background: updateAvailable ? "#fef3c7" : "#fff",
+                color: updateAvailable ? "#92400e" : "#475569",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+              title="Application version and update manager"
+            >
+              <span>v{APP_VERSION}</span>
+              {updateAvailable && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b" }} />}
+            </button>
+
+            {/* Quick module switchers in header */}
+            <div className="headerToggleSwitch">
+              <button
+                className={`headerToggleBtn ${appModule === "DAILY" ? "active" : ""}`}
+                onClick={() => handleModuleSwitch("DAILY")}
+              >
+                Daily
+              </button>
+              <button
+                className={`headerToggleBtn ${appModule === "AUTO" ? "active autoMode" : ""}`}
+                onClick={() => handleModuleSwitch("AUTO")}
+              >
+                Auto
+              </button>
+              <button
+                className={`headerToggleBtn ${appModule === "GLOBAL" ? "active globalMode" : ""}`}
+                onClick={() => handleModuleSwitch("GLOBAL")}
+              >
+                Global
+              </button>
+            </div>
+
             <span style={{ color: "#94a3b8", fontSize: "13px" }}>{dateLabel(entryDate)}</span>
             <button className="iconTextButton" onClick={handleRefresh}>
               <RefreshCw size={15} /> Refresh
@@ -245,6 +336,11 @@ export default function AppFinance() {
           />
         )}
       </main>
+
+      <VersionUpdateModal
+        isOpen={showVersionModal}
+        onClose={() => setShowVersionModal(false)}
+      />
     </div>
   );
 }

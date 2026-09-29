@@ -372,15 +372,21 @@ export default function AutoDashboard({
           </thead>
           <tbody>
             {dashboardLoans.map((l) => {
-              const todayStr = new Date().toISOString().slice(0, 10);
-              const dueStr = l.next_due_date
-                ? new Date(l.next_due_date).toISOString().slice(0, 10)
-                : "";
-              const isToday = dueStr === todayStr;
-              const isOverdue =
-                l.next_due_date &&
-                new Date(l.next_due_date) < new Date(todayStr);
-              const hasUpcoming = l.next_due_date && !isToday && !isOverdue;
+              const getLocalDateString = (d) => {
+                if (!d) return "";
+                const dt = new Date(d);
+                if (isNaN(dt.getTime())) return "";
+                const y = dt.getFullYear();
+                const m = String(dt.getMonth() + 1).padStart(2, "0");
+                const day = String(dt.getDate()).padStart(2, "0");
+                return `${y}-${m}-${day}`;
+              };
+
+              const todayStr = getLocalDateString(new Date());
+              const dueStr = getLocalDateString(l.next_due_date);
+              const isToday = Boolean(dueStr && dueStr === todayStr);
+              const isOverdue = Boolean(dueStr && dueStr < todayStr);
+              const hasUpcoming = Boolean(dueStr && dueStr > todayStr);
 
               // Monthly due amount calculation
               const dashDue = (dashboardData.dueSchedules || []).find(
@@ -393,6 +399,15 @@ export default function AutoDashboard({
                 ? dashDue.installment_number
                 : l.next_installment_number || "?";
               const emiId = dashDue ? dashDue.id : l.next_emi_id;
+
+              // Determine partial or pending status of the due installment
+              const dueStatus = dashDue?.status || l.next_emi_status || "";
+              const paidSoFar = Number(dashDue?.collected_amount || l.next_emi_collected || 0);
+              const fullInstallmentEmi = Number(dashDue?.total_emi || l.next_emi_total || (monthlyDueAmount + paidSoFar));
+
+              const isPartial = dueStatus === "PARTIAL" || (paidSoFar > 0 && monthlyDueAmount > 0);
+              // Only consider pending if due date is strictly in the past (< current date)
+              const isPending = !isPartial && isOverdue;
 
               return (
                 <tr
@@ -446,21 +461,24 @@ export default function AutoDashboard({
                       <span
                         style={{
                           color:
-                            Number(l.pending_dues_count || 0) > 0
+                            isPartial
+                              ? "#d97706"
+                              : Number(l.pending_dues_count || 0) > 0
                               ? "#c2410c"
                               : "#047857",
+                          fontWeight: isPartial ? 700 : "normal",
                         }}
                       >
                         <Clock3
                           size={11}
                           style={{ verticalAlign: "middle" }}
                         />{" "}
-                        {l.pending_dues_count || 0} Pending
+                        {isPartial ? "Partial Due" : `${l.pending_dues_count || 0} Pending`}
                       </span>
                     </small>
                   </td>
                   <td>
-                    {isToday || isOverdue ? (
+                    {isToday || isOverdue || hasUpcoming ? (
                       <div
                         style={{
                           display: "flex",
@@ -469,21 +487,54 @@ export default function AutoDashboard({
                           gap: "4px",
                         }}
                       >
-                        <span
-                          className="tag"
-                          style={{
-                            background: isToday ? "#fff7ed" : "#fef2f2",
-                            color: isToday ? "#c2410c" : "#b91c1c",
-                            border: `1px solid ${isToday ? "#ffedd5" : "#fecaca"}`,
-                            fontSize: "10px",
-                            padding: "2px 6px",
-                          }}
-                        >
-                          {isToday ? "DUE TODAY" : "OVERDUE"}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                          {isPartial ? (
+                            <span
+                              className="tag"
+                              style={{
+                                background: "#fef3c7",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                fontWeight: "800",
+                              }}
+                            >
+                              PARTIAL
+                            </span>
+                          ) : isPending ? (
+                            <span
+                              className="tag"
+                              style={{
+                                background: isOverdue ? "#fee2e2" : isToday ? "#ffedd5" : "#eff6ff",
+                                color: isOverdue ? "#b91c1c" : isToday ? "#c2410c" : "#1d4ed8",
+                                border: `1px solid ${isOverdue ? "#fecaca" : isToday ? "#fed7aa" : "#dbeafe"}`,
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                fontWeight: "800",
+                              }}
+                            >
+                              PENDING
+                            </span>
+                          ) : null}
+
+                          <span
+                            className="tag"
+                            style={{
+                              background: isToday ? "#fff7ed" : isOverdue ? "#fef2f2" : "#eff6ff",
+                              color: isToday ? "#c2410c" : isOverdue ? "#b91c1c" : "#1d4ed8",
+                              border: `1px solid ${isToday ? "#ffedd5" : isOverdue ? "#fecaca" : "#dbeafe"}`,
+                              fontSize: "10px",
+                              padding: "2px 6px",
+                            }}
+                          >
+                            {isToday ? "DUE TODAY" : isOverdue ? "OVERDUE" : "UPCOMING"}
+                          </span>
+                        </div>
+
                         <b
                           style={{
-                            color: isToday ? "#d97706" : "#dc2626",
+                            color: isPartial ? "#d97706" : isOverdue ? "#dc2626" : isToday ? "#d97706" : "#1e3a8a",
                             fontSize: "13px",
                           }}
                         >
@@ -492,37 +543,7 @@ export default function AutoDashboard({
                         <small
                           style={{ color: "#64748b", fontSize: "11px" }}
                         >
-                          Inst #{instNo}
-                        </small>
-                      </div>
-                    ) : hasUpcoming ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-start",
-                          gap: "4px",
-                        }}
-                      >
-                        <span
-                          className="tag"
-                          style={{
-                            background: "#eff6ff",
-                            color: "#1d4ed8",
-                            border: "1px solid #dbeafe",
-                            fontSize: "10px",
-                            padding: "2px 6px",
-                          }}
-                        >
-                          UPCOMING DUE
-                        </span>
-                        <b style={{ color: "#1e3a8a", fontSize: "13px" }}>
-                          {money(monthlyDueAmount)}
-                        </b>
-                        <small
-                          style={{ color: "#64748b", fontSize: "11px" }}
-                        >
-                          Due: {dateLabel(l.next_due_date)}
+                          Inst #{instNo} {isPartial && paidSoFar > 0 ? `· Paid: ${money(paidSoFar)}` : hasUpcoming ? `· Due: ${dateLabel(l.next_due_date)}` : ""}
                         </small>
                       </div>
                     ) : (
@@ -550,18 +571,38 @@ export default function AutoDashboard({
                       <button
                         className="payButton"
                         style={{
-                          background: hasUpcoming ? "#3b82f6" : "#059669",
+                          background: isPartial
+                            ? "#d97706"
+                            : isOverdue
+                            ? "#dc2626"
+                            : hasUpcoming
+                            ? "#2563eb"
+                            : "#059669",
                           color: "#fff",
-                          borderColor: hasUpcoming ? "#3b82f6" : "#059669",
+                          borderColor: isPartial
+                            ? "#b45309"
+                            : isOverdue
+                            ? "#b91c1c"
+                            : hasUpcoming
+                            ? "#1d4ed8"
+                            : "#047857",
                           fontWeight: "800",
                         }}
+                        title={
+                          isPartial
+                            ? `Partial payment recorded (${money(paidSoFar)}). Collect remaining balance of ${money(monthlyDueAmount)}`
+                            : isPending
+                            ? `Collect pending EMI of ${money(monthlyDueAmount)} for Inst #${instNo}`
+                            : `Collect EMI of ${money(monthlyDueAmount)}`
+                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           setPayEmiModal({
                             loanId: l.id,
                             emiId: emiId,
-                            totalEmi: monthlyDueAmount,
+                            totalEmi: fullInstallmentEmi,
                             instNo: instNo,
+                            remainingEmi: monthlyDueAmount,
                           });
                           setPayForm({
                             amountPaid: monthlyDueAmount,
@@ -570,7 +611,7 @@ export default function AutoDashboard({
                           });
                         }}
                       >
-                        Collect EMI
+                        {isPartial ? "Collect Part" : isPending ? "Collect Pending" : "Collect Due"}
                       </button>
                     ) : (
                       <button

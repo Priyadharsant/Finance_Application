@@ -55,6 +55,8 @@ export default function DailyFinanceView({
   const [finance, setFinance] = useState(emptyFinance);
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
 
   // Dynamic document title
   const dynamicTitle = useMemo(() => {
@@ -84,14 +86,29 @@ export default function DailyFinanceView({
       .then(setDaily)
       .catch((error) => setNotice?.({ type: "error", text: error.message }));
 
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      await Promise.allSettled([
+        dailyFinanceApi.getDashboard(entryDate).then(setDashboard),
+        dailyFinanceApi.getDailyEntry(entryDate).then(setDaily),
+      ]);
+    } catch (error) {
+      setNotice?.({ type: "error", text: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadDashboard();
-    loadDaily();
-  }, [entryDate]);
+    loadInitialData();
+  }, [entryDate, activeMenu]);
 
   const submitFinance = async (event) => {
     event.preventDefault();
+    if (busy || actionLoading) return;
     setBusy(true);
+    setActionLoading("Saving New Customer Finance...");
     try {
       await dailyFinanceApi.createFinance(finance);
       setFinance(emptyFinance);
@@ -103,12 +120,14 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
     } finally {
       setBusy(false);
+      setActionLoading(null);
     }
   };
 
   const savePayment = async (customer, amount) => {
-    if (!amount || Number(amount) < 0) return;
+    if (busy || actionLoading || !amount || Number(amount) < 0) return;
     setBusy(true);
+    setActionLoading("Recording Daily Collection...");
     try {
       if (customer.today_payment_id) {
         await dailyFinanceApi.updatePayment(customer.today_payment_id, {
@@ -134,12 +153,15 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
     } finally {
       setBusy(false);
+      setActionLoading(null);
     }
   };
 
   const updatePayment = async (event) => {
     event.preventDefault();
+    if (busy || actionLoading) return;
     setBusy(true);
+    setActionLoading("Updating Collection Record...");
     try {
       await dailyFinanceApi.updatePayment(
         editingPayment.payment_id,
@@ -153,11 +175,14 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
     } finally {
       setBusy(false);
+      setActionLoading(null);
     }
   };
 
   const handleCloseLoan = async (payload) => {
+    if (busy || actionLoading) return;
     setBusy(true);
+    setActionLoading("Closing Loan Account...");
     try {
       await dailyFinanceApi.closeLoan(payload.financeId, payload);
       setClosingCustomer(null);
@@ -168,11 +193,14 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
     } finally {
       setBusy(false);
+      setActionLoading(null);
     }
   };
 
   const handleIncreaseLoan = async (payload) => {
+    if (busy || actionLoading) return;
     setBusy(true);
+    setActionLoading("Increasing Loan Amount...");
     try {
       await dailyFinanceApi.increaseLoanAmount(payload.financeId, payload);
       setIncreasingCustomer(null);
@@ -183,6 +211,7 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
     } finally {
       setBusy(false);
+      setActionLoading(null);
     }
   };
 
@@ -338,6 +367,23 @@ export default function DailyFinanceView({
           onSubmit={handleIncreaseLoan}
           busy={busy}
         />
+      )}
+
+      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
+      {(actionLoading || loading) && (
+        <div className="autoLoadingScreenOverlay">
+          <div className="autoLoadingCard">
+            <div className="autoLoadingSpinner" />
+            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
+              {actionLoading || "Loading Daily Finance..."}
+            </h4>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+              {actionLoading
+                ? "Processing transaction and updating ledger. Please wait..."
+                : "Fetching daily accounts, payments, and customer records..."}
+            </p>
+          </div>
+        </div>
       )}
     </>
   );

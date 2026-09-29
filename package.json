@@ -1,0 +1,13 @@
+
+{
+  "name": "finance-application-workspace",
+  "version": "1.2.0",
+  "private": true,
+  "scripts": {
+    "build:exe": "npm --prefix Frontend run electron:build",
+    "build:exe:dev": "npm --prefix Frontend run electron:build:dev",
+    "build:frontend": "npm --prefix Frontend run build",
+    "start:backend": "npm --prefix Backend run start",
+    "start:frontend": "npm --prefix Frontend run dev"
+  }
+}

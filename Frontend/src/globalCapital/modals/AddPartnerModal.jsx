@@ -7,6 +7,7 @@ export default function AddPartnerModal({
   partnerFormData,
   setPartnerFormData,
   onSubmit,
+  submitting = false,
 }) {
   if (!show) return null;
 
@@ -189,12 +190,31 @@ export default function AddPartnerModal({
             <button
               type="button"
               className="secondaryBtn"
+              disabled={submitting}
               onClick={close}
             >
               Cancel
             </button>
-            <button type="submit" className="primaryBtn">
-              Save Partner
+            <button
+              type="submit"
+              className="primaryBtn"
+              disabled={submitting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: submitting ? 0.75 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? (
+                <>
+                  <span className="autoBtnSpinner" />
+                  Saving Partner...
+                </>
+              ) : (
+                "Save Partner"
+              )}
             </button>
           </div>
         </form>

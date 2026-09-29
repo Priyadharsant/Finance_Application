@@ -10,6 +10,7 @@ export default function CapitalTransactionModal({
   setCapitalFormData,
   partners,
   onSubmit,
+  submitting = false,
 }) {
   if (!show) return null;
 
@@ -322,6 +323,7 @@ export default function CapitalTransactionModal({
             <button
               type="button"
               className="secondaryBtn"
+              disabled={submitting}
               onClick={close}
             >
               Cancel
@@ -329,16 +331,31 @@ export default function CapitalTransactionModal({
             <button
               type="submit"
               className="primaryBtn"
+              disabled={submitting}
               style={{
                 background:
                   capitalActionType === "WITHDRAWAL"
                     ? "linear-gradient(135deg, #e11d48, #be123c)"
                     : "linear-gradient(135deg, #059669, #047857)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: submitting ? 0.75 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
               }}
             >
-              {capitalActionType === "WITHDRAWAL"
-                ? "Confirm Withdrawal"
-                : "Confirm Deposit"}
+              {submitting ? (
+                <>
+                  <span className="autoBtnSpinner" />
+                  {capitalActionType === "WITHDRAWAL"
+                    ? "Processing Withdrawal..."
+                    : "Processing Deposit..."}
+                </>
+              ) : (
+                capitalActionType === "WITHDRAWAL"
+                  ? "Confirm Withdrawal"
+                  : "Confirm Deposit"
+              )}
             </button>
           </div>
         </form>

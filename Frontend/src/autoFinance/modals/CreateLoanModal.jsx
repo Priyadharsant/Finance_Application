@@ -11,6 +11,7 @@ export default function CreateLoanModal({
   customerOptions,
   handleCreateLoan,
   partners = [],
+  submitting = false,
 }) {
   if (!showCreateLoan) return null;
 
@@ -453,8 +454,27 @@ export default function CreateLoanModal({
           </label>
         </div>
 
-        <button className="primary autoBtn full">
-          Generate Loan & EMI Schedule
+        <button
+          type="submit"
+          className="primary autoBtn full"
+          disabled={submitting}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            opacity: submitting ? 0.75 : 1,
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}
+        >
+          {submitting ? (
+            <>
+              <span className="autoBtnSpinner" />
+              Generating Loan &amp; Schedules...
+            </>
+          ) : (
+            "Generate Loan & EMI Schedule"
+          )}
         </button>
       </form>
     </div>

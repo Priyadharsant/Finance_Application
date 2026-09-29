@@ -1,15 +1,17 @@
 {
-  "name": "frontend",
+  "name": "finance-application",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --configLoader runner",
-    "build": "vite build --configLoader runner",
+    "build": "vite build --mode production --configLoader runner",
+    "build:dev": "vite build --mode development --configLoader runner",
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron\"",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:dev": "npm run build:dev && electron-builder"
   },
   "dependencies": {
     "lucide-react": "^1.43.0",
@@ -34,9 +36,9 @@
   },
   "build": {
     "appId": "com.finance.application",
-    "productName": "Finance Application",
+    "productName": "FinFlow",
     "directories": {
-      "output": "release"
+      "output": "../App"
     },
     "files": [
       "dist/**/*",
@@ -45,7 +47,15 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FinFlow"
     }
   }
 }

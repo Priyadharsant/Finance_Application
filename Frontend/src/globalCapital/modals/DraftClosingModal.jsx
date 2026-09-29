@@ -7,6 +7,7 @@ export default function DraftClosingModal({
   draftData,
   setDraftData,
   onSubmit,
+  submitting = false,
 }) {
   if (!show) return null;
 
@@ -65,12 +66,31 @@ export default function DraftClosingModal({
             <button
               type="button"
               className="secondaryBtn"
+              disabled={submitting}
               onClick={close}
             >
               Cancel
             </button>
-            <button type="submit" className="primaryBtn">
-              Generate Draft
+            <button
+              type="submit"
+              className="primaryBtn"
+              disabled={submitting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: submitting ? 0.75 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? (
+                <>
+                  <span className="autoBtnSpinner" />
+                  Generating Draft...
+                </>
+              ) : (
+                "Generate Draft"
+              )}
             </button>
           </div>
         </form>

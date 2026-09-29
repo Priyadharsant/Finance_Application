@@ -41,7 +41,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const [expenseServerSummary, setExpenseServerSummary] = useState(null);
   const [closings, setClosings] = useState([]);
   const [profitCalcs, setProfitCalcs] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
 
   // 2. Monthly Closing & Time-Weighted State
   const now = new Date();
@@ -347,6 +348,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   // ----------------------------------------------------
   const handleAddPartner = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading("Registering Business Partner...");
     try {
       const res = await globalCapitalApi.createPartner(partnerFormData);
       setNotice({ type: "success", text: "Partner registered successfully" });
@@ -361,13 +364,14 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         initialContribution: "",
         effectiveDate: new Date().toISOString().slice(0, 10),
       });
-      fetchPartners();
+      await fetchPartners();
       if (partnerFormData.initialContribution) {
-        fetchTransactions();
-        fetchLedger();
+        await Promise.all([fetchTransactions(), fetchLedger()]);
       }
     } catch (err) {
       setNotice({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -384,6 +388,12 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   const handleCapitalTransaction = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading(
+      capitalActionType === "WITHDRAWAL"
+        ? "Processing Capital Withdrawal..."
+        : "Recording Capital Contribution..."
+    );
     try {
       if (capitalActionType === "WITHDRAWAL") {
         await globalCapitalApi.createWithdrawal({
@@ -406,16 +416,18 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         setNotice({ type: "success", text: "Capital contribution added successfully" });
       }
       setShowCapitalModal(false);
-      fetchTransactions();
-      fetchPartners();
-      fetchLedger();
+      await Promise.all([fetchTransactions(), fetchPartners(), fetchLedger()]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading("Recording Expense...");
     try {
       await globalCapitalApi.createExpense({
         ...expenseFormData,
@@ -430,10 +442,11 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         description: "",
         expenseDate: new Date().toISOString().slice(0, 10),
       });
-      fetchExpenses();
-      fetchLedger();
+      await Promise.all([fetchExpenses(), fetchLedger()]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -442,8 +455,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     try {
       await globalCapitalApi.deleteExpense(id);
       setNotice({ type: "success", text: "Expense removed successfully" });
-      fetchExpenses();
-      fetchLedger();
+      await Promise.all([fetchExpenses(), fetchLedger()]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
     }
@@ -451,6 +463,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   const handleRunDraft = async (e) => {
     e.preventDefault();
+    if (actionLoading) return;
+    setActionLoading("Generating Draft Monthly Closing...");
     try {
       await globalCapitalApi.createDraftMonthlyClosing({
         year: parseInt(draftData.year, 10),
@@ -458,9 +472,11 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       });
       setNotice({ type: "success", text: "Closing draft generated" });
       setShowDraftModal(false);
-      fetchClosings();
+      await fetchClosings();
     } catch (err) {
       setNotice({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -514,7 +530,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   const handleProfitPaymentSubmit = async (e) => {
     e.preventDefault();
-    if (!profitPaymentModal) return;
+    if (!profitPaymentModal || actionLoading) return;
+    setActionLoading("Recording Profit Settlement...");
     try {
       await globalCapitalApi.recordProfitPayment({
         partnerId: profitPaymentModal.partner_id,
@@ -526,10 +543,11 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       });
       setNotice({ type: "success", text: "Profit settlement payment recorded" });
       setProfitPaymentModal(null);
-      fetchProfitCalcs();
-      fetchLedger();
+      await Promise.all([fetchProfitCalcs(), fetchLedger()]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -695,6 +713,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         partnerFormData={partnerFormData}
         setPartnerFormData={setPartnerFormData}
         onSubmit={handleAddPartner}
+        submitting={Boolean(actionLoading)}
       />
 
       <CapitalTransactionModal
@@ -706,6 +725,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         setCapitalFormData={setCapitalFormData}
         partners={partners}
         onSubmit={handleCapitalTransaction}
+        submitting={Boolean(actionLoading)}
       />
 
       <AddExpenseModal
@@ -714,6 +734,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         expenseFormData={expenseFormData}
         setExpenseFormData={setExpenseFormData}
         onSubmit={handleAddExpense}
+        submitting={Boolean(actionLoading)}
       />
 
       <DraftClosingModal
@@ -722,6 +743,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         draftData={draftData}
         setDraftData={setDraftData}
         onSubmit={handleRunDraft}
+        submitting={Boolean(actionLoading)}
       />
 
       {/* Transaction Details Modal */}
@@ -772,7 +794,25 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         setForm={setProfitPaymentForm}
         submit={handleProfitPaymentSubmit}
         close={() => setProfitPaymentModal(null)}
+        submitting={Boolean(actionLoading)}
       />
+
+      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
+      {(actionLoading || loading) && (
+        <div className="autoLoadingScreenOverlay">
+          <div className="autoLoadingCard">
+            <div className="autoLoadingSpinner" />
+            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
+              {actionLoading || "Loading Global Capital..."}
+            </h4>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+              {actionLoading
+                ? "Processing transaction and updating ledger. Please wait..."
+                : "Fetching ledger, partners, and financial statements..."}
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

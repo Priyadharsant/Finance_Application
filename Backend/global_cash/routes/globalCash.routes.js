@@ -6,6 +6,7 @@ import {
   createWithdrawal,
   getPartnerCurrentCapital,
   getPartnerStats,
+  ensurePartnerCapitalColumns,
 } from '../services/partnerCapital.service.js';
 import { createDraftMonthlyClosing, finalizeMonthlyClosing } from '../services/monthlyClosing.service.js';
 import {
@@ -31,6 +32,7 @@ import {
   syncMonthDailyCalculations,
   getCronStatus,
 } from '../services/monthlyClosingCron.service.js';
+import { getMasterBusinessLedger } from '../services/masterBusinessLedger.service.js';
 
 const router = express.Router();
 
@@ -40,6 +42,9 @@ ensureUnifiedExpensesTable(pool).catch((e) =>
 );
 ensureProfitCalculationTables(pool).catch((e) =>
   console.error('Failed to initialize profit calculation tables:', e)
+);
+ensurePartnerCapitalColumns(pool).catch((e) =>
+  console.error('Failed to initialize partner capital columns:', e)
 );
 
 // --- DASHBOARD & LEDGER ---
@@ -709,6 +714,18 @@ router.get('/daily-profit-logs', async (req, res) => {
       logs: rows
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- DETAILED MASTER BUSINESS LEDGER & RECONCILIATION REPORT (latest.xlsx structure) ---
+router.get('/reports/master-business-ledger', async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    const reportData = await getMasterBusinessLedger(pool, { year, month });
+    res.json(reportData);
+  } catch (err) {
+    console.error('Failed to get master business ledger:', err);
     res.status(500).json({ error: err.message });
   }
 });

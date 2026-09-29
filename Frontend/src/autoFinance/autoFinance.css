@@ -423,3 +423,78 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
+
+/* Loading Screen & Processing Overlays */
+.autoLoadingScreenOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: autoFadeIn 0.2s ease-out;
+}
+
+.autoLoadingCard {
+  background: #ffffff;
+  padding: 30px 40px;
+  border-radius: 16px;
+  box-shadow: 0 24px 50px -12px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(226, 232, 240, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 90vw;
+  animation: autoScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.autoLoadingSpinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #059669;
+  border-radius: 50%;
+  animation: autoSpin 0.75s linear infinite;
+}
+
+.autoBtnSpinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: autoSpin 0.65s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes autoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes autoFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes autoScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

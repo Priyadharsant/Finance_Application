@@ -7,6 +7,7 @@ export default function AddExpenseModal({
   expenseFormData,
   setExpenseFormData,
   onSubmit,
+  submitting = false,
 }) {
   if (!show) return null;
 
@@ -241,12 +242,31 @@ export default function AddExpenseModal({
             <button
               type="button"
               className="secondaryBtn"
+              disabled={submitting}
               onClick={close}
             >
               Cancel
             </button>
-            <button type="submit" className="primaryBtn">
-              Save Expense
+            <button
+              type="submit"
+              className="primaryBtn"
+              disabled={submitting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                opacity: submitting ? 0.75 : 1,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? (
+                <>
+                  <span className="autoBtnSpinner" />
+                  Recording Expense...
+                </>
+              ) : (
+                "Save Expense"
+              )}
             </button>
           </div>
         </form>
