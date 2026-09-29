@@ -19,8 +19,8 @@ function compareSemver(vA = "0.0.0", vB = "0.0.0") {
 }
 
 router.get("/", (req, res) => {
-  const currentClientVersion = (req.query.current || "1.2.0").trim();
-  const latestVersion = (process.env.LATEST_APP_VERSION || "1.2.0").trim();
+  const currentClientVersion = (req.query.current || "1.3.0").trim();
+  const latestVersion = (process.env.LATEST_APP_VERSION || "1.3.0").trim();
   const repoOwner = process.env.GITHUB_REPO_OWNER || "Priyadharsant";
   const repoName = process.env.GITHUB_REPO_NAME || "Finance_Application";
   const defaultReleaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
