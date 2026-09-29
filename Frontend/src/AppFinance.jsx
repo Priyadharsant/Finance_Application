@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Menu,
   RefreshCw,
-  Tags,
+  LineChart,
   UserRound,
   WalletCards,
   X,
@@ -40,7 +40,7 @@ export default function AppFinance() {
         ? "Auto Finance"
         : "Global Capital";
 
-    return `${page} · ${moduleLabel} | FinFlow`;
+    return `${page} · ${moduleLabel} | Fin Tracker`;
   }, [appModule, page]);
 
   useDocumentTitle(dynamicTitle);
@@ -64,12 +64,12 @@ export default function AppFinance() {
   const autoMenus = [
     "Dashboard",
     "Customers",
-    "Loan Schemes",
     "Vehicle Loans",
     "Reports",
   ];
   const globalMenus = [
     "Ledger Overview",
+    "Monthly Stats",
     "Partner Management",
     "Capital Transactions",
     "Expenses",
@@ -88,11 +88,11 @@ export default function AppFinance() {
     Dashboard: LayoutDashboard,
     Customers: UserRound,
     "Daily entry": WalletCards,
-    "Loan Schemes": Tags,
     "Vehicle Loans": CarFront,
     "EMI Schedules": CalendarDays,
     Reports: FileText,
     "Ledger Overview": Globe,
+    "Monthly Stats": LineChart,
     "Partner Management": Users,
     "Capital Transactions": Landmark,
     Expenses: Receipt,
@@ -111,7 +111,7 @@ export default function AppFinance() {
             {appModule === "GLOBAL" && <Globe size={21} strokeWidth={2.5} />}
           </b>
           <div>
-            FinFlow
+            Fin Tracker
             <small>
               {appModule === "DAILY" && "Daily Finance"}
               {appModule === "AUTO" && "Auto Finance"}
@@ -175,9 +175,9 @@ export default function AppFinance() {
         ))}
 
         <div className="sidebarBottom">
-          <span>P</span>
+          <span>V</span>
           <div>
-            Priyan Finance
+            VEXORA Technologies
             <small>Production Workspace</small>
           </div>
         </div>
@@ -185,43 +185,17 @@ export default function AppFinance() {
 
       <main>
         <header>
-          <div>
+          <div style={{ flex: 1, textAlign: "center" }}>
             <span>
-              {appModule === "DAILY" && "Daily Finance Module"}
-              {appModule === "AUTO" && "Auto Finance Module"}
-              {appModule === "GLOBAL" && "Global Capital Module"}
+              {appModule === "DAILY" && "Daily Finance"}
+              {appModule === "AUTO" && "Auto Finance"}
+              {appModule === "GLOBAL" && "Global Capital"}
             </span>
             <h1>{page}</h1>
           </div>
 
           <div className="headerRight">
-            <span className="systemStatusBadge">
-              <span className="livePulseDot" /> Live Systems Active
-            </span>
-
-            {/* Quick module switchers in header */}
-            <div className="headerToggleSwitch">
-              <button
-                className={`headerToggleBtn ${appModule === "DAILY" ? "active" : ""}`}
-                onClick={() => handleModuleSwitch("DAILY")}
-              >
-                Daily
-              </button>
-              <button
-                className={`headerToggleBtn ${appModule === "AUTO" ? "active autoMode" : ""}`}
-                onClick={() => handleModuleSwitch("AUTO")}
-              >
-                Auto
-              </button>
-              <button
-                className={`headerToggleBtn ${appModule === "GLOBAL" ? "active globalMode" : ""}`}
-                onClick={() => handleModuleSwitch("GLOBAL")}
-              >
-                Global
-              </button>
-            </div>
-
-            <span>{dateLabel(entryDate)}</span>
+            <span style={{ color: "#94a3b8", fontSize: "13px" }}>{dateLabel(entryDate)}</span>
             <button className="iconTextButton" onClick={handleRefresh}>
               <RefreshCw size={15} /> Refresh
             </button>

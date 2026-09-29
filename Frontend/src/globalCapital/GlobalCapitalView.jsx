@@ -5,6 +5,7 @@ import { globalCapitalApi } from "./services/globalCapitalApi.js";
 
 // Tab Components
 import LedgerOverview from "./components/LedgerOverview.jsx";
+import MonthlyStatsTab from "./components/MonthlyStatsTab.jsx";
 import PartnerManagement from "./components/PartnerManagement.jsx";
 import CapitalTransactionsTab from "./components/CapitalTransactionsTab.jsx";
 import ExpensesTab from "./components/ExpensesTab.jsx";
@@ -36,6 +37,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const [partners, setPartners] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [monthlyStats, setMonthlyStats] = useState([]);
   const [expenseServerSummary, setExpenseServerSummary] = useState(null);
   const [closings, setClosings] = useState([]);
   const [profitCalcs, setProfitCalcs] = useState([]);
@@ -176,6 +178,18 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   // ----------------------------------------------------
   // Fetch Functions
   // ----------------------------------------------------
+  const fetchMonthlyStats = async () => {
+    setLoading(true);
+    try {
+      const data = await globalCapitalApi.getMonthlyStats();
+      setMonthlyStats(data);
+    } catch {
+      setNotice({ type: "error", text: "Failed to fetch monthly stats" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchLedger = async () => {
     setLoading(true);
     try {
@@ -305,6 +319,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   // ----------------------------------------------------
   useEffect(() => {
     if (activeMenu === "Ledger Overview") fetchLedger();
+    if (activeMenu === "Monthly Stats") fetchMonthlyStats();
     if (activeMenu === "Partner Management") fetchPartners();
     if (activeMenu === "Capital Transactions") {
       fetchTransactions();
@@ -586,6 +601,11 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           totalDebits={totalDebits}
           onSelectRecord={setSelectedRecord}
         />
+      )}
+
+      {/* ---------------- 1.5. MONTHLY STATS ---------------- */}
+      {activeMenu === "Monthly Stats" && (
+        <MonthlyStatsTab stats={monthlyStats} />
       )}
 
       {/* ---------------- 2. PARTNER MANAGEMENT ---------------- */}

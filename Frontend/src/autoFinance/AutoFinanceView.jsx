@@ -715,14 +715,6 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         />
       )}
 
-      {/* 3. LOAN SCHEMES */}
-      {activeMenu === "Loan Schemes" && (
-        <AutoLoanSchemes
-          loanTypes={loanTypes}
-          setShowAddLoanType={setShowAddLoanType}
-        />
-      )}
-
       {/* 4. VEHICLE LOANS */}
       {activeMenu === "Vehicle Loans" && (
         <AutoVehicleLoans
