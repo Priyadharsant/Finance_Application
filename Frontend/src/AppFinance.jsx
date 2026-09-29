@@ -55,12 +55,13 @@ export default function AppFinance() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  // Check for application updates on launch
+  // Check for application updates on launch - enforce latest version
   useEffect(() => {
     let isMounted = true;
     checkForAppUpdates().then((res) => {
       if (isMounted && res?.hasUpdate) {
         setUpdateAvailable(true);
+        setShowVersionModal(true);
       }
     });
     return () => {
@@ -339,7 +340,12 @@ export default function AppFinance() {
 
       <VersionUpdateModal
         isOpen={showVersionModal}
-        onClose={() => setShowVersionModal(false)}
+        isMandatory={updateAvailable}
+        onClose={() => {
+          if (!updateAvailable) {
+            setShowVersionModal(false);
+          }
+        }}
       />
     </div>
   );

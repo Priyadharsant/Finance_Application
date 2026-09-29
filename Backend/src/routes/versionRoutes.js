@@ -28,7 +28,7 @@ router.get("/", (req, res) => {
   const minSupportedVersion = (process.env.MIN_SUPPORTED_VERSION || "1.0.0").trim();
 
   const hasUpdate = compareSemver(latestVersion, currentClientVersion) > 0;
-  const isMandatory = compareSemver(minSupportedVersion, currentClientVersion) > 0;
+  const isMandatory = hasUpdate || compareSemver(minSupportedVersion, currentClientVersion) > 0;
 
   return res.json({
     success: true,
