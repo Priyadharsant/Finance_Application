@@ -1,6 +1,19 @@
 import express from "express";
+import fs from "fs";
 
 const router = express.Router();
+
+// Read package.json version dynamically as fallback
+let backendPackageVersion = "1.3.0";
+try {
+  const pkgUrl = new URL("../../package.json", import.meta.url);
+  const pkgData = JSON.parse(fs.readFileSync(pkgUrl, "utf-8"));
+  if (pkgData?.version) {
+    backendPackageVersion = pkgData.version;
+  }
+} catch (err) {
+  console.warn("[versionRoutes] Unable to read package.json version:", err.message);
+}
 
 /**
  * Semver comparison: returns 1 if vA > vB, -1 if vA < vB, 0 if equal
@@ -19,8 +32,8 @@ function compareSemver(vA = "0.0.0", vB = "0.0.0") {
 }
 
 router.get("/", (req, res) => {
-  const currentClientVersion = (req.query.current || "1.3.0").trim();
-  const latestVersion = (process.env.LATEST_APP_VERSION || "1.3.0").trim();
+  const currentClientVersion = (req.query.current || backendPackageVersion).trim();
+  const latestVersion = (process.env.LATEST_APP_VERSION || backendPackageVersion).trim();
   const repoOwner = process.env.GITHUB_REPO_OWNER || "Priyadharsant";
   const repoName = process.env.GITHUB_REPO_NAME || "Finance_Application";
   const defaultReleaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
