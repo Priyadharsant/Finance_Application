@@ -1,8 +1,7 @@
 import React from "react";
-import { Plus, FileSpreadsheet } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money } from "../services/dailyFinanceApi.js";
-import { exportTotalDailyPortfolio } from "../services/dailyExportUtils.js";
 
 export default function DailyCustomers({
   customers = [],
@@ -20,47 +19,14 @@ export default function DailyCustomers({
       <div className="intro">
         <div>
           <span className="overline">CUSTOMERS</span>
-          <h2>Customer and finance records</h2>
+          <h2>Customer Loans</h2>
           <p>
-            Click a customer to open the complete finance and collection
-            history.
+            Click a customer to open loan details and payment history.
           </p>
         </div>
         <button className="primary" onClick={() => setShowAdd(true)}>
           <Plus size={16} /> Add customer
         </button>
-      </div>
-
-      {/* DYNAMIC GRID ANALYTICS CARDS (BASED ON FILTERS) */}
-      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "18px" }}>
-        <div className="metric autoMetric blue">
-          <span>Filtered Customers</span>
-          <b>{customers.length}</b>
-          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
-            {status ? `Status: ${status}` : "All Active & Completed"}
-          </small>
-        </div>
-        <div className="metric autoMetric green">
-          <span>Total Disbursed</span>
-          <b>{money(customers.reduce((s, c) => s + Number(c.net_disbursement || c.finance_amount || 0), 0))}</b>
-          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Principal deployed
-          </small>
-        </div>
-        <div className="metric autoMetric teal">
-          <span>Total Collected</span>
-          <b>{money(customers.reduce((s, c) => s + Number(c.total_collected || 0), 0))}</b>
-          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Collections to date
-          </small>
-        </div>
-        <div className="metric autoMetric red">
-          <span>Total Remaining</span>
-          <b>{money(customers.reduce((s, c) => s + Number(c.balance_amount || 0), 0))}</b>
-          <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Outstanding balance
-          </small>
-        </div>
       </div>
 
       <div className="filterBar">
@@ -77,25 +43,6 @@ export default function DailyCustomers({
           <option value="ACTIVE">Active</option>
           <option value="COMPLETED">Completed</option>
         </select>
-        <button
-          type="button"
-          className="iconTextButton"
-          style={{
-            background: "#059669",
-            color: "#ffffff",
-            border: 0,
-            borderRadius: "8px",
-            padding: "10px 15px",
-            fontSize: "13px",
-            fontWeight: "700",
-            cursor: "pointer",
-            marginLeft: "auto",
-          }}
-          onClick={() => exportTotalDailyPortfolio(customers)}
-          title="Export current customer accounts to Excel (.xlsx)"
-        >
-          <FileSpreadsheet size={15} /> Export (Excel)
-        </button>
       </div>
       <div className="card tableWrap">
         <table>

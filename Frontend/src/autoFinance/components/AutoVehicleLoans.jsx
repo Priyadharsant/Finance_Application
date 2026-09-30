@@ -1,7 +1,10 @@
-import React from "react";
-import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw, FileSpreadsheet } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money } from "../services/autoFinanceApi";
+import { exportAutoMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi";
+import MonthFilterModal from "../../components/MonthFilterModal";
 
 export default function AutoVehicleLoans({
   overview = {},
@@ -19,6 +22,13 @@ export default function AutoVehicleLoans({
   openLoanDetails,
   handleExportVehicleLoans,
 }) {
+  const [showMonthModal, setShowMonthModal] = useState(false);
+
+  const handleExportMonthlyCollections = async (selectedMonth) => {
+    const reportData = await globalCapitalApi.getMasterBusinessLedger();
+    exportAutoMonthlyCollectionReport(reportData, {}, selectedMonth);
+  };
+
   const isFiltered =
     loanTabFilter !== "ALL" ||
     Boolean(loanMonthFilter) ||
@@ -39,25 +49,25 @@ export default function AutoVehicleLoans({
   const filteredRecoveryRate = filteredDisbursed > 0 ? Math.round((filteredCollected / filteredDisbursed) * 100) : 0;
   const filteredRemaining = Math.max(0, filteredDisbursed - filteredCollected);
 
+
   return (
     <section className="content">
       <div className="intro">
         <div>
-          <span className="overline autoBadgeTag">VEHICLE LOANS PORTFOLIO</span>
-          <h2>Vehicle Loans &amp; Registered Assets</h2>
+          <span className="overline autoBadgeTag">VEHICLE LOANS</span>
+          <h2>Vehicle Loans</h2>
           <p>
-            Comprehensive directory of all active and completed vehicle loan agreements, registered vehicles, and repayment status.
+            All active and completed vehicle loans and repayment details.
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
           <button
-            className="secondary autoBtn"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-            onClick={handleExportVehicleLoans}
-            title="Export Filtered Vehicle Loans to Excel"
+            type="button"
+            className="unifiedReportBtn"
+            onClick={() => setShowMonthModal(true)}
+            title="Download Monthly Collections Report (.xlsx)"
           >
-            <Download size={15} /> Export Report (Excel)
-            {vehiclePageLoans.length < loans.length ? ` (${vehiclePageLoans.length})` : ` (${loans.length})`}
+            <FileSpreadsheet size={15} /> Monthly Collection Report
           </button>
           <button
             className="primary autoBtn"
@@ -99,7 +109,7 @@ export default function AutoVehicleLoans({
           </small>
         </div>
         <div className="metric autoMetric red">
-          <span>{isFiltered ? "Filtered Remaining" : "Remaining Portfolio"}</span>
+          <span>{isFiltered ? "Filtered Remaining" : "Total Balance Pending"}</span>
           <b>{money(filteredRemaining)}</b>
           <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
             Outstanding Balance
@@ -378,6 +388,15 @@ export default function AutoVehicleLoans({
           </div>
         )}
       </div>
+
+
+      <MonthFilterModal
+        isOpen={showMonthModal}
+        onClose={() => setShowMonthModal(false)}
+        onExport={handleExportMonthlyCollections}
+        title="Auto Monthly Collections Report"
+        themeColor="#0284c7"
+      />
     </section>
   );
 }

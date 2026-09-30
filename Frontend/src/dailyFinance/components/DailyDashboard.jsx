@@ -1,7 +1,9 @@
-import React from "react";
-import { Plus } from "lucide-react";
+import React, { useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
+import { exportDailyCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 
 export default function DailyDashboard({
   position = {},
@@ -10,17 +12,41 @@ export default function DailyDashboard({
   setPage,
   openDetails,
 }) {
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
+  const handleExportDailyReport = async () => {
+    try {
+      setDownloadingReport(true);
+      const reportData = await globalCapitalApi.getMasterBusinessLedger();
+      exportDailyCategoryReport(reportData, { customers });
+    } catch (e) {
+      console.error(e);
+      alert("Failed to export Daily Finance Report: " + e.message);
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   return (
     <section className="content">
       <div className="intro">
         <div>
           <span className="overline">OVERVIEW</span>
-          <h2>Business position</h2>
-          <p>Everything you need to understand today’s finance position.</p>
+          <h2>Business Overview</h2>
+          <p>Summary of collections, active loans, and cash balance.</p>
         </div>
-        <button className="primary" onClick={() => setPage("Customers")}>
-          <Plus size={16} /> Add customer
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="unifiedReportBtn"
+            onClick={handleExportDailyReport}
+            disabled={downloadingReport}
+            title="Download complete Daily Finance Report (.xlsx)"
+          >
+            <FileSpreadsheet size={16} />
+            <span>{downloadingReport ? "Compiling..." : "Download Report (.xlsx)"}</span>
+          </button>
+        </div>
       </div>
       <div className="metricGrid">
         <Metric
@@ -28,13 +54,6 @@ export default function DailyDashboard({
           value={position.total_finance_amount}
         />
         <Metric title="Amount given" value={position.disbursed} />
-        <Metric
-          title="Total to return"
-          value={
-            Number(position.receivable || 0) + Number(position.collected || 0)
-          }
-          tone="orange"
-        />
         <Metric
           title="Total collected"
           value={position.collected}
@@ -46,16 +65,6 @@ export default function DailyDashboard({
           tone="orange"
         />
         <Metric title="Total profit" value={position.profit} tone="green" />
-        <Metric
-          title="Active customers"
-          value={position.active_accounts}
-          count
-        />
-        <Metric
-          title="Completed customers"
-          value={position.completed_accounts}
-          count
-        />
         <Metric
           title="Current In-Hand Amount"
           value={position.collected}
@@ -70,12 +79,12 @@ export default function DailyDashboard({
           tone="orange"
         />
       </div>
-      <div className="dashboardGrid">
+      <div className="dashboardGrid" style={{ gridTemplateColumns: "1fr" }}>
         <div className="card tableWrap">
           <div className="cardHead">
             <div>
-              <h3>Customer position</h3>
-              <p>Active and completed finances from PostgreSQL.</p>
+              <h3>Customer Accounts</h3>
+              <p>Active and completed daily loans.</p>
             </div>
           </div>
           <table>
@@ -126,21 +135,6 @@ export default function DailyDashboard({
             </tbody>
           </table>
           {!customers.length && <Empty text="No customers yet." />}
-        </div>
-        <div className="card recentCard">
-          <div className="cardHead">
-            <h3>Today’s collection</h3>
-            <p>
-              {money(position.today_collected)} received on the selected date.
-            </p>
-          </div>
-          {recent.slice(0, 8).map((payment) => (
-            <div className="recentRow" key={payment.payment_id}>
-              <span>{payment.customer_name}</span>
-              <b>{money(payment.amount)}</b>
-              <small>{dateLabel(payment.collection_date)}</small>
-            </div>
-          ))}
         </div>
       </div>
     </section>

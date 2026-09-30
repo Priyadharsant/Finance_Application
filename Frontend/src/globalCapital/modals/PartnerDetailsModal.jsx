@@ -50,11 +50,11 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
   const transactions = fullData?.transactions || [];
 
   const filteredTransactions = transactions.filter((t) => {
+    if (t.transaction_type === "PROFIT_SHARE") return false;
     if (txFilter === "CONTRIBUTION") {
       return (
         t.transaction_type === "CONTRIBUTION" ||
-        t.transaction_type === "ADJUSTMENT_INCREASE" ||
-        t.transaction_type === "PROFIT_SHARE"
+        t.transaction_type === "ADJUSTMENT_INCREASE"
       );
     }
     if (txFilter === "WITHDRAWAL") {
@@ -80,7 +80,7 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
       >
         <div className="modalHeader">
           <div>
-            <span className="overline autoBadgeTag">PARTNER DOSSIER</span>
+            <span className="overline autoBadgeTag">PARTNER PROFILE</span>
             <h3>{p.name}</h3>
           </div>
           <button className="iconBtn" onClick={close} aria-label="Close">
@@ -114,7 +114,7 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                   opacity: 0.9,
                 }}
               >
-                Current Available Capital
+                Current Balance
               </span>
               <span
                 className="statusPill active"
@@ -253,9 +253,9 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                 </strong>
               </div>
               <div className="txGridItem">
-                <span>Profit Earned</span>
-                <strong style={{ color: "#7c3aed", fontSize: "14.5px" }}>
-                  +{money(stats.totalProfitEarned != null ? stats.totalProfitEarned : p.profit_earned || 0)}
+                <span>Total Contributed</span>
+                <strong style={{ color: "#059669", fontSize: "14.5px" }}>
+                  +{money(stats.totalContributed || stats.baseCapital || 0)}
                 </strong>
               </div>
               <div className="txGridItem">
@@ -352,11 +352,7 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                             <span
                               className={`partnerTxPill ${isContrib ? "credit" : "debit"}`}
                             >
-                              {t.transaction_type === "PROFIT_SHARE"
-                                ? "+ AUTO PROFIT SHARE"
-                                : isContrib
-                                  ? "+ CONTRIBUTION"
-                                  : "- WITHDRAWAL"}
+                              {isContrib ? "+ CONTRIBUTION" : "- WITHDRAWAL"}
                             </span>
                           </td>
                           <td>

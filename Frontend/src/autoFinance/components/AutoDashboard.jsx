@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -11,9 +11,12 @@ import {
   Calendar,
   X,
   RotateCcw,
+  FileSpreadsheet,
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money, dateLabel } from "../services/autoFinanceApi";
+import { exportAutoCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi";
 
 export default function AutoDashboard({
   overview = {},
@@ -31,6 +34,21 @@ export default function AutoDashboard({
   setPayEmiModal,
   setPayForm,
 }) {
+  const [downloadingAutoReport, setDownloadingAutoReport] = useState(false);
+
+  const handleExportAutoReport = async () => {
+    try {
+      setDownloadingAutoReport(true);
+      const reportData = await globalCapitalApi.getMasterBusinessLedger();
+      exportAutoCategoryReport(reportData, { loans: dashboardLoans });
+    } catch (e) {
+      console.error(e);
+      alert("Failed to export Auto Finance Report: " + e.message);
+    } finally {
+      setDownloadingAutoReport(false);
+    }
+  };
+
   const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter);
 
   const dashDisbursed = dashboardLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
@@ -54,18 +72,21 @@ export default function AutoDashboard({
           <span className="overline autoBadgeTag">
             AUTO FINANCE ANALYTICS
           </span>
-          <h2>Vehicle Loan Portfolio & Business Analytics</h2>
+          <h2>Vehicle Loans &amp; Business Analytics</h2>
           <p>
-            Real-time loan position, capital deployment, EMI recovery, and
-            vehicle fleet distribution.
+            Real-time loan position, loans given, EMI collections, and vehicle details.
           </p>
         </div>
-        <div className="actionGroup">
+        <div className="actionGroup" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <button
-            className="primary autoBtn"
-            onClick={() => setShowCreateLoan(true)}
+            type="button"
+            className="unifiedReportBtn"
+            onClick={handleExportAutoReport}
+            disabled={downloadingAutoReport}
+            title="Download complete Auto Finance Report (.xlsx)"
           >
-            <Plus size={16} /> New Vehicle Loan
+            <FileSpreadsheet size={16} />
+            <span>{downloadingAutoReport ? "Compiling..." : "Download Report (.xlsx)"}</span>
           </button>
         </div>
       </div>
@@ -124,7 +145,7 @@ export default function AutoDashboard({
         </div>
 
         <div className="metric autoMetric red">
-          <span>Remaining Portfolio</span>
+          <span>Balance Pending</span>
           <b>{money(dashRemaining)}</b>
           <small
             style={{
@@ -136,22 +157,6 @@ export default function AutoDashboard({
             }}
           >
             Outstanding balance in filter
-          </small>
-        </div>
-
-        <div className="metric autoMetric teal">
-          <span>Actionable Dues</span>
-          <b>{dashOverdueCount + dashDueTodayCount} Dues</b>
-          <small
-            style={{
-              color: "#0f766e",
-              fontWeight: 600,
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            {dashOverdueCount} Overdue · {dashDueTodayCount} Due Today
           </small>
         </div>
 
@@ -288,40 +293,6 @@ export default function AutoDashboard({
                 </button>
               )}
             </div>
-
-            <button
-              className="secondary autoBtn"
-              style={{ padding: "5px 10px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-              onClick={handleExportDashboardLoans}
-              title="Export filtered active dues to Excel"
-            >
-              <Download size={13} /> Export Dues ({dashboardLoans.length})
-            </button>
-
-            <span
-              className="tag"
-              style={{
-                background: "#fff7ed",
-                color: "#c2410c",
-                border: "1px solid #ffedd5",
-              }}
-            >
-              <CalendarDays size={13} /> Today Due:{" "}
-              <b>{money(overview.today_due_amount || 0)}</b> (
-              {overview.today_due_count || 0})
-            </span>
-            <span
-              className="tag"
-              style={{
-                background: "#fef2f2",
-                color: "#b91c1c",
-                border: "1px solid #fecaca",
-              }}
-            >
-              <AlertTriangle size={13} /> Outstanding Overdue:{" "}
-              <b>{money(overview.overdue_amount || 0)}</b> (
-              {overview.overdue_count || 0})
-            </span>
           </div>
         </div>
         <table>

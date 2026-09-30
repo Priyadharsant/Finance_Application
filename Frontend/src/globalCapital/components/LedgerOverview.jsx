@@ -124,39 +124,39 @@ export default function LedgerOverview({
       <div className="globalCapitalHero">
         <div className="analyticsBannerHead">
           <h4>
-            <Globe size={18} /> Available Company Capital
+            <Globe size={18} /> Available Company Balance
           </h4>
         </div>
         <strong>
           {money(ledgerData.availableCapital)}
         </strong>
         <p>
-          Net real-time capital balance (Gross capital minus all business &amp; brokerage expenses).
+          Current cash balance available after all business expenses.
         </p>
       </div>
 
       {/* KPI Stats (Dynamic based on Active Filters) */}
-      <div className="globalCapitalStats sixCol">
+      <div className="globalCapitalStats fiveCol">
         <div>
-          <span>{isFiltered ? "Filtered Inflow" : "Gross Revenue"}</span>
+          <span>{isFiltered ? "Total Money In" : "Total Collections / Income"}</span>
           <strong style={{ color: "#059669" }}>
             {money(isFiltered ? filteredInflow : ledgerData.revenue?.totalRevenue)}
           </strong>
           <small>
-            {isFiltered ? "Credits in active filter" : `Auto: ${money(ledgerData.revenue?.autoRevenue)} • Daily: ${money(ledgerData.revenue?.dailyRevenue)}`}
+            {isFiltered ? "Collections in selected filter" : `Auto: ${money(ledgerData.revenue?.autoRevenue)} • Daily: ${money(ledgerData.revenue?.dailyRevenue)}`}
           </small>
         </div>
         <div>
-          <span>{isFiltered ? "Filtered Outflow" : "Total Expenses"}</span>
+          <span>{isFiltered ? "Total Money Out" : "Total Expenses"}</span>
           <strong style={{ color: "#e11d48" }}>
             {money(isFiltered ? filteredOutflow : ledgerData.expenses?.totalExpenses)}
           </strong>
           <small>
-            {isFiltered ? "Debits in active filter" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
+            {isFiltered ? "Expenses in selected filter" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
           </small>
         </div>
         <div>
-          <span>{isFiltered ? "Filtered Net Movement" : "Net Profit"}</span>
+          <span>{isFiltered ? "Net Balance" : "Net Profit"}</span>
           <strong
             style={{
               color: (isFiltered ? filteredNetFlow : Number(ledgerData.netProfit || 0)) >= 0 ? "#0d9488" : "#e11d48",
@@ -164,26 +164,21 @@ export default function LedgerOverview({
           >
             {isFiltered ? (filteredNetFlow >= 0 ? "+" : "") + money(filteredNetFlow) : money(ledgerData.netProfit)}
           </strong>
-          <small>{isFiltered ? "Inflow minus Outflow" : "Revenue minus All Expenses"}</small>
+          <small>{isFiltered ? "Money In minus Money Out" : "Income minus Expenses"}</small>
         </div>
         <div>
-          <span>{isFiltered ? "Auto Module Inflow" : "Capital in"}</span>
+          <span>{isFiltered ? "Auto Collections" : "Partner Capital"}</span>
           <strong style={{ color: isFiltered ? "#2563eb" : undefined }}>
             {isFiltered ? `+${money(filteredAutoInflow)}` : money(ledgerData.totalCredits || totalCredits)}
           </strong>
-          <small>{isFiltered ? "Auto Finance Credits" : "Partner contributions"}</small>
+          <small>{isFiltered ? "Auto finance collections" : "Total money invested by partners"}</small>
         </div>
         <div>
-          <span>{isFiltered ? "Daily Module Inflow" : "Capital deployed"}</span>
+          <span>{isFiltered ? "Daily Collections" : "Loans Given Out"}</span>
           <strong style={{ color: isFiltered ? "#059669" : undefined }}>
             {isFiltered ? `+${money(filteredDailyInflow)}` : money(ledgerData.totalDebits || totalDebits)}
           </strong>
-          <small>{isFiltered ? "Daily Finance Credits" : "Finance disbursements"}</small>
-        </div>
-        <div>
-          <span>Ledger entries</span>
-          <strong>{filteredLedger.length}</strong>
-          <small>{isFiltered ? `Filtered of ${rawLedger.length}` : "Auditable transactions"}</small>
+          <small>{isFiltered ? "Daily finance collections" : "Total loans given to customers"}</small>
         </div>
       </div>
 
@@ -247,9 +242,9 @@ export default function LedgerOverview({
               cursor: "pointer",
             }}
           >
-            <option value="ALL">All Cash Flows</option>
-            <option value="CREDIT">Inflow (Credits Only)</option>
-            <option value="DEBIT">Outflow (Debits Only)</option>
+            <option value="ALL">All Transactions</option>
+            <option value="CREDIT">Money In (+ Inflow)</option>
+            <option value="DEBIT">Money Out (- Outflow)</option>
           </select>
 
           {/* Month Calendar Picker */}
@@ -304,7 +299,7 @@ export default function LedgerOverview({
             <Search size={14} color="#94a3b8" />
             <input
               type="text"
-              placeholder="Search narration, ref, type..."
+              placeholder="Search notes, bill no, type..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ fontSize: "12px" }}
@@ -348,16 +343,16 @@ export default function LedgerOverview({
           }}
         >
           <h3>
-            <Landmark size={18} /> Global Cash Ledger
+            <Landmark size={18} /> Cash Flow History
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <button
               className="secondaryBtn"
               style={{ padding: "6px 12px", fontSize: "12px" }}
               onClick={() => exportGlobalLedger(filteredLedger, { label: monthFilter || undefined })}
-              title="Export Filtered General Cash Ledger to Excel"
+              title="Download transactions to Excel"
             >
-              <Download size={14} /> Export Ledger (Excel)
+              <Download size={14} /> Download Excel
               {filteredLedger.length < rawLedger.length ? ` (${filteredLedger.length})` : ""}
             </button>
             <span
@@ -370,7 +365,7 @@ export default function LedgerOverview({
                 gap: "6px",
               }}
             >
-              <span>💡 Click any row to view full transaction details</span>
+              <span>💡 Click any row to view details</span>
             </span>
           </div>
         </div>
@@ -379,9 +374,9 @@ export default function LedgerOverview({
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Type / Description</th>
+                <th>Description</th>
                 <th>Module</th>
-                <th>Direction</th>
+                <th>Flow (In/Out)</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
                 <th style={{ textAlign: "center", width: "90px" }}>Action</th>
               </tr>
@@ -494,7 +489,7 @@ export default function LedgerOverview({
                     colSpan="6"
                     style={{ textAlign: "center", color: "#64748b", padding: "24px" }}
                   >
-                    No ledger transactions found matching the applied filters.
+                    No transactions found for the selected filter.
                   </td>
                 </tr>
               )}

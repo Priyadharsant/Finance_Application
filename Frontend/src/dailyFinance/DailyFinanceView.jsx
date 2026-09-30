@@ -11,7 +11,6 @@ import "./dailyFinance.css";
 import DailyDashboard from "./components/DailyDashboard.jsx";
 import DailyCustomers from "./components/DailyCustomers.jsx";
 import DailyEntryTab from "./components/DailyEntryTab.jsx";
-import DailyReports from "./components/DailyReports.jsx";
 
 // Modals
 import FinanceFormModal from "./modals/FinanceFormModal.jsx";
@@ -37,15 +36,6 @@ export default function DailyFinanceView({
     recentPayments: [],
   });
   const [daily, setDaily] = useState({ date: today(), customers: [] });
-  const [report, setReport] = useState(null);
-  const [reportRange, setReportRange] = useState({
-    from: today(),
-    to: today(),
-  });
-  const [reportCustomerId, setReportCustomerId] = useState("");
-  const [reportStatus, setReportStatus] = useState("");
-  const [reportSearch, setReportSearch] = useState("");
-  const [reportScope, setReportScope] = useState("all");
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerStatus, setCustomerStatus] = useState("");
   const [details, setDetails] = useState(null);
@@ -224,30 +214,7 @@ export default function DailyFinanceView({
     }
   };
 
-  const runReport = async (overrideRange, overrideScope) => {
-    try {
-      const activeRange = overrideRange || reportRange;
-      const activeScope = overrideScope !== undefined ? overrideScope : reportScope;
-      const params = {
-        from: activeRange.from,
-        to: activeRange.to,
-        scope: activeScope,
-      };
-      if (reportCustomerId) params.customerId = reportCustomerId;
-      if (reportStatus) params.status = reportStatus;
-      if (reportSearch) params.search = reportSearch;
-      const data = await dailyFinanceApi.getReports(params);
-      setReport(data);
-    } catch (error) {
-      setNotice?.({ type: "error", text: error.message });
-    }
-  };
 
-  useEffect(() => {
-    if (activeMenu === "Reports" && !report) {
-      runReport();
-    }
-  }, [activeMenu]);
 
   const filteredCustomers = useMemo(
     () =>
@@ -302,23 +269,7 @@ export default function DailyFinanceView({
         />
       )}
 
-      {activeMenu === "Reports" && (
-        <DailyReports
-          report={report}
-          runReport={runReport}
-          range={reportRange}
-          setRange={setReportRange}
-          scope={reportScope}
-          setScope={setReportScope}
-          customers={dashboard.customers}
-          customerId={reportCustomerId}
-          setCustomerId={setReportCustomerId}
-          status={reportStatus}
-          setStatus={setReportStatus}
-          search={reportSearch}
-          setSearch={setReportSearch}
-        />
-      )}
+
 
       {/* Modals */}
       {showAdd && (

@@ -17,11 +17,6 @@ export default function AutoCustomers({
     setSearch("");
   };
 
-  const totalFilteredCust = filteredCustomers.length;
-  const withPhone = filteredCustomers.filter((c) => Boolean(c.phone)).length;
-  const withEmail = filteredCustomers.filter((c) => Boolean(c.email)).length;
-  const uniqueCities = new Set(filteredCustomers.map((c) => c.city).filter(Boolean)).size;
-
   return (
     <section className="content">
       <div className="intro">
@@ -29,38 +24,6 @@ export default function AutoCustomers({
           <span className="overline autoBadgeTag">CUSTOMERS</span>
           <h2>Auto Finance Customer Directory</h2>
           <p>Manage customer profiles, contact info, and loan histories.</p>
-        </div>
-      </div>
-
-      {/* GRID ANALYTICS CARDS (DYNAMIC BASED ON FILTERS) */}
-      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "20px" }}>
-        <div className="metric autoMetric blue">
-          <span>{isFiltered ? "Filtered Customers" : "Total Customers"}</span>
-          <b>{totalFilteredCust}</b>
-          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
-            {isFiltered ? "Active filter directory" : "Registered profiles"}
-          </small>
-        </div>
-        <div className="metric autoMetric green">
-          <span>Phone Verified</span>
-          <b>{withPhone}</b>
-          <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            {totalFilteredCust > 0 ? Math.round((withPhone / totalFilteredCust) * 100) : 0}% Contactable
-          </small>
-        </div>
-        <div className="metric autoMetric teal">
-          <span>Email Listed</span>
-          <b>{withEmail}</b>
-          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Digital messaging
-          </small>
-        </div>
-        <div className="metric autoMetric orange">
-          <span>Cities / Towns</span>
-          <b>{uniqueCities}</b>
-          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Geographic coverage
-          </small>
         </div>
       </div>
 
@@ -145,13 +108,6 @@ export default function AutoCustomers({
           )}
         </div>
 
-        <button
-          className="primary autoBtn"
-          style={{ background: "#059669", borderColor: "#059669", display: "inline-flex", alignItems: "center", gap: "6px" }}
-          onClick={handleExportCustomers}
-        >
-          <Download size={15} /> Export Customers (Excel) ({filteredCustomers.length})
-        </button>
       </div>
 
       <div className="card tableWrap">

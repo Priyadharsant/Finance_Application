@@ -81,9 +81,9 @@ export default function PartnerManagement({
           <button
             className="secondaryBtn"
             onClick={() => exportPartnerBalances(filteredPartners)}
-            title="Export Filtered Partner Capital Report to Excel"
+            title="Download partner report to Excel"
           >
-            <Download size={16} /> Export Report (Excel){filteredPartners.length < (partners?.length || 0) ? ` (${filteredPartners.length})` : ""}
+            <Download size={16} /> Download Excel{filteredPartners.length < (partners?.length || 0) ? ` (${filteredPartners.length})` : ""}
           </button>
           <button
             className="primaryBtn"
@@ -101,18 +101,18 @@ export default function PartnerManagement({
           <small>Total registered: {partners.length}</small>
         </div>
         <div>
-          <span>Current Available Capital</span>
+          <span>Current Partner Balance</span>
           <strong style={{ color: "#0f766e" }}>
             {money(totalAvailableCapital)}
           </strong>
-          <small>Filtered available capital</small>
+          <small>Active partner balance</small>
         </div>
         <div>
-          <span>Total Withdrawn (Out)</span>
+          <span>Total Withdrawn</span>
           <strong style={{ color: "#e11d48" }}>
             -{money(totalWithdrawn)}
           </strong>
-          <small>Lifetime withdrawals</small>
+          <small>Total money withdrawn</small>
         </div>
       </div>
 
@@ -215,7 +215,7 @@ export default function PartnerManagement({
             </span>
           </div>
           <span style={{ fontSize: "12px", color: "#64748b" }}>
-            💡 Click any partner row to open full dossier &amp; transaction history
+            💡 Click any partner to view details &amp; account history
           </span>
         </div>
         <div className="tableResponsive">
@@ -224,7 +224,7 @@ export default function PartnerManagement({
               <tr>
                 <th>Partner &amp; Contact</th>
                 <th style={{ textAlign: "right" }}>Total Out</th>
-                <th style={{ textAlign: "right" }}>Current Available Capital</th>
+                <th style={{ textAlign: "right" }}>Current Balance</th>
                 <th style={{ textAlign: "center", width: "220px" }}>Actions</th>
               </tr>
             </thead>
@@ -233,7 +233,7 @@ export default function PartnerManagement({
                 <tr
                   className="clickable globalClickableRow"
                   key={p.id}
-                  title="Click to view full partner dossier"
+                  title="Click to view partner details"
                   onClick={() =>
                     onSelectRecord({ type: "partner", record: p })
                   }

@@ -156,7 +156,7 @@ export default function AutoReports({
           <span className="overline autoBadgeTag">REPORTS</span>
           <h2>Auto Finance Financial Reports</h2>
           <p>
-            Period vehicle loan disbursements, EMI recovery audit, and single-click Excel export.
+            Track vehicle loans, EMI collections, and download Excel reports.
           </p>
         </div>
 
@@ -226,12 +226,12 @@ export default function AutoReports({
           value={scope}
           onChange={(e) => setScope(e.target.value)}
           style={{ fontWeight: "600" }}
-          title="Filter by portfolio view scope"
+          title="Filter by account view scope"
         >
-          <option value="all">View: All Portfolio Accounts</option>
+          <option value="all">View: All Accounts</option>
           <option value="active">View: Active Loans Only</option>
           <option value="completed">View: Settled / Completed Loans Only</option>
-          <option value="disbursed">View: Loans Disbursed in Period Only</option>
+          <option value="disbursed">View: Loans Given in Period Only</option>
         </select>
 
         {/* Search Input */}

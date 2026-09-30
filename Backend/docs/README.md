@@ -12,6 +12,7 @@ This directory contains complete SQL files with all local database tables and da
 | [`finance_data_inserts.sql`](./finance_data_inserts.sql) | **Data-Only Insert Script**<br>Contains clean `INSERT INTO table (...) VALUES (...)` statements with replication role bypass. | Use when tables **already exist** in your database and you only want to populate/insert all local records. |
 | [`export-database.js`](./export-database.js) | Node export utility script that dumps local DB data into clean, compatible SQL files. | Use anytime you want to refresh/re-export local DB data. |
 | [`import-database.js`](./import-database.js) | Node import utility script to apply the SQL files to any target database. | Run to import data into local or remote databases. |
+| [`reset-database.js`](./reset-database.js) | Node script that truncates all tables and resets sequences without dropping tables. | Run `pnpm db:reset` or `npm run db:reset` to clear all data. |
 
 > **Note:** These files are also mirrored in the project root [`docs/`](../../docs/) folder.
 

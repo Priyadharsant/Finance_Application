@@ -97,6 +97,19 @@ export const exportTotalDailyPortfolio = (customers = []) => {
     return;
   }
 
+  // Sort by active, completed, then alphabet
+  const sorted = [...customers].sort((a, b) => {
+    const statusA = String(a.status || "ACTIVE").toUpperCase();
+    const statusB = String(b.status || "ACTIVE").toUpperCase();
+    const getPrio = (st) => (st === "ACTIVE" ? 1 : (st === "COMPLETED" ? 2 : 3));
+    const pA = getPrio(statusA);
+    const pB = getPrio(statusB);
+    if (pA !== pB) return pA - pB;
+    const nameA = String(a.customer_name || "").toLowerCase();
+    const nameB = String(b.customer_name || "").toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
   let totalGross = 0;
   let totalDeduction = 0;
   let totalDisbursed = 0;
@@ -104,13 +117,13 @@ export const exportTotalDailyPortfolio = (customers = []) => {
   let totalCollected = 0;
   let totalRemaining = 0;
 
-  const rows = customers.map((c, idx) => {
+  const rows = sorted.map((c, idx) => {
     const gross = Number(c.gross_finance_amount || 0);
     const deduction = Number(c.initial_deduction || 0);
-    const disbursed = Number(c.net_disbursement || 0);
-    const agreed = Number(c.agreed_total_payable || 0);
+    const disbursed = Number(c.net_disbursement || (gross - deduction));
+    const agreed = Number(c.agreed_total_payable || gross);
     const collected = Number(c.total_collected || 0);
-    const remaining = Number(c.outstanding_receivable ?? c.remaining ?? (agreed - collected));
+    const remaining = Number(c.outstanding_receivable ?? c.remaining ?? Math.max(0, agreed - collected));
 
     totalGross += gross;
     totalDeduction += deduction;
@@ -119,48 +132,34 @@ export const exportTotalDailyPortfolio = (customers = []) => {
     totalCollected += collected;
     totalRemaining += remaining;
 
-    const progressPct = agreed > 0 ? ((collected / agreed) * 100).toFixed(1) + "%" : "0%";
-
     return {
-      "S.No": idx + 1,
-      "Customer Name": c.customer_name || "—",
-      "Mobile Number": c.mobile_number || "—",
-      "Address": c.address || "—",
-      "Finance Date": dateLabel(c.finance_date),
-      "Gross Finance (₹)": gross,
-      "Upfront Interest (₹)": deduction,
-      "Net Disbursed (₹)": disbursed,
-      "Agreed Total Return (₹)": agreed,
-      "Total Collected (₹)": collected,
-      "Remaining Balance (₹)": remaining,
-      "Recovery %": progressPct,
-      "Profit (₹)": deduction,
+      "Sl": idx + 1,
+      "Name": c.customer_name || "—",
+      "Total Loan": gross,
+      "Pitibu": deduction,
+      "By hand": disbursed,
+      "Income": agreed,
+      "Vasul": collected,
+      "Balance": remaining,
       "Status": c.status || "ACTIVE",
-      "Notes": c.notes || "",
     };
   });
 
   // Summary Row
   rows.push({
-    "S.No": "TOTAL",
-    "Customer Name": "PORTFOLIO TOTALS",
-    "Mobile Number": `Accounts: ${customers.length}`,
-    "Address": "",
-    "Finance Date": "",
-    "Gross Finance (₹)": totalGross,
-    "Upfront Interest (₹)": totalDeduction,
-    "Net Disbursed (₹)": totalDisbursed,
-    "Agreed Total Return (₹)": totalAgreed,
-    "Total Collected (₹)": totalCollected,
-    "Remaining Balance (₹)": totalRemaining,
-    "Recovery %": totalAgreed > 0 ? ((totalCollected / totalAgreed) * 100).toFixed(1) + "%" : "0%",
-    "Profit (₹)": totalDeduction,
-    "Status": "ALL",
-    "Notes": "",
+    "Sl": "TOTAL",
+    "Name": `${sorted.length} Customers`,
+    "Total Loan": totalGross,
+    "Pitibu": totalDeduction,
+    "By hand": totalDisbursed,
+    "Income": totalAgreed,
+    "Vasul": totalCollected,
+    "Balance": totalRemaining,
+    "Status": "",
   });
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  exportToExcel(rows, `Daily_Finance_Total_Portfolio_${todayStr}`, "Portfolio Summary");
+  exportToExcel(rows, `Daily_Finance_Total_Loans_${todayStr}`, "Daily Loans");
 };
 
 /**

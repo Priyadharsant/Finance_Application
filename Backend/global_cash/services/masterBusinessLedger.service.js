@@ -40,6 +40,28 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
   `;
   const dfPaymentsRes = await client.query(dfPaymentsQuery);
 
+  // Fetch all daily individual collections for detailed collection sheets
+  const dfCollectionsQuery = `
+    SELECT 
+      p.payment_id,
+      p.finance_id,
+      p.customer_id,
+      c.customer_name,
+      p.collection_date,
+      p.amount,
+      p.payment_method,
+      p.notes,
+      a.gross_finance_amount,
+      a.agreed_total_payable,
+      a.status as account_status
+    FROM daily_finance_payments p
+    JOIN daily_finance_customers c ON p.customer_id = c.customer_id
+    JOIN daily_finance_accounts a ON p.finance_id = a.finance_id
+    WHERE p.status <> 'VOID' AND a.status <> 'CANCELLED'
+    ORDER BY c.customer_name ASC, p.collection_date ASC, p.created_at ASC;
+  `;
+  const dfCollectionsRes = await client.query(dfCollectionsQuery);
+
   // Collect all unique collection months
   const monthMap = {};
   const distinctMonths = [];
@@ -120,6 +142,27 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     ORDER BY l.start_date ASC, l.created_at ASC;
   `;
   const autoLoansRes = await client.query(autoLoansQuery);
+
+  // Fetch all auto loan individual payment/collection logs
+  const autoCollectionsQuery = `
+    SELECT 
+      p.id as payment_id,
+      p.loan_id,
+      c.first_name,
+      c.last_name,
+      TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))) as customer_name,
+      p.payment_date,
+      p.amount_paid as amount,
+      p.payment_method,
+      p.reference_number,
+      l.loan_amount,
+      l.status as loan_status
+    FROM autofinance_payments p
+    JOIN autofinance_loans l ON p.loan_id = l.id
+    JOIN autofinance_customers c ON l.customer_id = c.id
+    ORDER BY customer_name ASC, p.payment_date ASC, p.created_at ASC;
+  `;
+  const autoCollectionsRes = await client.query(autoCollectionsQuery);
 
   const autoLoansList = autoLoansRes.rows.map((l, idx) => {
     let fees = {};
@@ -241,7 +284,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       p.name,
       p.status,
       COALESCE((
-        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'PROFIT_SHARE') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END)
+        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END)
         FROM partner_capital_transactions
         WHERE partner_id = p.id AND status = 'COMPLETED'
       ), 0) as current_capital,
@@ -365,6 +408,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     distinctMonths,
     dailyFinance: {
       loans: dailyLoansList,
+      collections: dfCollectionsRes.rows,
       totals: {
         ...dfTotals,
         balancePlusIncome: dfTotals.balance + dfTotals.income,
@@ -374,6 +418,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     },
     autoFinance: {
       loans: autoLoansList,
+      collections: autoCollectionsRes.rows,
       totals: {
         ...autoTotals,
         dTaHpInsuFc: autoTotals.document + autoTotals.ta + autoTotals.hp + autoTotals.insurance + autoTotals.fcSelavu,

@@ -59,7 +59,7 @@ export default function CustomerDetailsModal({
                 cursor: "pointer",
               }}
               onClick={() => exportCustomerStatement(customer, data.collections)}
-              title="Download customer loan dossier & complete payment statement in Excel (.xlsx)"
+              title="Download customer statement & loan details in Excel (.xlsx)"
             >
               <FileSpreadsheet size={15} /> Statement (Excel)
             </button>

@@ -612,7 +612,7 @@ export const exportMasterFinancialReport = ({
 
   const summarySheetData = [
     { Metric: "Report Generated On", Value: new Date().toLocaleString("en-IN") },
-    { Metric: "Report Scope", Value: "Complete Multi-Module Audit (All Passed Months & Active Portfolios)" },
+    { Metric: "Report Scope", Value: "All Modules (Auto Finance, Daily Finance, Global Capital)" },
     { Metric: "Total Active Partners", Value: partners.length },
     { Metric: "Total Active Capital Balance (₹)", Value: totalPartnerCapital },
     { Metric: "Total Capital Contributed (₹)", Value: totalContributed },
@@ -935,19 +935,19 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
   const currentDailyInHandMaster = Number(dfTotals.kaieruppu || totalDfIncome || 0);
   const nextMonthDailyProjMaster = currentDailyInHandMaster + Math.round(totalDfIncome / (distinctMonths.length || 1));
   sheet1Data.push([]);
-  sheet1Data.push(["FORWARD CASH FLOW & NEXT MONTH PROJECTIONS", "AMOUNT (₹)"]);
-  sheet1Data.push(["Current In-Hand Cash (Opening balance for next month)", currentDailyInHandMaster]);
-  sheet1Data.push(["Next Month Projected Amount (In-Hand + Next Month Vasul)", nextMonthDailyProjMaster]);
+  sheet1Data.push(["NEXT MONTH ESTIMATE", "AMOUNT (₹)"]);
+  sheet1Data.push(["Current In-Hand Cash", currentDailyInHandMaster]);
+  sheet1Data.push(["Next Month Estimated Total", nextMonthDailyProjMaster]);
 
   sheet1Data.push([]);
-  sheet1Data.push(["MASTER PORTFOLIO RECONCILIATION", "AMOUNT (₹)"]);
+  sheet1Data.push(["CASH & CAPITAL SUMMARY", "AMOUNT (₹)"]);
   sheet1Data.push(["Daily Finance Cash in Hand (Kaieruppu)", Number(recon.dlKaieruppu || dfTotals.kaieruppu || 0)]);
   sheet1Data.push(["Auto Finance Cash in Hand (IRUPPU)", Number(recon.autoKaieruppu || autoTotals.iruppu || 0)]);
-  sheet1Data.push(["Total Combined Physical Cash", Number(recon.totalKaieruppu || 0)]);
-  sheet1Data.push(["Total Active Partner Investment", Number(recon.investment || totalInvestment || 0)]);
-  sheet1Data.push(["Total Capital Disbursed Across Loans", Number(recon.loanDistribut || (Number(dfTotals.distrubut || 0) + Number(autoTotals.distribut || 0)))]);
-  sheet1Data.push(["Capital Deployment Variance / Difference", Number(recon.difference || 0)]);
-  sheet1Data.push(["Liquid Cash + Capital Variance", Number(recon.kaiEruppuPlusDifference || 0)]);
+  sheet1Data.push(["Total Cash in Hand", Number(recon.totalKaieruppu || 0)]);
+  sheet1Data.push(["Total Partner Investment", Number(recon.investment || totalInvestment || 0)]);
+  sheet1Data.push(["Total Loans Given", Number(recon.loanDistribut || (Number(dfTotals.distrubut || 0) + Number(autoTotals.distribut || 0)))]);
+  sheet1Data.push(["Capital Difference", Number(recon.difference || 0)]);
+  sheet1Data.push(["Cash + Difference", Number(recon.kaiEruppuPlusDifference || 0)]);
 
   const wsSheet1 = XLSX.utils.aoa_to_sheet(sheet1Data);
   autoFitColumns(wsSheet1);
@@ -1065,13 +1065,11 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
   const sheet3Data = [];
   sheet3Data.push([
     "S.No", "Partner Name", "Base Capital (₹)", "Current Capital (₹)", "Total Contributed (₹)",
-    "Total Withdrawn (₹)", "Profit Credited (₹)", "Equity Share (%)", "Status"
+    "Total Withdrawn (₹)", "Status"
   ]);
 
   partners.forEach((p, idx) => {
     const pCap = Number(p.capital ?? p.current_capital ?? 0);
-    const pool = totalInvestment > 0 ? totalInvestment : sumCurrent;
-    const share = pool > 0 ? ((pCap / pool) * 100).toFixed(2) + "%" : "0.00%";
     sheet3Data.push([
       idx + 1,
       p.name || p.partner_name || "—",
@@ -1079,14 +1077,12 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
       pCap,
       Number(p.contributed ?? p.total_contributed ?? 0),
       Number(p.withdrawn ?? p.total_withdrawn ?? 0),
-      Number(p.profit ?? p.profit_earned ?? 0),
-      share,
       p.status || "ACTIVE"
     ]);
   });
 
   sheet3Data.push([
-    "", "TOTAL", sumBase, totalInvestment || sumCurrent, sumContributed, sumWithdrawn, sumProfit, "100.00%", `${partners.length} Partners`
+    "", "TOTAL", sumBase, totalInvestment || sumCurrent, sumContributed, sumWithdrawn, `${partners.length} Partners`
   ]);
 
   sheet3Data.push([]);
@@ -1168,134 +1164,80 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
 // ============================================================================
 // 11. DEDICATED AUTO FINANCE REPORT (EXECUTIVE 4-SHEET WORKBOOK)
 // ============================================================================
+// HELPER: Sort Loans by Status (Active first, then Completed/Closed) then Name
+// ============================================================================
+export const sortLoansByStatusAndName = (loans = []) => {
+  return [...loans].sort((a, b) => {
+    const statusA = String(a.status || a.loan_status || a.account_status || "ACTIVE").toUpperCase();
+    const statusB = String(b.status || b.loan_status || b.account_status || "ACTIVE").toUpperCase();
+    const getPrio = (st) => (st === "ACTIVE" ? 1 : (st === "COMPLETED" ? 2 : 3));
+    const pA = getPrio(statusA);
+    const pB = getPrio(statusB);
+    if (pA !== pB) return pA - pB;
+
+    const nameA = String(
+      a.customerName || a.customer_name || `${a.first_name || ""} ${a.last_name || ""}`.trim() || ""
+    ).toLowerCase();
+    const nameB = String(
+      b.customerName || b.customer_name || `${b.first_name || ""} ${b.last_name || ""}`.trim() || ""
+    ).toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+};
+
+const formatDate = (val) => {
+  if (!val) return "—";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val).slice(0, 10);
+    return d.toISOString().slice(0, 10);
+  } catch (_) {
+    return String(val).slice(0, 10);
+  }
+};
+
+// ============================================================================
+// 11. DEDICATED AUTO FINANCE REPORT (3 ESSENTIAL SHEETS)
+// Sheet 1: Portfolio (Sl, Name, Total Loan, Pitibu, By hand, Income, Vasul, Balance, Status)
+// Sheet 2: Collections (Sl, Name, Date, Collection Amount, Balance, Total)
+// Sheet 3: Expenses (Auto expenses only)
+// ============================================================================
 export const exportAutoCategoryReport = (reportData, additionalData = {}, customFileName) => {
   const autoData = reportData?.autoFinance || {};
-  const autoLoans = autoData.loans || additionalData.loans || [];
   const autoTotals = autoData.totals || {};
+  const autoLoans = autoData.loans || additionalData.loans || [];
+  const autoCollections = autoData.collections || additionalData.collections || [];
   const allExpenses = reportData?.expenses?.items || additionalData.expenses || [];
 
   const workbook = XLSX.utils.book_new();
+  const sortedLoans = sortLoansByStatusAndName(autoLoans);
 
-  const totalLoanAmt = autoLoans.reduce((sum, l) => sum + Number(l.loanAmount || l.loan_amount || 0), 0);
-  const totalRepayable = autoLoans.reduce((sum, l) => sum + Number(l.totalAmount || l.total_payable || l.loanAmount || 0), 0);
-  const totalRecovered = autoLoans.reduce((sum, l) => sum + Number(l.incomeCollected || l.total_collected || l.total_paid || 0), 0);
-  const totalDeductions = autoLoans.reduce((sum, l) => sum + Number(l.totalDeductions || 0), 0);
-  const totalInHand = autoLoans.reduce((sum, l) => sum + Number(l.byHand || (Number(l.loanAmount || 0) - Number(l.totalDeductions || 0))), 0);
-  const totalInterest = Math.max(0, totalRepayable - totalLoanAmt);
-  const totalBrokerage = autoLoans.reduce((sum, l) => sum + Number(l.broker || 0), 0);
-
-  // -------------------------------------------------------------
-  // SHEET 1: Auto Finance Ledger & Reconciliation
-  // -------------------------------------------------------------
-  const sheetData = [];
-  sheetData.push([
-    "S.No", "Date", "Customer Name", "Vehicle Details", "Principal Loan (₹)", "Interest Rate (%)", "Total Repayable (₹)",
-    "In Hand Disbursed (₹)", "Broker Name", "Brokerage (₹)", "Charges Description", "Doc Charges (₹)", "HP Charges (₹)",
-    "TA Charges (₹)", "Insurance (₹)", "IF (₹)", "GT (₹)", "Fine (₹)", "NT (₹)", "Permit (₹)", "Total Deductions (₹)",
-    "FC & Insurance Selavu (₹)", "Collected / Recovered (₹)", "Balance Due (₹)"
-  ]);
-
-  autoLoans.forEach((r, idx) => {
-    const lPrincipal = Number(r.loanAmount || r.loan_amount || 0);
-    const lTotal = Number(r.totalAmount || r.total_payable || lPrincipal);
-    const lCollected = Number(r.incomeDue || r.incomeCollected || r.total_collected || 0);
-    const lBalance = Math.max(0, lTotal - lCollected);
-    sheetData.push([
-      idx + 1,
-      r.date || "—",
-      r.customerName || `${r.first_name || ""} ${r.last_name || ""}`.trim() || "—",
-      r.vehicle || `${r.make || ""} ${r.model || ""}`.trim() || "—",
-      lPrincipal,
-      r.interestRate || r.interest_rate || "—",
-      lTotal,
-      Number(r.byHand || (lPrincipal - Number(r.totalDeductions || 0))),
-      r.brokerName || "—",
-      Number(r.broker || 0),
-      r.chargesDescription || "—",
-      Number(r.document || 0),
-      Number(r.hp || 0),
-      Number(r.ta || 0),
-      Number(r.insurance || 0),
-      Number(r.if || 0),
-      Number(r.gt || 0),
-      Number(r.fine || 0),
-      Number(r.nt || 0),
-      Number(r.permit || 0),
-      Number(r.totalDeductions || 0),
-      Number(r.selavuFcInsur || 0),
-      lCollected,
-      lBalance
-    ]);
-  });
-
+  const totalLoanAmt = sortedLoans.reduce((sum, l) => sum + Number(l.loanAmount || l.loan_amount || 0), 0);
+  const totalRepayable = sortedLoans.reduce((sum, l) => sum + Number(l.totalAmount || l.total_payable || l.loanAmount || l.loan_amount || 0), 0);
+  const totalRecovered = sortedLoans.reduce((sum, l) => sum + Number(l.incomeCollected || l.total_collected || l.total_paid || 0), 0);
+  const totalDeductions = sortedLoans.reduce((sum, l) => sum + Number(l.totalDeductions || 0), 0);
+  const totalInHand = sortedLoans.reduce((sum, l) => sum + Number(l.byHand || (Number(l.loanAmount || l.loan_amount || 0) - Number(l.totalDeductions || 0))), 0);
   const totalBalDue = Math.max(0, totalRepayable - totalRecovered);
-  sheetData.push([
-    "", "", "TOTAL", "",
-    autoTotals.totalLoan || totalLoanAmt,
-    "",
-    autoTotals.totalLoanWithInterest || totalRepayable,
-    autoTotals.distribut || totalInHand,
-    "",
-    autoTotals.broker || totalBrokerage,
-    "",
-    autoTotals.document || 0,
-    autoTotals.hp || 0,
-    autoTotals.ta || 0,
-    autoTotals.insurance || 0,
-    autoTotals.if || 0,
-    autoTotals.gt || 0,
-    autoTotals.fine || 0,
-    autoTotals.nt || 0,
-    autoTotals.permit || 0,
-    autoTotals.totalCharges || totalDeductions,
-    autoTotals.fcSelavu || 0,
-    autoTotals.loanIncome || totalRecovered,
-    totalBalDue
-  ]);
+  const totalBrokerage = sortedLoans.reduce((sum, l) => sum + Number(l.broker || 0), 0);
 
-  sheetData.push([]);
-  sheetData.push(["AUTO FINANCE CASH FLOW & IRUPPU RECONCILIATION", "AMOUNT (₹)", "DETAILS / FORMULA"]);
-  sheetData.push(["Total Loan Principal Sanctioned", Number(autoTotals.totalLoan || totalLoanAmt), "Gross principal approved across portfolio"]);
-  sheetData.push(["Total Contractual Repayable Amount", Number(autoTotals.totalLoanWithInterest || totalRepayable), "Principal plus total interest receivables"]);
-  sheetData.push(["Total Auto Interest Accrued", Number(autoTotals.autoInterest || totalInterest), "Contractual interest earnings"]);
-  sheetData.push(["Total Net Disbursed (In Hand)", Number(autoTotals.distribut || totalInHand), "Actual liquid cash handed to borrowers"]);
-  sheetData.push(["Total Upfront Fees & Deductions", Number(autoTotals.totalCharges || totalDeductions), "Document, HP, TA, insurance, and permit deductions"]);
-  sheetData.push(["Total Loan Income Recovered", Number(autoTotals.loanIncome || totalRecovered), "Liquid cash recovered from customer dues"]);
-  sheetData.push(["Total FC & Insurance Expenses", Number(autoTotals.fcSelavu || 0), "Direct vehicle clearance operational expenses"]);
-  sheetData.push(["Total Brokerage Paid", Number(autoTotals.broker || totalBrokerage), "Direct commission paid to auto brokers"]);
-  sheetData.push(["Operating Overhead (Salary, Rent, Car)", Number(autoTotals.expensesSaleryRentCar || 0), "Auto operational overhead disbursements"]);
-  sheetData.push(["Closing Cash in Hand (IRUPPU)", Number(autoTotals.iruppu || 0), "Net verified physical and bank cash in hand"]);
-
-  const activeLoans = autoLoans.filter(l => (l.status || "ACTIVE").toUpperCase() === "ACTIVE");
+  const activeLoans = sortedLoans.filter(l => (l.status || "ACTIVE").toUpperCase() === "ACTIVE");
   const nextMonthActiveEmis = activeLoans.reduce((sum, l) => {
     const loanAmt = Number(l.loanAmount || l.loan_amount || 0);
     const totAmt = Number(l.totalAmount || l.total_payable || loanAmt);
     const tenure = Number(l.tenureMonths || l.tenure_months || 0);
     const scheduledEmi = tenure > 0 ? Math.round(totAmt / tenure) : 0;
-    const emi = Number(l.monthly_installment || l.emi_amount || scheduledEmi || (loanAmt * 0.1));
+    const emi = Number(l.monthly_installment || l.emi_amount || scheduledEmi || 0);
     return sum + emi;
   }, 0);
 
-  // Exact metrics as shown on Auto Dashboard:
-  // "Current In-Hand Cash" (Opening balance for next month)
-  const currentInHandCash = Number(totalRecovered || autoTotals.iruppu || 0);
-  // "Next Month Projected Amount" (In-Hand + Next Month EMIs)
-  const nextMonthProjectedAmount = currentInHandCash + nextMonthActiveEmis;
-
-  sheetData.push([]);
-  sheetData.push(["FORWARD CASH FLOW & NEXT MONTH PROJECTIONS", "AMOUNT (₹)", "DETAILS / SUBTITLE"]);
-  sheetData.push(["Current In-Hand Cash", currentInHandCash, "Opening balance for next month"]);
-  sheetData.push(["Next Month Active EMIs Recovery", nextMonthActiveEmis, `${activeLoans.length} Active vehicle loans monthly EMI expected`]);
-  sheetData.push(["Next Month Projected Amount", nextMonthProjectedAmount, "In-Hand + Next Month EMIs"]);
-
-  const ws1 = XLSX.utils.aoa_to_sheet(sheetData);
-  autoFitColumns(ws1);
-  XLSX.utils.book_append_sheet(workbook, ws1, "Auto Finance Ledger");
-
   // -------------------------------------------------------------
-  // SHEET 2: Vehicle Loans Portfolio
+  // SHEET 1: Vehicle Loans Portfolio (Previous Portfolio Columns, NO ID column)
+  // Columns: Sl, Disbursement Date, Customer Name, Mobile Number, Vehicle Make/Model,
+  // Registration Number, Loan Principal (₹), Interest Rate (%), Tenure (Months),
+  // Monthly EMI (₹), Agreed Total Amount (₹), Total Deductions (₹), In-Hand Disbursed (₹),
+  // Total Recovered (₹), Balance Pending (₹), Broker Name, Brokerage (₹), Loan Status
   // -------------------------------------------------------------
-  const portfolioRows = autoLoans.map((l, idx) => {
+  const portfolioRows = sortedLoans.map((l, idx) => {
     const loanAmt = Number(l.loanAmount || l.loan_amount || 0);
     const totAmt = Number(l.totalAmount || l.total_payable || loanAmt);
     const recAmt = Number(l.incomeCollected || l.total_collected || l.total_paid || 0);
@@ -1305,12 +1247,12 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
     const tenure = Number(l.tenureMonths || l.tenure_months || 0);
     const scheduledEmi = tenure > 0 ? Math.round(totAmt / tenure) : 0;
     const emi = Number(l.monthly_installment || l.emi_amount || scheduledEmi || 0);
+    const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
 
     return {
-      "S.No": idx + 1,
-      "Loan ID": l.id || l.loan_id || `AL-${idx + 1}`,
-      "Disbursement Date": l.date || l.start_date || "—",
-      "Customer Name": l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—",
+      "Sl": idx + 1,
+      "Disbursement Date": formatDate(l.date || l.start_date),
+      "Customer Name": custName,
       "Mobile Number": l.phone || l.mobile_number || "—",
       "Vehicle Make/Model": l.vehicle || `${l.make || ""} ${l.model || ""}`.trim() || "—",
       "Registration Number": l.regNo || l.registration_number || "PENDING",
@@ -1329,482 +1271,604 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
     };
   });
 
-  if (portfolioRows.length > 0) {
-    portfolioRows.push({
-      "S.No": "",
-      "Loan ID": "TOTAL",
-      "Disbursement Date": "",
-      "Customer Name": `${autoLoans.length} Loans`,
-      "Mobile Number": "",
-      "Vehicle Make/Model": "",
-      "Registration Number": "",
-      "Loan Principal (₹)": totalLoanAmt,
-      "Interest Rate (%)": "",
-      "Tenure (Months)": "",
-      "Monthly EMI (₹)": nextMonthActiveEmis,
-      "Agreed Total Amount (₹)": totalRepayable,
-      "Total Deductions (₹)": totalDeductions,
-      "In-Hand Disbursed (₹)": totalInHand,
-      "Total Recovered (₹)": totalRecovered,
-      "Balance Pending (₹)": totalBalDue,
-      "Broker Name": "",
-      "Brokerage (₹)": totalBrokerage,
-      "Loan Status": "",
-    });
-  }
+  const sheet1Data = [];
+  sheet1Data.push([
+    "Sl", "Disbursement Date", "Customer Name", "Mobile Number", "Vehicle Make/Model",
+    "Registration Number", "Loan Principal (₹)", "Interest Rate (%)", "Tenure (Months)",
+    "Monthly EMI (₹)", "Agreed Total Amount (₹)", "Total Deductions (₹)", "In-Hand Disbursed (₹)",
+    "Total Recovered (₹)", "Balance Pending (₹)", "Broker Name", "Brokerage (₹)", "Loan Status"
+  ]);
 
-  const ws2 = XLSX.utils.json_to_sheet(portfolioRows.length ? portfolioRows : [{ Message: "No vehicle loans on record." }]);
-  autoFitColumns(ws2, portfolioRows);
-  XLSX.utils.book_append_sheet(workbook, ws2, "Vehicle Loans Portfolio");
-
-  // -------------------------------------------------------------
-  // SHEET 3: EMI Recovery Schedule
-  // -------------------------------------------------------------
-  let totalEmiSum = 0;
-  let totalRecSum = 0;
-  let totalPendSum = 0;
-
-  const emiRows = autoLoans.map((l, idx) => {
-    const loanAmt = Number(l.loanAmount || l.loan_amount || 0);
-    const totAmt = Number(l.totalAmount || l.total_payable || loanAmt);
-    const tenure = Number(l.tenureMonths || l.tenure_months || 1);
-    const emi = tenure > 0 ? Math.round(totAmt / tenure) : 0;
-    const recAmt = Number(l.incomeCollected || l.total_collected || l.total_paid || 0);
-    const duesPaid = emi > 0 ? Math.floor(recAmt / emi) : 0;
-    const duesPending = Math.max(0, tenure - duesPaid);
-    const pendAmt = Math.max(0, totAmt - recAmt);
-
-    totalEmiSum += emi;
-    totalRecSum += recAmt;
-    totalPendSum += pendAmt;
-
-    return {
-      "S.No": idx + 1,
-      "Loan ID": l.id || l.loan_id || `AL-${idx + 1}`,
-      "Customer Name": l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—",
-      "Vehicle": l.vehicle || `${l.make || ""} ${l.model || ""}`.trim() || "—",
-      "Reg No": l.regNo || l.registration_number || "—",
-      "Monthly EMI (₹)": emi,
-      "Tenure (Months)": tenure,
-      "Dues Paid": duesPaid,
-      "Dues Pending": duesPending,
-      "Total Collected (₹)": recAmt,
-      "Total Pending (₹)": pendAmt,
-      "Recovery Status": l.status || "ACTIVE",
-    };
+  portfolioRows.forEach((r) => {
+    sheet1Data.push([
+      r["Sl"], r["Disbursement Date"], r["Customer Name"], r["Mobile Number"], r["Vehicle Make/Model"],
+      r["Registration Number"], r["Loan Principal (₹)"], r["Interest Rate (%)"], r["Tenure (Months)"],
+      r["Monthly EMI (₹)"], r["Agreed Total Amount (₹)"], r["Total Deductions (₹)"], r["In-Hand Disbursed (₹)"],
+      r["Total Recovered (₹)"], r["Balance Pending (₹)"], r["Broker Name"], r["Brokerage (₹)"], r["Loan Status"]
+    ]);
   });
 
-  if (emiRows.length > 0) {
-    emiRows.push({
-      "S.No": "",
-      "Loan ID": "TOTAL",
-      "Customer Name": "",
-      "Vehicle": "",
-      "Reg No": "",
-      "Monthly EMI (₹)": totalEmiSum,
-      "Tenure (Months)": "",
-      "Dues Paid": "",
-      "Dues Pending": "",
-      "Total Collected (₹)": totalRecSum,
-      "Total Pending (₹)": totalPendSum,
-      "Recovery Status": "",
-    });
-    emiRows.push({
-      "S.No": "",
-      "Loan ID": "PROJECTION",
-      "Customer Name": "Current In-Hand Cash (Opening balance for next month)",
-      "Vehicle": "",
-      "Reg No": "",
-      "Monthly EMI (₹)": currentInHandCash,
-      "Tenure (Months)": "",
-      "Dues Paid": "",
-      "Dues Pending": "",
-      "Total Collected (₹)": currentInHandCash,
-      "Total Pending (₹)": "",
-      "Recovery Status": "IN-HAND CASH",
-    });
-    emiRows.push({
-      "S.No": "",
-      "Loan ID": "PROJECTION",
-      "Customer Name": "Next Month Projected Amount (In-Hand + Next Month EMIs)",
-      "Vehicle": "",
-      "Reg No": "",
-      "Monthly EMI (₹)": nextMonthProjectedAmount,
-      "Tenure (Months)": "",
-      "Dues Paid": "",
-      "Dues Pending": "",
-      "Total Collected (₹)": nextMonthProjectedAmount,
-      "Total Pending (₹)": "",
-      "Recovery Status": "PROJECTED LIQUIDITY",
+  if (portfolioRows.length > 0) {
+    sheet1Data.push([
+      "TOTAL", "", `${sortedLoans.length} Loans`, "", "",
+      "", totalLoanAmt, "", "",
+      nextMonthActiveEmis, totalRepayable, totalDeductions, totalInHand,
+      totalRecovered, totalBalDue, "", totalBrokerage, ""
+    ]);
+  }
+
+  // -------------------------------------------------------------
+  // AUTO FINANCE RECONCILIATION SUMMARY (From Image 1)
+  // -------------------------------------------------------------
+  const fcSelavu = Number(autoTotals.fcSelavu || 0);
+  const brokerSelavu = Number(autoTotals.broker || totalBrokerage || 0);
+  const overheadSelavu = Number(autoTotals.expensesSaleryRentCar || 0);
+  const totalAutoSelavu = Number(autoTotals.totalSelavu || (fcSelavu + brokerSelavu + overheadSelavu));
+  const autoIruppu = Number(autoTotals.iruppu ?? (totalRecovered - totalAutoSelavu));
+
+  sheet1Data.push([]);
+  sheet1Data.push(["AUTO SUMMARY", "AMOUNT (₹)"]);
+  sheet1Data.push(["Total Loan Principal", totalLoanAmt]);
+  sheet1Data.push(["Total Loan + Interest", totalRepayable]);
+  sheet1Data.push(["Auto Interest", Math.max(0, totalRepayable - totalLoanAmt)]);
+  sheet1Data.push(["Loan Income (Recovered)", totalRecovered]);
+  sheet1Data.push(["Total Deductions", totalDeductions]);
+  sheet1Data.push(["Net Disbursed In-Hand", totalInHand]);
+  sheet1Data.push(["FC Selavu", fcSelavu]);
+  sheet1Data.push(["Brokerage Paid", brokerSelavu]);
+  sheet1Data.push(["Overhead Expenses", overheadSelavu]);
+  sheet1Data.push(["Total Auto Selavu", totalAutoSelavu]);
+  sheet1Data.push(["Cash in Hand (Iruppu)", autoIruppu]);
+
+  // -------------------------------------------------------------
+  // FORWARD CASH FLOW & NEXT MONTH PROJECTIONS
+  // -------------------------------------------------------------
+  const currentInHandCash = autoIruppu;
+  const nextMonthProjectedAmount = currentInHandCash + nextMonthActiveEmis;
+
+  sheet1Data.push([]);
+  sheet1Data.push(["NEXT MONTH ESTIMATE", "AMOUNT (₹)"]);
+  sheet1Data.push(["Current In-Hand Cash", currentInHandCash]);
+  sheet1Data.push(["Next Month EMI Collections", nextMonthActiveEmis]);
+  sheet1Data.push(["Next Month Estimated Total", nextMonthProjectedAmount]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+  autoFitColumns(ws1);
+  XLSX.utils.book_append_sheet(workbook, ws1, "Vehicle Loans");
+
+  // -------------------------------------------------------------
+  // SHEET 2: Collections Sheet
+  // Columns: Sl, Name, Date, Collection Amount, Balance, Total
+  // ONLY show collected details! (No dummy rows, no 0 collection rows)
+  // Name shown ONLY on first collection row per customer, then empty
+  // -------------------------------------------------------------
+  const collectionRows = [];
+  let collSl = 1;
+  let grandCollAmt = 0;
+
+  sortedLoans.forEach((l) => {
+    const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
+    const loanId = l.id || l.loan_id;
+    const loanTotal = Number(l.totalAmount || l.total_payable || l.loanAmount || l.loan_amount || 0);
+
+    // Find actual collections for this loan
+    const custPayments = (autoCollections || []).filter(p => {
+      const amt = Number(p.amount || p.amount_paid || 0);
+      if (amt <= 0) return false;
+      if (loanId && p.loan_id === loanId) return true;
+      if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
+      return false;
+    }).sort((a, b) => new Date(a.payment_date || 0) - new Date(b.payment_date || 0));
+
+    if (custPayments.length > 0) {
+      let runBal = loanTotal;
+      custPayments.forEach((p, pIdx) => {
+        const amt = Number(p.amount || p.amount_paid || 0);
+        runBal = Math.max(0, runBal - amt);
+        grandCollAmt += amt;
+
+        collectionRows.push({
+          "Sl": pIdx === 0 ? collSl++ : "",
+          "Name": pIdx === 0 ? custName : "", // Name only on first collection row
+          "Date": formatDate(p.payment_date),
+          "Collection Amount": amt,
+          "Balance": runBal,
+          "Total": loanTotal,
+        });
+      });
+    }
+  });
+
+  if (collectionRows.length > 0) {
+    collectionRows.push({
+      "Sl": "TOTAL",
+      "Name": "",
+      "Date": "",
+      "Collection Amount": grandCollAmt,
+      "Balance": "",
+      "Total": "",
     });
   }
 
-  const ws3 = XLSX.utils.json_to_sheet(emiRows.length ? emiRows : [{ Message: "No schedule data available." }]);
-  autoFitColumns(ws3, emiRows);
-  XLSX.utils.book_append_sheet(workbook, ws3, "EMI Recovery Schedule");
-
+  const ws2 = XLSX.utils.json_to_sheet(collectionRows.length ? collectionRows : [{ Message: "No collections on record." }]);
+  autoFitColumns(ws2, collectionRows);
+  XLSX.utils.book_append_sheet(workbook, ws2, "Collections");
 
   // -------------------------------------------------------------
-  // SHEET 4: Auto Expenses & Selavu
+  // SHEET 3: Auto Expenses ONLY
+  // Columns: Sl, Date, Description, Category, Amount
   // -------------------------------------------------------------
   const autoExpenses = allExpenses.filter(e => {
+    const cat = (e.category || e.categoryLabel || "").toUpperCase();
     const desc = (e.description || e.title || "").toLowerCase();
-    const cat = (e.category || e.categoryLabel || "").toLowerCase();
-    return cat.includes("auto") || cat.includes("car") || cat.includes("rto") || cat.includes("fc") ||
+    return cat === "AUTO" || cat.includes("AUTO") || cat.includes("CAR") || cat.includes("RTO") || cat.includes("FC") ||
       desc.includes("auto") || desc.includes("car") || desc.includes("rto") || desc.includes("fc") || desc.includes("broker");
   });
 
-  const expensesToUse = autoExpenses.length ? autoExpenses : allExpenses;
-  let totalAutoExpAmt = 0;
-
-  const expRows = expensesToUse.map((e, idx) => {
+  let totAutoExp = 0;
+  const expRows = autoExpenses.map((e, idx) => {
     const amt = Number(e.amount || 0);
-    totalAutoExpAmt += amt;
+    totAutoExp += amt;
     return {
-      "S.No": idx + 1,
-      "Date": e.date || (e.expense_date ? String(e.expense_date).slice(0, 10) : "—"),
+      "Sl": idx + 1,
+      "Date": formatDate(e.date || e.expense_date),
       "Description": e.description || e.title || "—",
-      "Category": e.categoryLabel || e.category || "GENERAL",
-      "Amount (₹)": amt,
+      "Category": e.categoryLabel || e.category || "AUTO",
+      "Amount": amt,
     };
   });
 
   if (expRows.length > 0) {
     expRows.push({
-      "S.No": "",
+      "Sl": "TOTAL",
       "Date": "",
       "Description": "TOTAL AUTO EXPENSES",
       "Category": "",
-      "Amount (₹)": totalAutoExpAmt,
+      "Amount": totAutoExp,
     });
   }
 
-  const ws4 = XLSX.utils.json_to_sheet(expRows.length ? expRows : [{ Message: "No expenses on record." }]);
-  autoFitColumns(ws4, expRows);
-  XLSX.utils.book_append_sheet(workbook, ws4, "Auto Expenses & Selavu");
+  const ws3 = XLSX.utils.json_to_sheet(expRows.length ? expRows : [{ Message: "No auto expenses on record." }]);
+  autoFitColumns(ws3, expRows);
+  XLSX.utils.book_append_sheet(workbook, ws3, "Expenses");
 
   const fileName = customFileName || `Auto_Finance_Report_${new Date().toISOString().slice(0, 10)}`;
   XLSX.writeFile(workbook, `${fileName}.xlsx`);
 };
 
 // ============================================================================
-// 12. DEDICATED DAILY FINANCE REPORT (EXECUTIVE 4-SHEET WORKBOOK)
+// 11B. AUTO FINANCE MONTHLY COLLECTION REPORT
+// ============================================================================
+export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {}, selectedMonth, customFileName) => {
+  const autoData = reportData?.autoFinance || {};
+  const autoLoans = autoData.loans || additionalData.loans || [];
+  const autoCollections = autoData.collections || additionalData.collections || [];
+
+  const targetMonth = selectedMonth || new Date().toISOString().slice(0, 7);
+  const workbook = XLSX.utils.book_new();
+  const sortedLoans = sortLoansByStatusAndName(autoLoans);
+
+  const collectionRows = [];
+  let collSl = 1;
+  let grandCollAmt = 0;
+
+  sortedLoans.forEach((l) => {
+    const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
+    const loanId = l.id || l.loan_id;
+    const loanTotal = Number(l.totalAmount || l.total_payable || l.loanAmount || l.loan_amount || 0);
+
+    // Filter payments to selected targetMonth with amount > 0
+    const custPayments = (autoCollections || []).filter(p => {
+      const amt = Number(p.amount || p.amount_paid || 0);
+      if (amt <= 0) return false;
+      const pDate = p.payment_date ? String(p.payment_date).slice(0, 7) : "";
+      if (pDate !== targetMonth) return false;
+      if (loanId && p.loan_id === loanId) return true;
+      if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
+      return false;
+    }).sort((a, b) => new Date(a.payment_date || 0) - new Date(b.payment_date || 0));
+
+    if (custPayments.length > 0) {
+      let runBal = loanTotal;
+      custPayments.forEach((p, pIdx) => {
+        const amt = Number(p.amount || p.amount_paid || 0);
+        runBal = Math.max(0, runBal - amt);
+        grandCollAmt += amt;
+
+        collectionRows.push({
+          "Sl": pIdx === 0 ? collSl++ : "",
+          "Name": pIdx === 0 ? custName : "", // Name only on first collection row
+          "Date": formatDate(p.payment_date),
+          "Collection Amount": amt,
+          "Balance": runBal,
+          "Total": loanTotal,
+        });
+      });
+    }
+  });
+
+  if (collectionRows.length > 0) {
+    collectionRows.push({
+      "Sl": "TOTAL",
+      "Name": "",
+      "Date": "",
+      "Collection Amount": grandCollAmt,
+      "Balance": "",
+      "Total": "",
+    });
+  }
+
+  const ws = XLSX.utils.json_to_sheet(collectionRows.length ? collectionRows : [{ Message: `No collections recorded for month ${targetMonth}.` }]);
+  autoFitColumns(ws, collectionRows);
+  XLSX.utils.book_append_sheet(workbook, ws, `Collections (${targetMonth})`);
+
+  const fileName = customFileName || `Auto_Finance_Collections_${targetMonth.replace("-", "_")}`;
+  XLSX.writeFile(workbook, `${fileName}.xlsx`);
+};
+
+// ============================================================================
+// 12. DEDICATED DAILY FINANCE REPORT (3 ESSENTIAL SHEETS)
+// Sheet 1: Portfolio (Sl, Name, Total Loan, Pitibu, By hand, Income, Vasul, Balance, Status)
+// Sheet 2: Collections (Sl, Name, Date, Collection Amount, Balance, Total)
+// Sheet 3: Expenses (Daily expenses only)
 // ============================================================================
 export const exportDailyCategoryReport = (reportData, additionalData = {}, customFileName) => {
   const dfData = reportData?.dailyFinance || {};
   const dfLoans = dfData.loans || additionalData.customers || [];
-  const dfTotals = dfData.totals || {};
-  const distinctMonths = reportData?.distinctMonths || additionalData.distinctMonths || [];
-  const dailyLogs = additionalData.dailyLogs || [];
+  const dfCollections = dfData.collections || additionalData.collections || [];
   const allExpenses = reportData?.expenses?.items || additionalData.expenses || [];
 
   const workbook = XLSX.utils.book_new();
-
-  const totalLoanAmt = dfLoans.reduce((sum, l) => sum + Number(l.loanAmount || l.gross_finance_amount || 0), 0);
-  const totalPitibu = dfLoans.reduce((sum, l) => sum + Number(l.pitibu || l.initial_deduction || 0), 0);
-  const totalNetGiven = dfLoans.reduce((sum, l) => sum + Number(l.byHand || l.net_disbursement || (Number(l.loanAmount || 0) - Number(l.pitibu || 0))), 0);
-  const totalIncomeCollected = dfLoans.reduce((sum, l) => sum + Number(l.income || l.total_collected || 0), 0);
-  const totalBal = dfLoans.reduce((sum, l) => sum + Number(l.balance || l.remaining || 0), 0);
+  const sortedLoans = sortLoansByStatusAndName(dfLoans);
 
   // -------------------------------------------------------------
-  // SHEET 1: Daily Finance Ledger & Reconciliation
+  // SHEET 1: Portfolio Table (Replacing Ledger, removing 2nd portfolio)
+  // Columns: Sl, Name, Total Loan, Pitibu, By hand, Income, Vasul, Balance, Status
   // -------------------------------------------------------------
-  const sheetData = [];
-  sheetData.push([
-    "S.No", "Date", "Customer Name", "Gross Loan Amount (₹)", "Pitibu / Deduction (₹)", "Net Disbursed (By Hand) (₹)",
-    "Collection Matakku", ...distinctMonths.map(m => `${m.label || m.key} Vasul (₹)`), "Total Vasul Collected (₹)", "Remaining Balance (₹)"
-  ]);
+  let totLoanSum = 0;
+  let totPitibuSum = 0;
+  let totByHandSum = 0;
+  let totIncomeSum = 0;
+  let totVasulSum = 0;
+  let totBalanceSum = 0;
 
-  dfLoans.forEach((r, idx) => {
-    const monthCols = distinctMonths.map(m => Number(r.monthlyVasul?.[m.key] || 0));
-    sheetData.push([
-      idx + 1,
-      r.date || "—",
-      r.customerName || "—",
-      Number(r.loanAmount || 0),
-      Number(r.pitibu || 0),
-      Number(r.byHand || (Number(r.loanAmount || 0) - Number(r.pitibu || 0))),
-      r.matakku || "Daily",
-      ...monthCols,
-      Number(r.income || 0),
-      Number(r.balance || 0)
-    ]);
-  });
-
-  const dfMonthTotals = distinctMonths.map(m => {
-    return dfLoans.reduce((sum, r) => sum + Number(r.monthlyVasul?.[m.key] || 0), 0);
-  });
-
-  sheetData.push([
-    "", "", "TOTAL",
-    dfTotals.totalLoan || totalLoanAmt,
-    dfTotals.pitipu || totalPitibu,
-    dfTotals.distrubut || totalNetGiven,
-    "",
-    ...dfMonthTotals,
-    dfTotals.income || totalIncomeCollected,
-    dfTotals.balance || totalBal
-  ]);
-
-  sheetData.push([]);
-  sheetData.push(["DAILY FINANCE CASH FLOW & KAIERUPPU RECONCILIATION", "AMOUNT (₹)", "DETAILS / FORMULA"]);
-  sheetData.push(["Total Gross Loan Sanctioned", Number(dfTotals.totalLoan || totalLoanAmt), "Gross sanctioned daily loans across portfolio"]);
-  sheetData.push(["Total Pitibu (Upfront Deduction)", Number(dfTotals.pitipu || totalPitibu), "Processing deductions / upfront interest retained"]);
-  sheetData.push(["Total Net Disbursed (By Hand)", Number(dfTotals.distrubut || totalNetGiven), "Actual liquid cash handed to borrowers"]);
-  sheetData.push(["Total Vasul Collected (Income)", Number(dfTotals.income || totalIncomeCollected), "Total daily collections received to date"]);
-  sheetData.push(["Total Outstanding Customer Balance", Number(dfTotals.balance || totalBal), "Uncollected balance remaining across borrower accounts"]);
-  sheetData.push(["Total Portfolio Book (Balance + Income)", Number(dfTotals.balance || totalBal) + Number(dfTotals.income || totalIncomeCollected), "Aggregate collectible book value"]);
-  sheetData.push(["Daily Operating Expenses (Selavu)", Number(dfTotals.selavu || 0), "Routine operational and collection expenses"]);
-  sheetData.push(["Closing Cash in Hand (KAIERUPPU)", Number(dfTotals.kaieruppu || 0), "Net verified physical daily cash in hand"]);
-
-  const currentDailyInHand = Number(dfTotals.kaieruppu || totalIncomeCollected || 0);
-  const nextMonthDailyProjectedVasul = Math.round(totalIncomeCollected > 0 ? (totalIncomeCollected / (distinctMonths.length || 1)) : 0);
-  const nextMonthDailyProjectedAmount = currentDailyInHand + nextMonthDailyProjectedVasul;
-
-  sheetData.push([]);
-  sheetData.push(["FORWARD CASH FLOW & NEXT MONTH PROJECTIONS", "AMOUNT (₹)", "DETAILS / SUBTITLE"]);
-  sheetData.push(["Current In-Hand Cash", currentDailyInHand, "Opening balance for next month"]);
-  sheetData.push(["Next Month Projected Vasul / Inflow", nextMonthDailyProjectedVasul, "Expected monthly vasul collections"]);
-  sheetData.push(["Next Month Projected Amount", nextMonthDailyProjectedAmount, "In-Hand + Next Month Vasul"]);
-
-  const ws1 = XLSX.utils.aoa_to_sheet(sheetData);
-  autoFitColumns(ws1);
-  XLSX.utils.book_append_sheet(workbook, ws1, "Daily Finance Ledger");
-
-  // -------------------------------------------------------------
-  // SHEET 2: Customer Loans Portfolio
-  // -------------------------------------------------------------
-  let totCustGross = 0;
-  let totCustPitibu = 0;
-  let totCustByHand = 0;
-  let totCustTarget = 0;
-  let totCustCollected = 0;
-  let totCustBalance = 0;
-
-  const custRows = dfLoans.map((l, idx) => {
+  const portfolioRows = sortedLoans.map((l, idx) => {
+    const custName = l.customerName || l.customer_name || "—";
     const gross = Number(l.loanAmount || l.gross_finance_amount || 0);
     const pitibu = Number(l.pitibu || l.initial_deduction || 0);
     const byHand = Number(l.byHand || l.net_disbursement || (gross - pitibu));
-    const targetReturn = Number(l.agreed_total_payable || (gross + pitibu) || gross);
-    const collected = Number(l.income || l.total_collected || 0);
-    const balance = Number(l.balance || l.remaining || Math.max(0, targetReturn - collected));
+    const income = Number(l.agreed_total_payable || (gross + pitibu) || gross);
+    const vasul = Number(l.income || l.total_collected || 0);
+    const balance = Number(l.balance || l.remaining || Math.max(0, income - vasul));
+    const status = l.status || "ACTIVE";
 
-    totCustGross += gross;
-    totCustPitibu += pitibu;
-    totCustByHand += byHand;
-    totCustTarget += targetReturn;
-    totCustCollected += collected;
-    totCustBalance += balance;
+    totLoanSum += gross;
+    totPitibuSum += pitibu;
+    totByHandSum += byHand;
+    totIncomeSum += income;
+    totVasulSum += vasul;
+    totBalanceSum += balance;
 
     return {
-      "S.No": idx + 1,
-      "Finance ID": l.financeId || l.id || `DF-${idx + 1}`,
-      "Disbursement Date": l.date || l.finance_date || "—",
-      "Customer Name": l.customerName || l.customer_name || "—",
-      "Mobile Number": l.mobileNumber || l.mobile_number || "—",
-      "Gross Finance Amount (₹)": gross,
-      "Pitibu / Upfront Deduction (₹)": pitibu,
-      "Net Given By Hand (₹)": byHand,
-      "Agreed Total Return (₹)": targetReturn,
-      "Total Collected / Vasul (₹)": collected,
-      "Pending Balance (₹)": balance,
-      "Loan Status": l.status || "ACTIVE",
+      "Sl": idx + 1,
+      "Name": custName,
+      "Total Loan": gross,
+      "Pitibu": pitibu,
+      "By hand": byHand,
+      "Income": income,
+      "Vasul": vasul,
+      "Balance": balance,
+      "Status": status,
     };
   });
 
-  if (custRows.length > 0) {
-    custRows.push({
-      "S.No": "",
-      "Finance ID": "TOTAL",
-      "Disbursement Date": "",
-      "Customer Name": `${dfLoans.length} Customers`,
-      "Mobile Number": "",
-      "Gross Finance Amount (₹)": totCustGross,
-      "Pitibu / Upfront Deduction (₹)": totCustPitibu,
-      "Net Given By Hand (₹)": totCustByHand,
-      "Agreed Total Return (₹)": totCustTarget,
-      "Total Collected / Vasul (₹)": totCustCollected,
-      "Pending Balance (₹)": totCustBalance,
-      "Loan Status": "",
-    });
-  }
+  const sheet1Data = [];
+  sheet1Data.push(["Sl", "Name", "Total Loan", "Pitibu", "By hand", "Income", "Vasul", "Balance", "Status"]);
 
-  const ws2 = XLSX.utils.json_to_sheet(custRows.length ? custRows : [{ Message: "No customer accounts on record." }]);
-  autoFitColumns(ws2, custRows);
-  XLSX.utils.book_append_sheet(workbook, ws2, "Customer Loans Portfolio");
-
-  // -------------------------------------------------------------
-  // SHEET 3: Daily Collection Logs
-  // -------------------------------------------------------------
-  let totLogAutoRev = 0;
-  let totLogDailyRev = 0;
-  let totLogInflow = 0;
-  let totLogExp = 0;
-  let totLogNet = 0;
-
-  const logRows = dailyLogs.map((l, idx) => {
-    const aRev = Number(l.autoRevenue || 0);
-    const dRev = Number(l.dailyRevenue || 0);
-    const tRev = Number(l.totalRevenue || 0);
-    const exp = Number(l.expenses || 0);
-    const net = Number(l.netProfit || 0);
-
-    totLogAutoRev += aRev;
-    totLogDailyRev += dRev;
-    totLogInflow += tRev;
-    totLogExp += exp;
-    totLogNet += net;
-
-    return {
-      "S.No": idx + 1,
-      "Date": l.calcDate || l.date || "—",
-      "Auto Revenue (₹)": aRev,
-      "Daily Revenue (Vasul) (₹)": dRev,
-      "Total Daily Inflow (₹)": tRev,
-      "Operating Expenses (₹)": exp,
-      "Net Daily Income (₹)": net,
-      "Active Capital (₹)": Number(l.totalActiveCapital || 0),
-    };
+  portfolioRows.forEach((r) => {
+    sheet1Data.push([
+      r["Sl"], r["Name"], r["Total Loan"], r["Pitibu"], r["By hand"], r["Income"], r["Vasul"], r["Balance"], r["Status"]
+    ]);
   });
 
-  if (logRows.length > 0) {
-    logRows.push({
-      "S.No": "",
-      "Date": "TOTAL",
-      "Auto Revenue (₹)": totLogAutoRev,
-      "Daily Revenue (Vasul) (₹)": totLogDailyRev,
-      "Total Daily Inflow (₹)": totLogInflow,
-      "Operating Expenses (₹)": totLogExp,
-      "Net Daily Income (₹)": totLogNet,
-      "Active Capital (₹)": "",
+  if (portfolioRows.length > 0) {
+    sheet1Data.push([
+      "TOTAL", `${sortedLoans.length} Customers`, totLoanSum, totPitibuSum, totByHandSum, totIncomeSum, totVasulSum, totBalanceSum, ""
+    ]);
+  }
+
+  // Pre-calculate daily expenses for reconciliation summary
+  const dailyExpensesPre = allExpenses.filter(e => {
+    const cat = (e.category || e.categoryLabel || "").toUpperCase();
+    const desc = (e.description || e.title || "").toLowerCase();
+    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection");
+  });
+  const totDailyExpPre = dailyExpensesPre.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const dfSelavu = Number(dfData.totals?.selavu || totDailyExpPre);
+  const dfKaieruppu = Number(dfData.totals?.kaieruppu ?? (totVasulSum - dfSelavu));
+
+  // -------------------------------------------------------------
+  // DAILY FINANCE SUMMARY
+  // -------------------------------------------------------------
+  sheet1Data.push([]);
+  sheet1Data.push(["DAILY SUMMARY", "AMOUNT (₹)"]);
+  sheet1Data.push(["Total Loan", totLoanSum]);
+  sheet1Data.push(["Pitibu", totPitibuSum]);
+  sheet1Data.push(["Income (Vasul)", totVasulSum]);
+  sheet1Data.push(["Balance", totBalanceSum]);
+  sheet1Data.push(["Distribut (By Hand)", totByHandSum]);
+  sheet1Data.push(["Balance + Income", totBalanceSum + totVasulSum]);
+  sheet1Data.push(["Selavu (Expenses)", dfSelavu]);
+  sheet1Data.push(["Cash in Hand (Kaieruppu)", dfKaieruppu]);
+
+  // -------------------------------------------------------------
+  // FORWARD CASH FLOW & NEXT MONTH PROJECTIONS
+  // -------------------------------------------------------------
+  const activeDailyLoans = sortedLoans.filter(l => (l.status || "ACTIVE").toUpperCase() === "ACTIVE");
+  const currentDailyInHand = dfKaieruppu;
+  const nextMonthDailyProj = currentDailyInHand + Math.round(totVasulSum);
+
+  sheet1Data.push([]);
+  sheet1Data.push(["NEXT MONTH ESTIMATE", "AMOUNT (₹)"]);
+  sheet1Data.push(["Current In-Hand Cash", currentDailyInHand]);
+  sheet1Data.push(["Next Month Collections", Math.round(totVasulSum)]);
+  sheet1Data.push(["Next Month Estimated Total", nextMonthDailyProj]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+  autoFitColumns(ws1);
+  XLSX.utils.book_append_sheet(workbook, ws1, "Daily Loans");
+
+  // -------------------------------------------------------------
+  // SHEET 2: Collections Sheet
+  // Columns: Sl, Name, Date, Collection Amount, Balance, Total
+  // Name shown ONLY on first collection row per customer, then empty
+  // -------------------------------------------------------------
+  const collectionRows = [];
+  let collSl = 1;
+  let grandCollAmt = 0;
+
+  sortedLoans.forEach((l) => {
+    const custName = l.customerName || l.customer_name || "—";
+    const fId = l.financeId || l.finance_id;
+    const loanTotal = Number(l.agreed_total_payable || (Number(l.loanAmount || 0) + Number(l.pitibu || 0)) || l.loanAmount || 0);
+
+    // Find actual collection payments for this customer / finance account
+    const custPayments = (dfCollections || []).filter(p => {
+      const amt = Number(p.amount || 0);
+      if (amt <= 0) return false;
+      if (fId && p.finance_id === fId) return true;
+      if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
+      return false;
+    }).sort((a, b) => new Date(a.collection_date || 0) - new Date(b.collection_date || 0));
+
+    if (custPayments.length > 0) {
+      let runBal = loanTotal;
+      custPayments.forEach((p, pIdx) => {
+        const amt = Number(p.amount || 0);
+        runBal = Math.max(0, runBal - amt);
+        grandCollAmt += amt;
+
+        collectionRows.push({
+          "Sl": pIdx === 0 ? collSl++ : "",
+          "Name": pIdx === 0 ? custName : "", // Name only on first collection row
+          "Date": formatDate(p.collection_date),
+          "Collection Amount": amt,
+          "Balance": runBal,
+          "Total": loanTotal,
+        });
+      });
+    }
+  });
+
+  if (collectionRows.length > 0) {
+    collectionRows.push({
+      "Sl": "TOTAL",
+      "Name": "",
+      "Date": "",
+      "Collection Amount": grandCollAmt,
+      "Balance": "",
+      "Total": "",
     });
   }
 
-  const ws3 = XLSX.utils.json_to_sheet(logRows.length ? logRows : [{ Message: "No daily logs recorded yet." }]);
-  autoFitColumns(ws3, logRows);
-  XLSX.utils.book_append_sheet(workbook, ws3, "Daily Collection Logs");
+  const ws2 = XLSX.utils.json_to_sheet(collectionRows.length ? collectionRows : [{ Message: "No collections on record." }]);
+  autoFitColumns(ws2, collectionRows);
+  XLSX.utils.book_append_sheet(workbook, ws2, "Collections");
 
   // -------------------------------------------------------------
-  // SHEET 4: Daily Operating Expenses
+  // SHEET 3: Daily Expenses ONLY
+  // Columns: Sl, Date, Description, Category, Amount
   // -------------------------------------------------------------
   const dailyExpenses = allExpenses.filter(e => {
+    const cat = (e.category || e.categoryLabel || "").toUpperCase();
     const desc = (e.description || e.title || "").toLowerCase();
-    const cat = (e.category || e.categoryLabel || "").toLowerCase();
-    return cat.includes("daily") || cat.includes("tea") || cat.includes("travel") || cat.includes("petrol") ||
-      desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("collection");
+    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection");
   });
 
-  const expensesToUse = dailyExpenses.length ? dailyExpenses : allExpenses;
-  let totDailyExpAmt = 0;
-
-  const expRows = expensesToUse.map((e, idx) => {
+  let totDailyExp = 0;
+  const expRows = dailyExpenses.map((e, idx) => {
     const amt = Number(e.amount || 0);
-    totDailyExpAmt += amt;
+    totDailyExp += amt;
     return {
-      "S.No": idx + 1,
-      "Date": e.date || (e.expense_date ? String(e.expense_date).slice(0, 10) : "—"),
+      "Sl": idx + 1,
+      "Date": formatDate(e.date || e.expense_date),
       "Description": e.description || e.title || "—",
-      "Category": e.categoryLabel || e.category || "GENERAL",
-      "Amount (₹)": amt,
+      "Category": e.categoryLabel || e.category || "DAILY",
+      "Amount": amt,
     };
   });
 
   if (expRows.length > 0) {
     expRows.push({
-      "S.No": "",
+      "Sl": "TOTAL",
       "Date": "",
       "Description": "TOTAL DAILY EXPENSES",
       "Category": "",
-      "Amount (₹)": totDailyExpAmt,
+      "Amount": totDailyExp,
     });
   }
 
-  const ws4 = XLSX.utils.json_to_sheet(expRows.length ? expRows : [{ Message: "No expenses on record." }]);
-  autoFitColumns(ws4, expRows);
-  XLSX.utils.book_append_sheet(workbook, ws4, "Daily Operating Expenses");
+  const ws3 = XLSX.utils.json_to_sheet(expRows.length ? expRows : [{ Message: "No daily expenses on record." }]);
+  autoFitColumns(ws3, expRows);
+  XLSX.utils.book_append_sheet(workbook, ws3, "Expenses");
 
   const fileName = customFileName || `Daily_Finance_Report_${new Date().toISOString().slice(0, 10)}`;
   XLSX.writeFile(workbook, `${fileName}.xlsx`);
 };
 
 // ============================================================================
-// 13. DEDICATED GLOBAL CAPITAL REPORT (EXECUTIVE 4-SHEET WORKBOOK)
+// 12B. DAILY FINANCE MONTHLY COLLECTION REPORT
+// ============================================================================
+export const exportDailyMonthlyCollectionReport = (reportData, additionalData = {}, selectedMonth, customFileName) => {
+  const dfData = reportData?.dailyFinance || {};
+  const dfLoans = dfData.loans || additionalData.customers || [];
+  const dfCollections = dfData.collections || additionalData.collections || [];
+
+  const targetMonth = selectedMonth || new Date().toISOString().slice(0, 7);
+  const workbook = XLSX.utils.book_new();
+  const sortedLoans = sortLoansByStatusAndName(dfLoans);
+
+  const collectionRows = [];
+  let collSl = 1;
+  let grandCollAmt = 0;
+
+  sortedLoans.forEach((l) => {
+    const custName = l.customerName || l.customer_name || "—";
+    const fId = l.financeId || l.finance_id;
+    const loanTotal = Number(l.agreed_total_payable || (Number(l.loanAmount || 0) + Number(l.pitibu || 0)) || l.loanAmount || 0);
+
+    // Filter actual collections with amount > 0 to selected targetMonth
+    const custPayments = (dfCollections || []).filter(p => {
+      const amt = Number(p.amount || 0);
+      if (amt <= 0) return false;
+      const pDate = p.collection_date ? String(p.collection_date).slice(0, 7) : "";
+      if (pDate !== targetMonth) return false;
+      if (fId && p.finance_id === fId) return true;
+      if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
+      return false;
+    }).sort((a, b) => new Date(a.collection_date || 0) - new Date(b.collection_date || 0));
+
+    if (custPayments.length > 0) {
+      let runBal = loanTotal;
+      custPayments.forEach((p, pIdx) => {
+        const amt = Number(p.amount || 0);
+        runBal = Math.max(0, runBal - amt);
+        grandCollAmt += amt;
+
+        collectionRows.push({
+          "Sl": pIdx === 0 ? collSl++ : "",
+          "Name": pIdx === 0 ? custName : "", // Name only on first collection row
+          "Date": formatDate(p.collection_date),
+          "Collection Amount": amt,
+          "Balance": runBal,
+          "Total": loanTotal,
+        });
+      });
+    }
+  });
+
+  if (collectionRows.length > 0) {
+    collectionRows.push({
+      "Sl": "TOTAL",
+      "Name": "",
+      "Date": "",
+      "Collection Amount": grandCollAmt,
+      "Balance": "",
+      "Total": "",
+    });
+  }
+
+  const ws = XLSX.utils.json_to_sheet(collectionRows.length ? collectionRows : [{ Message: `No collections recorded for month ${targetMonth}.` }]);
+  autoFitColumns(ws, collectionRows);
+  XLSX.utils.book_append_sheet(workbook, ws, `Collections (${targetMonth})`);
+
+  const fileName = customFileName || `Daily_Finance_Collections_${targetMonth.replace("-", "_")}`;
+  XLSX.writeFile(workbook, `${fileName}.xlsx`);
+};
+
+// ============================================================================
+// 13. DEDICATED GLOBAL CAPITAL REPORT (3 ESSENTIAL SHEETS)
+// Sheet 1: Partner Name and Share
+// Sheet 2: All Expenses
+// Sheet 3: Partner Transactions
+// (NO ID column in any sheet!)
 // ============================================================================
 export const exportGlobalCategoryReport = (reportData, additionalData = {}, customFileName) => {
   const partners = reportData?.partners?.list || additionalData.partners || [];
   const totalInvestment = Number(reportData?.partners?.totalInvestment || additionalData.totalInvestment || partners.reduce((s, p) => s + Number(p.capital || p.current_capital || 0), 0));
   const allExpenses = reportData?.expenses?.items || additionalData.expenses || [];
   const catTotals = reportData?.expenses?.categoryTotals || {};
-  const closings = additionalData.closings || [];
   const transactions = additionalData.transactions || [];
   const ledger = additionalData.ledger || [];
 
   const workbook = XLSX.utils.book_new();
 
   // -------------------------------------------------------------
-  // SHEET 1: Partner Capital & Equity Ledger
+  // SHEET 1: Partner Capital (No share detection, only Name and Capital)
+  // Columns: Sl, Name, Capital
+  // (NO ID column!)
   // -------------------------------------------------------------
-  const sumBase = partners.reduce((s, p) => s + Number(p.base_capital ?? p.initial_contribution ?? 0), 0);
   const sumCurrent = partners.reduce((s, p) => s + Number(p.capital ?? p.current_capital ?? 0), 0);
-  const sumContributed = partners.reduce((s, p) => s + Number(p.contributed ?? p.total_contributed ?? 0), 0);
-  const sumWithdrawn = partners.reduce((s, p) => s + Number(p.withdrawn ?? p.total_withdrawn ?? 0), 0);
-  const sumProfit = partners.reduce((s, p) => s + Number(p.profit ?? p.profit_earned ?? 0), 0);
 
   const sheet1Data = [];
-  sheet1Data.push([
-    "S.No", "Partner Name", "Phone", "Email", "Base Capital (₹)", "Current Capital (₹)",
-    "Total Contributed (₹)", "Total Withdrawn (₹)", "Profit Credited (₹)", "Equity Share (%)", "Status"
-  ]);
+  sheet1Data.push(["Sl", "Name", "Capital"]);
 
   partners.forEach((p, idx) => {
     const pCap = Number(p.capital ?? p.current_capital ?? 0);
-    const pool = totalInvestment > 0 ? totalInvestment : sumCurrent;
-    const share = pool > 0 ? ((pCap / pool) * 100).toFixed(2) + "%" : "0.00%";
     sheet1Data.push([
       idx + 1,
       p.name || p.partner_name || "—",
-      p.phone || "—",
-      p.email || "—",
-      Number(p.base_capital ?? p.initial_contribution ?? 0),
-      pCap,
-      Number(p.contributed ?? p.total_contributed ?? 0),
-      Number(p.withdrawn ?? p.total_withdrawn ?? 0),
-      Number(p.profit ?? p.profit_earned ?? 0),
-      share,
-      p.status || "ACTIVE"
+      pCap
     ]);
   });
 
   sheet1Data.push([
-    "", "TOTAL", "", "",
-    sumBase,
-    totalInvestment || sumCurrent,
-    sumContributed,
-    sumWithdrawn,
-    sumProfit,
-    "100.00%",
-    `${partners.length} Active Partners`
+    "TOTAL",
+    `${partners.length} Partners`,
+    totalInvestment || sumCurrent
   ]);
 
+  // -------------------------------------------------------------
+  // MASTER CASH & CAPITAL RECONCILIATION (From Image 1)
+  // -------------------------------------------------------------
+  const recon = reportData?.reconciliation || {};
+  const dlKaieruppu = Number(recon.dlKaieruppu || reportData?.dailyFinance?.totals?.kaieruppu || 0);
+  const autoKaieruppu = Number(recon.autoKaieruppu || reportData?.autoFinance?.totals?.iruppu || 0);
+  const totalKaieruppu = Number(recon.totalKaieruppu || (dlKaieruppu + autoKaieruppu));
+
+  const dlDist = Number(recon.dlDistrubut || reportData?.dailyFinance?.totals?.distrubut || 0);
+  const autoDist = Number(recon.autoDist || reportData?.autoFinance?.totals?.distribut || 0);
+  const totalDist = Number(recon.totalDist || (dlDist + autoDist));
+
+  const investment = Number(recon.investment || totalInvestment || sumCurrent || 0);
+  const loanDist = Number(recon.loanDistribut || totalDist);
+  const diff = Number(recon.difference || (investment - loanDist));
+  const netVariance = Number(recon.kaiEruppuPlusDifference || (totalKaieruppu + diff));
+
   sheet1Data.push([]);
-  sheet1Data.push(["GLOBAL CAPITAL POSITION SUMMARY", "AMOUNT / VALUE (₹)", "DESCRIPTION"]);
-  sheet1Data.push(["Total Active Operating Capital Deployed", Number(totalInvestment || sumCurrent), "Current active capital pool deployed in operations"]);
-  sheet1Data.push(["Total Initial Base Equity Committed", Number(sumBase), "Initial equity contributed by founders/partners"]);
-  sheet1Data.push(["Total Lifetime Capital Contributed", Number(sumContributed), "Additional capital deposits injected by partners"]);
-  sheet1Data.push(["Total Lifetime Capital Withdrawn", Number(sumWithdrawn), "Capital drawdowns taken by partners"]);
-  sheet1Data.push(["Total Cumulative Profits Credited", Number(sumProfit), "Total profit allocations credited to partner accounts"]);
-  sheet1Data.push(["Total Active Equity Partners", partners.length, "Number of participating equity partners"]);
+  sheet1Data.push(["MASTER CASH & CAPITAL RECONCILIATION", "AMOUNT (₹)"]);
+  sheet1Data.push(["Daily Finance Kaieruppu", dlKaieruppu]);
+  sheet1Data.push(["Auto Finance IRUPPU", autoKaieruppu]);
+  sheet1Data.push(["Total Combined Kaieruppu", totalKaieruppu]);
+  sheet1Data.push(["Daily Loan Distribut", dlDist]);
+  sheet1Data.push(["Auto Loan Distribut", autoDist]);
+  sheet1Data.push(["Total Combined Loans Distributed", totalDist]);
+  sheet1Data.push(["Total Partner Investment", investment]);
+  sheet1Data.push(["Capital Difference / Gap", diff]);
+  sheet1Data.push(["Kaieruppu + Difference", netVariance]);
 
   const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
   autoFitColumns(ws1);
-  XLSX.utils.book_append_sheet(workbook, ws1, "Partner Capital");
+  XLSX.utils.book_append_sheet(workbook, ws1, "Partners");
 
   // -------------------------------------------------------------
-  // SHEET 2: Categorized Selavu (Expenses Matrix)
+  // SHEET 2: All Expenses
+  // Columns: Sl, Date, Description / Payee, Category, Amount (₹)
+  // (NO ID column!)
   // -------------------------------------------------------------
   const sheet2Data = [];
   sheet2Data.push([
-    "S.No", "Date", "Description / Payee", "Category", "Shop Opening (₹)", "Tea & Refreshments (₹)", "Pooja & God (₹)",
+    "Sl", "Date", "Description / Payee", "Category", "Shop Opening (₹)", "Tea & Refreshments (₹)", "Pooja & God (₹)",
     "Allowances & Travel (₹)", "Rent & EB (₹)", "Salary & Wages (₹)", "Interest Paid (₹)", "Other Expenses (₹)", "Total Expense (₹)"
   ]);
 
@@ -1830,7 +1894,7 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
   const grandSelavu = Number(catTotals.totalSelavu || allExpenses.reduce((s, e) => s + Number(e.amount || 0), 0));
 
   sheet2Data.push([
-    "", "", "TOTAL SELAVU", "",
+    "TOTAL", "", "", "",
     catTotals.shopOpen || 0,
     catTotals.tea || 0,
     catTotals.god || 0,
@@ -1842,98 +1906,28 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     grandSelavu
   ]);
 
-  const calcPct = (val) => grandSelavu > 0 ? `${((Number(val || 0) / grandSelavu) * 100).toFixed(2)}%` : "0.00%";
-
-  sheet2Data.push([]);
-  sheet2Data.push(["CATEGORY-WISE SELAVU BREAKDOWN", "TOTAL AMOUNT (₹)", "% OF TOTAL SELAVU"]);
-  sheet2Data.push(["Shop Opening", Number(catTotals.shopOpen || 0), calcPct(catTotals.shopOpen)]);
-  sheet2Data.push(["Tea & Refreshments", Number(catTotals.tea || 0), calcPct(catTotals.tea)]);
-  sheet2Data.push(["Pooja & God", Number(catTotals.god || 0), calcPct(catTotals.god)]);
-  sheet2Data.push(["Allowances & Travel", Number(catTotals.allowances || 0), calcPct(catTotals.allowances)]);
-  sheet2Data.push(["Rent & Electricity (EB)", Number(catTotals.rentEb || 0), calcPct(catTotals.rentEb)]);
-  sheet2Data.push(["Salary & Wages", Number(catTotals.salary || 0), calcPct(catTotals.salary)]);
-  sheet2Data.push(["Interest Paid", Number(catTotals.interest || 0), calcPct(catTotals.interest)]);
-  sheet2Data.push(["Other Expenses", Number(catTotals.others || 0), calcPct(catTotals.others)]);
-  sheet2Data.push(["GRAND TOTAL SELAVU", grandSelavu, "100.00%"]);
-
   const ws2 = XLSX.utils.aoa_to_sheet(sheet2Data);
   autoFitColumns(ws2);
-  XLSX.utils.book_append_sheet(workbook, ws2, "Selavu (Expenses Matrix)");
+  XLSX.utils.book_append_sheet(workbook, ws2, "All Expenses");
 
   // -------------------------------------------------------------
-  // SHEET 3: Monthly Closings & Partner Shares
+  // SHEET 3: Partner Transactions
+  // Columns: Sl, Date, Partner / Account, Transaction Type, Description / Narration, Amount (₹), Payment Mode, Reference / UTR
+  // (NO ID column / Entry # removed!)
   // -------------------------------------------------------------
-  let totCloseAutoRev = 0;
-  let totCloseDailyRev = 0;
-  let totCloseGrossRev = 0;
-  let totCloseExp = 0;
-  let totCloseNet = 0;
-  let totClosePool = 0;
-  let totCloseComp = 0;
-
-  const closingRows = closings.map((c, idx) => {
-    const aRev = Number(c.financials?.autoRevenue ?? c.auto_revenue ?? 0);
-    const dRev = Number(c.financials?.dailyRevenue ?? c.daily_revenue ?? 0);
-    const gRev = Number(c.financials?.grossRevenue ?? c.gross_revenue ?? (aRev + dRev));
-    const exp = Number(c.financials?.expenses ?? c.expenses_total ?? 0);
-    const net = Number(c.financials?.netProfit ?? c.net_profit ?? (gRev - exp));
-    const pool = Number(c.financials?.partnerPoolProfit ?? c.partner_pool_profit ?? (net * 0.7));
-    const comp = Number(c.financials?.companyProfit ?? c.company_profit ?? (net - pool));
-
-    totCloseAutoRev += aRev;
-    totCloseDailyRev += dRev;
-    totCloseGrossRev += gRev;
-    totCloseExp += exp;
-    totCloseNet += net;
-    totClosePool += pool;
-    totCloseComp += comp;
-
-    return {
-      "S.No": idx + 1,
-      "Period / Month": c.monthName || `${c.year}-${String(c.month).padStart(2, "0")}`,
-      "Auto Revenue (₹)": aRev,
-      "Daily Revenue (₹)": dRev,
-      "Total Gross Revenue (₹)": gRev,
-      "Operating Expenses (₹)": exp,
-      "Net Operating Profit (₹)": net,
-      "Partner Pool Profit (₹)": pool,
-      "Company Retained (₹)": comp,
-      "Active Partners": Number(c.allocations?.length ?? c.partner_count ?? partners.length),
-      "Status": c.isCurrentMonth ? "In Progress" : "Finalized",
-    };
+  // Filter transactions to only partner contributions and withdrawals (no share)
+  const txSource = (transactions.length ? transactions : ledger).filter(t => {
+    const type = (t.transaction_type || t.type || "").toUpperCase();
+    if (type.includes("PROFIT") || type.includes("SHARE")) return false;
+    return true;
   });
-
-  if (closingRows.length > 0) {
-    closingRows.push({
-      "S.No": "",
-      "Period / Month": "TOTAL",
-      "Auto Revenue (₹)": totCloseAutoRev,
-      "Daily Revenue (₹)": totCloseDailyRev,
-      "Total Gross Revenue (₹)": totCloseGrossRev,
-      "Operating Expenses (₹)": totCloseExp,
-      "Net Operating Profit (₹)": totCloseNet,
-      "Partner Pool Profit (₹)": totClosePool,
-      "Company Retained (₹)": totCloseComp,
-      "Active Partners": "",
-      "Status": "",
-    });
-  }
-
-  const ws3 = XLSX.utils.json_to_sheet(closingRows.length ? closingRows : [{ Message: "No finalized closings on record." }]);
-  autoFitColumns(ws3, closingRows);
-  XLSX.utils.book_append_sheet(workbook, ws3, "Monthly Closings & Shares");
-
-  // -------------------------------------------------------------
-  // SHEET 4: Capital Transactions & General Ledger
-  // -------------------------------------------------------------
-  const txSource = transactions.length ? transactions : ledger;
   let totTxAmt = 0;
 
   const txRows = txSource.map((t, idx) => {
     const amt = Number(t.amount || 0);
     totTxAmt += amt;
     return {
-      "Entry #": t.id || idx + 1,
+      "Sl": idx + 1,
       "Date": (t.effective_date || t.transaction_date || t.created_at) ? String(t.effective_date || t.transaction_date || t.created_at).slice(0, 10) : "—",
       "Partner / Account": t.partner_name || t.name || t.source || "Company",
       "Transaction Type": t.transaction_type || t.type || "CONTRIBUTION",
@@ -1946,7 +1940,7 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
 
   if (txRows.length > 0) {
     txRows.push({
-      "Entry #": "TOTAL",
+      "Sl": "TOTAL",
       "Date": "",
       "Partner / Account": `${txRows.length} Entries`,
       "Transaction Type": "",
@@ -1957,9 +1951,9 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     });
   }
 
-  const ws4 = XLSX.utils.json_to_sheet(txRows.length ? txRows : [{ Message: "No transactions recorded." }]);
-  autoFitColumns(ws4, txRows);
-  XLSX.utils.book_append_sheet(workbook, ws4, "Capital Transactions & Ledger");
+  const ws3 = XLSX.utils.json_to_sheet(txRows.length ? txRows : [{ Message: "No transactions recorded." }]);
+  autoFitColumns(ws3, txRows);
+  XLSX.utils.book_append_sheet(workbook, ws3, "Partner Transactions");
 
   const fileName = customFileName || `Global_Capital_Report_${new Date().toISOString().slice(0, 10)}`;
   XLSX.writeFile(workbook, `${fileName}.xlsx`);

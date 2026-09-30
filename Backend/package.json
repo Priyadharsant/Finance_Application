@@ -1,6 +1,6 @@
 {
     "name": "finance-application-backend",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "private": true,
     "type": "module",
     "scripts": {
@@ -9,6 +9,7 @@
         "db:import": "node docs/import-database.js",
         "db:import:data": "node docs/import-database.js docs/finance_data_inserts.sql",
         "db:export": "node docs/export-database.js",
+        "db:reset": "node docs/reset-database.js",
         "bump": "node ../scripts/bump-version.js"
     },
     "dependencies": {

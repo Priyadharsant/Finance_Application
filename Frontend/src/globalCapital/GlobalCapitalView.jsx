@@ -9,7 +9,6 @@ import MonthlyStatsTab from "./components/MonthlyStatsTab.jsx";
 import PartnerManagement from "./components/PartnerManagement.jsx";
 import CapitalTransactionsTab from "./components/CapitalTransactionsTab.jsx";
 import ExpensesTab from "./components/ExpensesTab.jsx";
-import MonthlyClosingTab from "./components/MonthlyClosingTab.jsx";
 import GlobalReportsTab from "./components/GlobalReportsTab.jsx";
 
 // Modals
@@ -135,7 +134,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   const dynamicTitle = useMemo(() => {
     if (selectedRecord?.type === "partner" && selectedRecord.record) {
-      return `${selectedRecord.record.partner_name || "Partner"} · Partner Dossier · Global Capital | FinFlow`;
+      return `${selectedRecord.record.partner_name || "Partner"} · Partner Profile · Global Capital | FinFlow`;
     }
     if (selectedRecord?.type === "ledger" && selectedRecord.record) {
       return `Ledger Transaction #${selectedRecord.record.transaction_id || ""} · Global Capital | FinFlow`;
@@ -327,14 +326,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       fetchPartners();
     }
     if (activeMenu === "Expenses") fetchExpenses();
-    if (activeMenu === "Monthly Closing") {
-      fetchCurrentMonthEstimate();
-      fetchDailyLogs();
-      fetchHistoryMonthData(historyYear, historyMonth);
-      fetchClosings();
-      fetchProfitCalcs();
-      fetchCronStatus();
-    }
     if (activeMenu === "Reports") {
       fetchPartners();
       fetchTransactions();
@@ -667,31 +658,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         />
       )}
 
-      {/* ---------------- 5. MONTHLY CLOSING & TIME-WEIGHTED CAPITAL ---------------- */}
-      {activeMenu === "Monthly Closing" && (
-        <MonthlyClosingTab
-          currentMonthEstimate={currentMonthEstimate}
-          loadingEstimate={loadingEstimate}
-          onRefreshEstimate={fetchCurrentMonthEstimate}
-          cronStatus={cronStatus}
-          runningCron={runningCron}
-          onTriggerCron={handleTriggerCron}
-          dailyLogsData={dailyLogsData}
-          loadingDailyLogs={loadingDailyLogs}
-          runningDailyCalc={runningDailyCalc}
-          onRefreshDailyLogs={fetchDailyLogs}
-          onRunDailyCalc={handleRunDailyCalc}
-          onOpenSegmentModal={setSegmentModalData}
-          passedMonthsList={passedMonthsList}
-          historyYear={historyYear}
-          setHistoryYear={setHistoryYear}
-          historyMonth={historyMonth}
-          setHistoryMonth={setHistoryMonth}
-          historyMonthData={historyMonthData}
-          loadingHistoryMonth={loadingHistoryMonth}
-          onFetchHistoryMonth={fetchHistoryMonthData}
-        />
-      )}
 
       {/* ---------------- 6. REPORTS (EXCEL DOWNLOADS) ---------------- */}
       {activeMenu === "Reports" && (

@@ -46,8 +46,7 @@ export default function DailyPartnerBreakdownModal({ record, close }) {
               <tr>
                 <th>Partner</th>
                 <th style={{ textAlign: "right" }}>Capital Balance</th>
-                <th style={{ textAlign: "center" }}>Share %</th>
-                <th style={{ textAlign: "right" }}>Today's Share</th>
+                <th style={{ textAlign: "right" }}>Today's Allocation</th>
               </tr>
             </thead>
             <tbody>
@@ -62,11 +61,6 @@ export default function DailyPartnerBreakdownModal({ record, close }) {
                     </td>
                     <td style={{ textAlign: "right", fontFamily: "monospace" }}>
                       {money(alloc.capitalBalance)}
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className="profitRatioPill">
-                        {alloc.capitalSharePercent}%
-                      </span>
                     </td>
                     <td
                       style={{

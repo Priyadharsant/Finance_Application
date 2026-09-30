@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
-import { exportDailyCollectionsSheet } from "../services/dailyExportUtils.js";
+import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
+import MonthFilterModal from "../../components/MonthFilterModal.jsx";
 
 function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, busy }) {
   const isCollected = Number(customer.today_collection || 0) > 0;
@@ -72,7 +74,7 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, bus
           type="button"
           className="linkButton"
           onClick={() => openDetails(customer.customer_id)}
-          title="View complete customer loan dossier and collection ledger"
+          title="View customer loan details and payment history"
         >
           <b>{customer.customer_name}</b>
           <small>
@@ -298,6 +300,12 @@ export default function DailyEntryTab({
 }) {
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState("ALL"); // ALL | PENDING | COLLECTED
+  const [showMonthModal, setShowMonthModal] = useState(false);
+
+  const handleExportMonthlyCollections = async (selectedMonth) => {
+    const reportData = await globalCapitalApi.getMasterBusinessLedger();
+    exportDailyMonthlyCollectionReport(reportData, {}, selectedMonth);
+  };
 
   // Quick Date Navigation
   const shiftDate = (days) => {
@@ -598,21 +606,11 @@ export default function DailyEntryTab({
 
             <button
               type="button"
-              className="iconTextButton"
-              style={{
-                background: "#f8fafc",
-                color: "#0f766e",
-                border: "1.5px solid #cbd5e1",
-                borderRadius: "8px",
-                padding: "6px 12px",
-                fontSize: "12.5px",
-                fontWeight: "700",
-                cursor: "pointer",
-              }}
-              onClick={() => exportDailyCollectionsSheet(date, daily)}
-              title="Download collection sheet in Excel (.xlsx)"
+              className="unifiedReportBtn"
+              onClick={() => setShowMonthModal(true)}
+              title="Download Monthly Collections Report (.xlsx)"
             >
-              <FileSpreadsheet size={14} /> Export Sheet (Excel)
+              <FileSpreadsheet size={14} /> Monthly Collection Report
             </button>
           </div>
         </div>
@@ -658,6 +656,14 @@ export default function DailyEntryTab({
           </div>
         )}
       </div>
+
+      <MonthFilterModal
+        isOpen={showMonthModal}
+        onClose={() => setShowMonthModal(false)}
+        onExport={handleExportMonthlyCollections}
+        title="Daily Monthly Collections Report"
+        themeColor="#059669"
+      />
     </section>
   );
 }

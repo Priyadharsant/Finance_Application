@@ -305,10 +305,10 @@ export default function MonthlyClosingTab({
           >
             <div>
               <h3 style={{ margin: 0 }}>
-                <Users size={18} /> Partner Profit Shares ({displayData?.monthName || "Selected Month"} {historyYear})
+                <Users size={18} /> Partner Capital &amp; Allocations ({displayData?.monthName || "Selected Month"} {historyYear})
               </h3>
               <small style={{ color: "#64748b" }}>
-                Time-weighted capital days allocation for {displayData?.monthName} {historyYear}.
+                Capital performance and earnings for {displayData?.monthName} {historyYear}.
               </small>
             </div>
             <span style={{ fontSize: "12.5px", color: "#0f766e", fontWeight: "600" }}>
@@ -327,7 +327,6 @@ export default function MonthlyClosingTab({
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Opening Capital</th>
                   <th style={{ textAlign: "right" }}>Closing / Current Capital</th>
-                  <th style={{ textAlign: "center" }}>Share %</th>
                   <th style={{ textAlign: "right" }}>{displayData?.isCurrentMonth ? "Estimated Profit" : "Profit Earned"}</th>
                   <th style={{ textAlign: "center" }}>Status</th>
                   <th style={{ textAlign: "center" }}>Segments</th>
@@ -335,8 +334,6 @@ export default function MonthlyClosingTab({
               </thead>
               <tbody>
                 {(displayData?.allocations || []).map((alloc) => {
-                  const ratio = Number(alloc.profitRatio || 0);
-                  const weight = Number(alloc.capitalWeight || 0);
                   const profitVal = Number(alloc.allocatedProfit != null ? alloc.allocatedProfit : alloc.expectedProfit || 0);
 
                   return (
@@ -351,11 +348,6 @@ export default function MonthlyClosingTab({
                       </td>
                       <td style={{ textAlign: "right", fontWeight: "600", color: "#0f766e" }}>
                         {money(alloc.closingCapital)}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span className="profitRatioPill">
-                          {(ratio * 100).toFixed(2)}%
-                        </span>
                       </td>
                       <td
                         style={{

@@ -125,7 +125,7 @@ export default function DailyReports({
         <div>
           <span className="overline">REPORTS</span>
           <h2>Daily Finance Reports</h2>
-          <p>Period collections, disbursements, and Excel financial exports.</p>
+          <p>Track collections, loans given, and download Excel reports.</p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -145,7 +145,7 @@ export default function DailyReports({
             }}
             onClick={handleExportDailyCategoryReport}
             disabled={downloadingDailyReport}
-            title="Download dedicated Daily Finance Report (.xlsx) containing all 4 essential sheets: Daily Ledger, Customer Portfolio, Collection Logs, and Operating Expenses"
+            title="Download Daily Finance Report (.xlsx) with Daily Ledger, Loans, Collections, and Expenses"
           >
             <FileSpreadsheet size={16} />
             <span>{downloadingDailyReport ? "Compiling Report..." : "Download Daily Finance Report (.xlsx)"}</span>
@@ -192,13 +192,13 @@ export default function DailyReports({
             setScope?.(nextScope);
             runReport(range, nextScope);
           }}
-          title="Scope of report: All portfolio accounts or only accounts with period activity"
+          title="Scope of report: All accounts or only accounts with period activity"
           style={{ fontWeight: "600" }}
         >
-          <option value="all">View: All Portfolio Accounts</option>
+          <option value="all">View: All Accounts</option>
           <option value="period_activity">View: Period Activity Only</option>
           <option value="collections">View: Collections Received Only (&gt; ₹0)</option>
-          <option value="disbursed">View: New Loans Disbursed in Period</option>
+          <option value="disbursed">View: New Loans Given in Period</option>
         </select>
 
         <input
@@ -333,7 +333,7 @@ export default function DailyReports({
                 </p>
                 <p style={{ fontSize: "13px" }}>
                   {scope !== "all"
-                    ? "No disbursements or collections were recorded in this period. Switch the View dropdown to 'All Portfolio Accounts' or select a wider date range."
+                    ? "No loans given or collections recorded for this period. Try selecting 'All Accounts' or a wider date range."
                     : "Try adjusting your search query, status, or date range."}
                 </p>
               </div>

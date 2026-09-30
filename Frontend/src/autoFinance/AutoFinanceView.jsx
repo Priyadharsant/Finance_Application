@@ -22,7 +22,6 @@ import AutoDashboard from "./components/AutoDashboard";
 import AutoCustomers from "./components/AutoCustomers";
 import AutoLoanSchemes from "./components/AutoLoanSchemes";
 import AutoVehicleLoans from "./components/AutoVehicleLoans";
-import AutoReports from "./components/AutoReports";
 
 export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [dashboardData, setDashboardData] = useState({
@@ -770,18 +769,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         />
       )}
 
-      {/* 5. REPORTS */}
-      {activeMenu === "Reports" && (
-        <AutoReports
-          overview={overview}
-          loans={loans}
-          reportMonth={reportMonth}
-          setReportMonth={setReportMonth}
-          handleExportTotal={handleExportTotal}
-          handleExportMonthly={handleExportMonthly}
-          handleExportIndividualFromId={handleExportIndividualFromId}
-        />
-      )}
+
 
       {/* MODAL: ADD LOAN SCHEME */}
       <AddLoanSchemeModal

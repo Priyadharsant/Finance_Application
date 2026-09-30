@@ -51,7 +51,7 @@ export default function GlobalReportsTab({
 
   const [range, setRange] = useState(getInitialMonthRange());
   const [appliedRange, setAppliedRange] = useState(getInitialMonthRange());
-  const [scope, setScope] = useState("closings"); // 'closings', 'partners', 'expenses', 'transactions'
+  const [scope, setScope] = useState("partners"); // 'partners', 'expenses', 'transactions'
   const [search, setSearch] = useState("");
   const [partnerId, setPartnerId] = useState("");
   const [status, setStatus] = useState("");
@@ -199,7 +199,7 @@ export default function GlobalReportsTab({
           <span className="overline" style={{ color: "#0f766e" }}>REPORTS</span>
           <h2>Global Capital Reports</h2>
           <p>
-            Period corporate equity performance, partner profit shares, and single-click Excel export.
+            Track partner balances, monthly profits, expenses, and download Excel reports.
           </p>
         </div>
 
@@ -292,7 +292,6 @@ export default function GlobalReportsTab({
           style={{ fontWeight: "600" }}
           title="Scope of report view"
         >
-          <option value="closings">View: Monthly Closings &amp; Partner Shares</option>
           <option value="partners">View: Partner Capital Accounts</option>
           <option value="expenses">View: Business Operating Expenses (Selavu)</option>
         </select>
