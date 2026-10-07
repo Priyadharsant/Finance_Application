@@ -49,7 +49,7 @@ router.get("/", (req, res) => {
     currentVersion: currentClientVersion,
     hasUpdate,
     isMandatory,
-    releaseDate: "2026-10-06",
+    releaseDate: "2026-10-07",
     downloadUrl,
     releaseNotes: [
       "Supabase Cloud Storage: Secure cloud uploads for Aadhaar, RC Book, and loan dossiers with instant previews",
