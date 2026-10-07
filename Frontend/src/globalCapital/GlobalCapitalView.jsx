@@ -134,33 +134,33 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   const dynamicTitle = useMemo(() => {
     if (selectedRecord?.type === "partner" && selectedRecord.record) {
-      return `${selectedRecord.record.partner_name || "Partner"} · Partner Profile · Global Capital | FinFlow`;
+      return `${selectedRecord.record.partner_name || "Partner"} · Partner Profile · Global Capital | KAMBAM FINANCE`;
     }
     if (selectedRecord?.type === "ledger" && selectedRecord.record) {
-      return `Ledger Transaction #${selectedRecord.record.transaction_id || ""} · Global Capital | FinFlow`;
+      return `Ledger Transaction #${selectedRecord.record.transaction_id || ""} · Global Capital | KAMBAM FINANCE`;
     }
     if (selectedRecord?.record) {
-      return `Record Details · Global Capital | FinFlow`;
+      return `Record Details · Global Capital | KAMBAM FINANCE`;
     }
     if (profitPaymentModal?.partner_name) {
-      return `Profit Settlement (${profitPaymentModal.partner_name}) · Global Capital | FinFlow`;
+      return `Profit Settlement (${profitPaymentModal.partner_name}) · Global Capital | KAMBAM FINANCE`;
     }
     if (showAddPartner) {
-      return `Add Business Partner · Global Capital | FinFlow`;
+      return `Add Business Partner · Global Capital | KAMBAM FINANCE`;
     }
     if (showCapitalModal) {
-      return `${capitalActionType === "CONTRIBUTION" ? "Add Partner Capital" : "Withdraw Partner Capital"} · Global Capital | FinFlow`;
+      return `${capitalActionType === "CONTRIBUTION" ? "Add Partner Capital" : "Withdraw Partner Capital"} · Global Capital | KAMBAM FINANCE`;
     }
     if (showAddExpense) {
-      return `Record Expense · Global Capital | FinFlow`;
+      return `Record Expense · Global Capital | KAMBAM FINANCE`;
     }
     if (showDraftModal) {
-      return `Draft Monthly Closing · Global Capital | FinFlow`;
+      return `Draft Monthly Closing · Global Capital | KAMBAM FINANCE`;
     }
     if (segmentModalData) {
-      return `Time-Weighted Segments · Global Capital | FinFlow`;
+      return `Time-Weighted Segments · Global Capital | KAMBAM FINANCE`;
     }
-    return `${activeMenu || "Ledger Overview"} · Global Capital | FinFlow`;
+    return `${activeMenu || "Ledger Overview"} · Global Capital | KAMBAM FINANCE`;
   }, [
     activeMenu,
     selectedRecord,
@@ -392,6 +392,9 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           amount: parseFloat(capitalFormData.amount),
           effectiveDate: capitalFormData.effectiveDate,
           notes: capitalFormData.notes,
+          fundSourceType: capitalFormData.fundSourceType,
+          lenderName: capitalFormData.lenderName,
+          interestRate: capitalFormData.interestRate,
         });
         setNotice({ type: "success", text: "Withdrawal recorded successfully" });
       } else {

@@ -60,19 +60,12 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
 
     const inHandAmount = Number(l.loan_amount || 0) - totalDeductions;
 
-    // Partner Interest calculation
-    const fundSource = fees.fundSource || "OWN";
-    const partnerInterestRate = Number(fees.partnerInterestRate || 0);
     const tenureMonths = Number(l.tenure_months || 0);
     const loanAmount = Number(l.loan_amount || 0);
     const customerInterestRate = Number(l.interest_rate || 0);
     
     // Total interest from customer (approx flat)
     const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 1200);
-    // Partner's share of interest
-    const partnerInterestShare = fundSource === "PARTNER" ? Math.round((loanAmount * partnerInterestRate * tenureMonths) / 1200) : 0;
-    // Net profit for company
-    const netCompanyProfit = totalCustomerInterest - partnerInterestShare;
 
     return {
       "Customer Name": `${l.first_name || ""} ${l.last_name || ""}`.trim(),
@@ -80,10 +73,7 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
       "Phone": l.phone || "",
       "Vehicle": `${l.make || ""} ${l.model || ""}`.trim(),
       "Reg No": l.registration_number || "PENDING",
-      "Fund Source": fundSource === "PARTNER" ? "PARTNER" : "OWN CAPITAL",
-      "Partner Interest Rate (%)": fundSource === "PARTNER" ? partnerInterestRate : 0,
-      "Partner Interest Amount (₹)": partnerInterestShare,
-      "Expected Company Net Profit (₹)": netCompanyProfit,
+      "Expected Company Net Profit (₹)": totalCustomerInterest,
       "Broker Name": fees.brokerName || "—",
       "Broker Phone": fees.brokerPhone || "—",
       "Guarantor (Jamin) Name": fees.jaminName || "—",
@@ -94,10 +84,10 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
       "Hire Purchase (₹)": hirePurchase,
       "Tax Amount (₹)": taxAmount,
       "Insurance (₹)": insurance,
-      "Insurance Fine (₹)": insuranceFine,
+      "Fitness Cert (₹)": insuranceFine,
       "Green Tax (₹)": greenTax,
       "Fine (₹)": fine,
-      "National Tax (₹)": nationalTax,
+      "Name Transfer (₹)": nationalTax,
       "Permit (₹)": permit,
       "Brokerage (Customer) (₹)": brokerageCustomer,
       "Brokerage (By Hand) (₹)": brokerageHand,
@@ -116,16 +106,21 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
   if (exportData.length > 0) {
     const totalDisbursed = loans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
     const totalCollected = loans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
-    const activeLoans = loans.filter((l) => (l.status || "ACTIVE").toUpperCase() === "ACTIVE");
-    const nextMonthEmis = activeLoans.reduce((sum, l) => {
-      const loanAmt = Number(l.loan_amount || 0);
-      const tenure = Number(l.tenure_months || 0);
-      const emi = Number(l.monthly_installment || l.emi_amount || (tenure > 0 ? Math.round(loanAmt / tenure) : (loanAmt * 0.1)));
-      return sum + emi;
-    }, 0);
 
-    const currentInHand = totalCollected;
-    const nextMonthProjected = currentInHand + nextMonthEmis;
+    const sumIncomeDue = exportData.reduce((sum, r) => sum + Number(r["Income Due (₹)"] || 0), 0);
+    const sumDocFee = exportData.reduce((sum, r) => sum + Number(r["Document Fee (₹)"] || 0), 0);
+    const sumHp = exportData.reduce((sum, r) => sum + Number(r["Hire Purchase (₹)"] || 0), 0);
+    const sumTax = exportData.reduce((sum, r) => sum + Number(r["Tax Amount (₹)"] || 0), 0);
+    const sumInsur = exportData.reduce((sum, r) => sum + Number(r["Insurance (₹)"] || 0), 0);
+    const sumInsurFine = exportData.reduce((sum, r) => sum + Number(r["Fitness Cert (₹)"] || 0), 0);
+    const sumGt = exportData.reduce((sum, r) => sum + Number(r["Green Tax (₹)"] || 0), 0);
+    const sumFine = exportData.reduce((sum, r) => sum + Number(r["Fine (₹)"] || 0), 0);
+    const sumNameTransfer = exportData.reduce((sum, r) => sum + Number(r["Name Transfer (₹)"] || 0), 0);
+    const sumPermit = exportData.reduce((sum, r) => sum + Number(r["Permit (₹)"] || 0), 0);
+    const sumBrokerCust = exportData.reduce((sum, r) => sum + Number(r["Brokerage (Customer) (₹)"] || 0), 0);
+    const sumBrokerHand = exportData.reduce((sum, r) => sum + Number(r["Brokerage (By Hand) (₹)"] || 0), 0);
+    const sumDeductions = exportData.reduce((sum, r) => sum + Number(r["Total Deductions & Fees (₹)"] || 0), 0);
+    const sumInHand = exportData.reduce((sum, r) => sum + Number(r["Amount Given to Customer (After All Deductions) (₹)"] || 0), 0);
 
     exportData.push({
       "Customer Name": "TOTAL",
@@ -133,29 +128,26 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
       "Phone": "",
       "Vehicle": "",
       "Reg No": "",
-      "Fund Source": "",
-      "Partner Interest Rate (%)": "",
-      "Partner Interest Amount (₹)": "",
       "Expected Company Net Profit (₹)": "",
       "Broker Name": "",
       "Broker Phone": "",
       "Guarantor (Jamin) Name": "",
       "Guarantor (Jamin) Phone": "",
       "Loan Amount (₹)": totalDisbursed,
-      "Income Due (₹)": "",
-      "Document Fee (₹)": "",
-      "Hire Purchase (₹)": "",
-      "Tax Amount (₹)": "",
-      "Insurance (₹)": "",
-      "Insurance Fine (₹)": "",
-      "Green Tax (₹)": "",
-      "Fine (₹)": "",
-      "National Tax (₹)": "",
-      "Permit (₹)": "",
-      "Brokerage (Customer) (₹)": "",
-      "Brokerage (By Hand) (₹)": "",
-      "Total Deductions & Fees (₹)": "",
-      "Amount Given to Customer (After All Deductions) (₹)": "",
+      "Income Due (₹)": sumIncomeDue,
+      "Document Fee (₹)": sumDocFee,
+      "Hire Purchase (₹)": sumHp,
+      "Tax Amount (₹)": sumTax,
+      "Insurance (₹)": sumInsur,
+      "Fitness Cert (₹)": sumInsurFine,
+      "Green Tax (₹)": sumGt,
+      "Fine (₹)": sumFine,
+      "Name Transfer (₹)": sumNameTransfer,
+      "Permit (₹)": sumPermit,
+      "Brokerage (Customer) (₹)": sumBrokerCust,
+      "Brokerage (By Hand) (₹)": sumBrokerHand,
+      "Total Deductions & Fees (₹)": sumDeductions,
+      "Amount Given to Customer (After All Deductions) (₹)": sumInHand,
       "Interest Rate (%)": "",
       "Tenure (Months)": "",
       "Start Date": "",
@@ -233,7 +225,7 @@ export const exportIndividualLoan = (loan) => {
     { "Category": "Insurance Fine", "Value": Number(fees.insuranceFine || 0) },
     { "Category": "Green Tax", "Value": Number(fees.greenTax || 0) },
     { "Category": "Fine", "Value": Number(fees.fine || 0) },
-    { "Category": "National Tax", "Value": Number(fees.nationalTax || 0) },
+    { "Category": "Name Transfer", "Value": Number(fees.nationalTax || 0) },
     { "Category": "Permit", "Value": Number(fees.permit || 0) },
     { "Category": "Brokerage (Customer)", "Value": Number(fees.brokerageCustomer || 0) },
     { "Category": "Brokerage (By Hand)", "Value": Number(fees.brokerageHand || 0) },

@@ -131,53 +131,7 @@ export default function CreateLoanModal({
             </>
           )}
 
-          <div className="formSectionHeader">
-            🏦 Source of Funds
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
-            <label>
-              Fund Source
-              <select
-                value={loanForm.fundSource}
-                onChange={(e) => setLoanForm({ ...loanForm, fundSource: e.target.value })}
-                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-              >
-                <option value="OWN">Own Capital (Company)</option>
-                <option value="PARTNER">Partner Capital</option>
-              </select>
-            </label>
-            
-            {loanForm.fundSource === "PARTNER" && (
-              <>
-                <label>
-                  Select Partner *
-                  <select
-                    required
-                    value={loanForm.partnerId}
-                    onChange={(e) => setLoanForm({ ...loanForm, partnerId: e.target.value })}
-                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-                  >
-                    <option value="">-- Choose Partner --</option>
-                    {partners?.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Partner Interest Share (%) *
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    placeholder="e.g. 2.0"
-                    value={loanForm.partnerInterestRate}
-                    onChange={(e) => setLoanForm({ ...loanForm, partnerInterestRate: e.target.value })}
-                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-                  />
-                </label>
-              </>
-            )}
-          </div>
+
 
           <div className="formSectionHeader">
             💰 Loan Parameters & Calculations
@@ -273,10 +227,10 @@ export default function CreateLoanModal({
             <label>Hire Purchase <input type="number" className="autoInput" value={loanForm.hirePurchase} onChange={(e) => setLoanForm({ ...loanForm, hirePurchase: Number(e.target.value) })} /></label>
             <label>Tax Amount <input type="number" className="autoInput" value={loanForm.taxAmount} onChange={(e) => setLoanForm({ ...loanForm, taxAmount: Number(e.target.value) })} /></label>
             <label>Insurance <input type="number" className="autoInput" value={loanForm.insurance} onChange={(e) => setLoanForm({ ...loanForm, insurance: Number(e.target.value) })} /></label>
-            <label>Ins. Fine <input type="number" className="autoInput" value={loanForm.insuranceFine} onChange={(e) => setLoanForm({ ...loanForm, insuranceFine: Number(e.target.value) })} /></label>
+            <label>Fitness Cert <input type="number" className="autoInput" value={loanForm.insuranceFine} onChange={(e) => setLoanForm({ ...loanForm, insuranceFine: Number(e.target.value) })} /></label>
             <label>Green Tax <input type="number" className="autoInput" value={loanForm.greenTax} onChange={(e) => setLoanForm({ ...loanForm, greenTax: Number(e.target.value) })} /></label>
             <label>Fine <input type="number" className="autoInput" value={loanForm.fine} onChange={(e) => setLoanForm({ ...loanForm, fine: Number(e.target.value) })} /></label>
-            <label>National Tax <input type="number" className="autoInput" value={loanForm.nationalTax} onChange={(e) => setLoanForm({ ...loanForm, nationalTax: Number(e.target.value) })} /></label>
+            <label>Name Transfer <input type="number" className="autoInput" value={loanForm.nationalTax} onChange={(e) => setLoanForm({ ...loanForm, nationalTax: Number(e.target.value) })} /></label>
             <label>Permit <input type="number" className="autoInput" value={loanForm.permit} onChange={(e) => setLoanForm({ ...loanForm, permit: Number(e.target.value) })} /></label>
             <label>Brokerage (Cust.) <input type="number" className="autoInput" value={loanForm.brokerageCustomer} onChange={(e) => setLoanForm({ ...loanForm, brokerageCustomer: Number(e.target.value) })} /></label>
             <label>Brokerage (Hand) <input type="number" className="autoInput" value={loanForm.brokerageHand} onChange={(e) => setLoanForm({ ...loanForm, brokerageHand: Number(e.target.value) })} /></label>

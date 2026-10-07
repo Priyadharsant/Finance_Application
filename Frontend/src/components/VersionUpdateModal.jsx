@@ -114,7 +114,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: "19px", color: "#0f172a", fontWeight: 700 }}>
-                {hasUpdate ? "Update Required to Continue" : "FinFlow Up to Date"}
+                {hasUpdate ? "Update Required to Continue" : "KAMBAM FINANCE Up to Date"}
               </h3>
               <p style={{ margin: "3px 0 0 0", fontSize: "12px", color: "#64748b" }}>
                 Installed Version: <strong style={{ color: hasUpdate ? "#dc2626" : "#0f766e" }}>v{APP_VERSION}</strong> · Build: {APP_BUILD_DATE}
@@ -163,7 +163,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
             <div>
               <div style={{ fontWeight: 700, fontSize: "13px", color: hasUpdate ? "#991b1b" : "#166534" }}>
                 {hasUpdate
-                  ? `FinFlow v${latestVersion} is required to use this application`
+                  ? `KAMBAM FINANCE v${latestVersion} is required to use this application`
                   : "You are on the latest official release"}
               </div>
               <small style={{ color: hasUpdate ? "#b91c1c" : "#15803d", fontSize: "11px", display: "block", marginTop: "2px" }}>

@@ -12,7 +12,7 @@ ipcMain.handle("get-app-version", () => {
   return app.getVersion();
 });
 
-app.name = "Finance Application";
+app.name = "KAMBAM FINANCE";
 
 // Performance optimization: enable hardware acceleration & GPU rasterization
 app.commandLine.appendSwitch("enable-gpu-rasterization");

@@ -967,7 +967,7 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
   sheet2Data.push([
     "S.No", "Date", "Customer Name", "Vehicle Details", "Principal Loan (₹)", "Interest Rate (%)", "Total Repayable (₹)",
     "In Hand Disbursed (₹)", "Broker Name", "Brokerage (₹)", "Charges Description", "Doc Charges (₹)", "HP (₹)", "TA (₹)",
-    "Insurance (₹)", "IF (₹)", "GT (₹)", "Fine (₹)", "NT (₹)", "Permit (₹)", "Total Deductions (₹)", "FC Selavu (₹)", "Collected / Vasul (₹)"
+    "Insurance (₹)", "Fitness Cert (₹)", "GT (₹)", "Fine (₹)", "Name Transfer (₹)", "Permit (₹)", "Total Deductions (₹)", "FC Selavu (₹)", "Collected / Vasul (₹)"
   ]);
 
   autoLoans.forEach((r, idx) => {
@@ -1238,16 +1238,51 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   // Total Recovered (₹), Balance Pending (₹), Broker Name, Brokerage (₹), Loan Status
   // -------------------------------------------------------------
   const portfolioRows = sortedLoans.map((l, idx) => {
+    let fees = {};
+    try {
+      fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
+    } catch (_) {
+      fees = {};
+    }
+
+    const incomeDue = Number(l.incomeDue ?? fees.incomeDue ?? 0);
+    const documentFee = Number(l.document ?? fees.documentFee ?? 0);
+    const hirePurchase = Number(l.hp ?? fees.hirePurchase ?? 0);
+    const taxAmount = Number(l.ta ?? fees.taxAmount ?? 0);
+    const insurance = Number(l.insurance ?? fees.insurance ?? 0);
+    const insuranceFine = Number(l.if ?? fees.insuranceFine ?? 0);
+    const greenTax = Number(l.gt ?? fees.greenTax ?? 0);
+    const fine = Number(l.fine ?? fees.fine ?? 0);
+    const nameTransfer = Number(l.nt ?? fees.nationalTax ?? 0);
+    const permit = Number(l.permit ?? fees.permit ?? 0);
+    const brokerageCustomer = Number(l.brokerCustomer ?? fees.brokerageCustomer ?? 0);
+    const brokerageHand = Number(l.brokerHand ?? fees.brokerageHand ?? 0);
+
+    const calcDeductions =
+      incomeDue +
+      documentFee +
+      hirePurchase +
+      taxAmount +
+      insurance +
+      insuranceFine +
+      greenTax +
+      fine +
+      nameTransfer +
+      permit +
+      brokerageCustomer;
+
+    const dedAmt = Number(l.totalDeductions ?? calcDeductions);
     const loanAmt = Number(l.loanAmount || l.loan_amount || 0);
     const totAmt = Number(l.totalAmount || l.total_payable || loanAmt);
     const recAmt = Number(l.incomeCollected || l.total_collected || l.total_paid || 0);
-    const dedAmt = Number(l.totalDeductions || 0);
     const inHand = Number(l.byHand || (loanAmt - dedAmt));
     const balDue = Math.max(0, totAmt - recAmt);
     const tenure = Number(l.tenureMonths || l.tenure_months || 0);
     const scheduledEmi = tenure > 0 ? Math.round(totAmt / tenure) : 0;
     const emi = Number(l.monthly_installment || l.emi_amount || scheduledEmi || 0);
     const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
+    const brokerName = l.brokerName || fees.brokerName || "—";
+    const brokerAmt = Number(l.broker || brokerageCustomer || brokerageHand || 0);
 
     return {
       "Sl": idx + 1,
@@ -1261,12 +1296,24 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
       "Tenure (Months)": tenure,
       "Monthly EMI (₹)": emi,
       "Agreed Total Amount (₹)": totAmt,
+      "Income Due (₹)": incomeDue,
+      "Document Fee (₹)": documentFee,
+      "Hire Purchase (₹)": hirePurchase,
+      "Tax Amount (₹)": taxAmount,
+      "Insurance (₹)": insurance,
+      "Fitness Cert (₹)": insuranceFine,
+      "Green Tax (₹)": greenTax,
+      "Fine (₹)": fine,
+      "Name Transfer (₹)": nameTransfer,
+      "Permit (₹)": permit,
+      "Brokerage Cust (₹)": brokerageCustomer,
+      "Brokerage Hand (₹)": brokerageHand,
       "Total Deductions (₹)": dedAmt,
       "In-Hand Disbursed (₹)": inHand,
       "Total Recovered (₹)": recAmt,
       "Balance Pending (₹)": balDue,
-      "Broker Name": l.brokerName || "—",
-      "Brokerage (₹)": Number(l.broker || 0),
+      "Broker Name": brokerName,
+      "Brokerage (₹)": brokerAmt,
       "Loan Status": l.status || "ACTIVE",
     };
   });
@@ -1275,7 +1322,10 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   sheet1Data.push([
     "Sl", "Disbursement Date", "Customer Name", "Mobile Number", "Vehicle Make/Model",
     "Registration Number", "Loan Principal (₹)", "Interest Rate (%)", "Tenure (Months)",
-    "Monthly EMI (₹)", "Agreed Total Amount (₹)", "Total Deductions (₹)", "In-Hand Disbursed (₹)",
+    "Monthly EMI (₹)", "Agreed Total Amount (₹)",
+    "Income Due (₹)", "Document Fee (₹)", "Hire Purchase (₹)", "Tax Amount (₹)", "Insurance (₹)",
+    "Fitness Cert (₹)", "Green Tax (₹)", "Fine (₹)", "Name Transfer (₹)", "Permit (₹)",
+    "Brokerage Cust (₹)", "Brokerage Hand (₹)", "Total Deductions (₹)", "In-Hand Disbursed (₹)",
     "Total Recovered (₹)", "Balance Pending (₹)", "Broker Name", "Brokerage (₹)", "Loan Status"
   ]);
 
@@ -1283,16 +1333,35 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
     sheet1Data.push([
       r["Sl"], r["Disbursement Date"], r["Customer Name"], r["Mobile Number"], r["Vehicle Make/Model"],
       r["Registration Number"], r["Loan Principal (₹)"], r["Interest Rate (%)"], r["Tenure (Months)"],
-      r["Monthly EMI (₹)"], r["Agreed Total Amount (₹)"], r["Total Deductions (₹)"], r["In-Hand Disbursed (₹)"],
+      r["Monthly EMI (₹)"], r["Agreed Total Amount (₹)"],
+      r["Income Due (₹)"], r["Document Fee (₹)"], r["Hire Purchase (₹)"], r["Tax Amount (₹)"], r["Insurance (₹)"],
+      r["Fitness Cert (₹)"], r["Green Tax (₹)"], r["Fine (₹)"], r["Name Transfer (₹)"], r["Permit (₹)"],
+      r["Brokerage Cust (₹)"], r["Brokerage Hand (₹)"], r["Total Deductions (₹)"], r["In-Hand Disbursed (₹)"],
       r["Total Recovered (₹)"], r["Balance Pending (₹)"], r["Broker Name"], r["Brokerage (₹)"], r["Loan Status"]
     ]);
   });
 
   if (portfolioRows.length > 0) {
+    const sumIncomeDue = portfolioRows.reduce((s, r) => s + r["Income Due (₹)"], 0);
+    const sumDoc = portfolioRows.reduce((s, r) => s + r["Document Fee (₹)"], 0);
+    const sumHp = portfolioRows.reduce((s, r) => s + r["Hire Purchase (₹)"], 0);
+    const sumTax = portfolioRows.reduce((s, r) => s + r["Tax Amount (₹)"], 0);
+    const sumInsur = portfolioRows.reduce((s, r) => s + r["Insurance (₹)"], 0);
+    const sumInsurFine = portfolioRows.reduce((s, r) => s + r["Fitness Cert (₹)"], 0);
+    const sumGt = portfolioRows.reduce((s, r) => s + r["Green Tax (₹)"], 0);
+    const sumFine = portfolioRows.reduce((s, r) => s + r["Fine (₹)"], 0);
+    const sumNt = portfolioRows.reduce((s, r) => s + r["Name Transfer (₹)"], 0);
+    const sumPermit = portfolioRows.reduce((s, r) => s + r["Permit (₹)"], 0);
+    const sumBrokerCust = portfolioRows.reduce((s, r) => s + r["Brokerage Cust (₹)"], 0);
+    const sumBrokerHand = portfolioRows.reduce((s, r) => s + r["Brokerage Hand (₹)"], 0);
+
     sheet1Data.push([
       "TOTAL", "", `${sortedLoans.length} Loans`, "", "",
       "", totalLoanAmt, "", "",
-      nextMonthActiveEmis, totalRepayable, totalDeductions, totalInHand,
+      nextMonthActiveEmis, totalRepayable,
+      sumIncomeDue, sumDoc, sumHp, sumTax, sumInsur,
+      sumInsurFine, sumGt, sumFine, sumNt, sumPermit,
+      sumBrokerCust, sumBrokerHand, totalDeductions, totalInHand,
       totalRecovered, totalBalDue, "", totalBrokerage, ""
     ]);
   }
@@ -1537,9 +1606,9 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
     const gross = Number(l.loanAmount || l.gross_finance_amount || 0);
     const pitibu = Number(l.pitibu || l.initial_deduction || 0);
     const byHand = Number(l.byHand || l.net_disbursement || (gross - pitibu));
-    const income = Number(l.agreed_total_payable || (gross + pitibu) || gross);
-    const vasul = Number(l.income || l.total_collected || 0);
-    const balance = Number(l.balance || l.remaining || Math.max(0, income - vasul));
+    const income = Number(l.agreed_total_payable || gross);
+    const vasul = Number(l.total_collected ?? l.vasul ?? (l.income !== undefined && l.income !== income ? l.income : 0) ?? 0);
+    const balance = Number(l.balance ?? l.remaining ?? Math.max(0, income - vasul));
     const status = l.status || "ACTIVE";
 
     totLoanSum += gross;
@@ -1630,7 +1699,7 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   sortedLoans.forEach((l) => {
     const custName = l.customerName || l.customer_name || "—";
     const fId = l.financeId || l.finance_id;
-    const loanTotal = Number(l.agreed_total_payable || (Number(l.loanAmount || 0) + Number(l.pitibu || 0)) || l.loanAmount || 0);
+    const loanTotal = Number(l.agreed_total_payable || l.loanAmount || l.gross_finance_amount || 0);
 
     // Find actual collection payments for this customer / finance account
     const custPayments = (dfCollections || []).filter(p => {
@@ -1735,7 +1804,7 @@ export const exportDailyMonthlyCollectionReport = (reportData, additionalData = 
   sortedLoans.forEach((l) => {
     const custName = l.customerName || l.customer_name || "—";
     const fId = l.financeId || l.finance_id;
-    const loanTotal = Number(l.agreed_total_payable || (Number(l.loanAmount || 0) + Number(l.pitibu || 0)) || l.loanAmount || 0);
+    const loanTotal = Number(l.agreed_total_payable || l.loanAmount || l.gross_finance_amount || 0);
 
     // Filter actual collections with amount > 0 to selected targetMonth
     const custPayments = (dfCollections || []).filter(p => {

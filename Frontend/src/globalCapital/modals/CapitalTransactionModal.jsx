@@ -128,98 +128,96 @@ export default function CapitalTransactionModal({
               </div>
             )}
             
-            {/* Own Money vs Lend Money (Contribution Only) */}
-            {capitalActionType === "CONTRIBUTION" && (
-              <div
-                style={{
-                  background: "#f8fafc",
-                  padding: "12px",
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  marginBottom: "14px",
-                }}
-              >
-                <label style={{ fontSize: "12.5px", fontWeight: "700", color: "#334155", marginBottom: "6px", display: "block" }}>
-                  Source of Capital (Own vs Lend)
+            {/* Own Money vs Lend Money */}
+            <div
+              style={{
+                background: "#f8fafc",
+                padding: "12px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                marginBottom: "14px",
+              }}
+            >
+              <label style={{ fontSize: "12.5px", fontWeight: "700", color: "#334155", marginBottom: "6px", display: "block" }}>
+                Source of Capital (Own vs Lend)
+              </label>
+              <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <input
+                    type="radio"
+                    name="fundSourceType"
+                    value="OWN"
+                    checked={capitalFormData.fundSourceType !== "LEND"}
+                    onChange={() =>
+                      setCapitalFormData({
+                        ...capitalFormData,
+                        fundSourceType: "OWN",
+                        lenderName: "",
+                        interestRate: "",
+                      })
+                    }
+                  />
+                  <span>Own Money (Personal)</span>
                 </label>
-                <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                    <input
-                      type="radio"
-                      name="fundSourceType"
-                      value="OWN"
-                      checked={capitalFormData.fundSourceType !== "LEND"}
-                      onChange={() =>
-                        setCapitalFormData({
-                          ...capitalFormData,
-                          fundSourceType: "OWN",
-                          lenderName: "",
-                          interestRate: "",
-                        })
-                      }
-                    />
-                    <span>Own Money (Personal)</span>
-                  </label>
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                    <input
-                      type="radio"
-                      name="fundSourceType"
-                      value="LEND"
-                      checked={capitalFormData.fundSourceType === "LEND"}
-                      onChange={() =>
-                        setCapitalFormData({
-                          ...capitalFormData,
-                          fundSourceType: "LEND",
-                        })
-                      }
-                    />
-                    <span style={{ color: "#7c3aed", fontWeight: "600" }}>Lend / Borrowed Money</span>
-                  </label>
-                </div>
-
-                {capitalFormData.fundSourceType === "LEND" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px" }}>
-                    <div>
-                      <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
-                        From Whom Borrowed (Lender Name) *
-                      </label>
-                      <input
-                        required
-                        type="text"
-                        placeholder="e.g. Ramesh Uncle / ABC Finance"
-                        value={capitalFormData.lenderName || ""}
-                        onChange={(e) =>
-                          setCapitalFormData({
-                            ...capitalFormData,
-                            lenderName: e.target.value,
-                          })
-                        }
-                        style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
-                        Interest Rate Payable (%) *
-                      </label>
-                      <input
-                        required
-                        type="number"
-                        step="any"
-                        placeholder="e.g. 1.5 or 2.0"
-                        value={capitalFormData.interestRate || ""}
-                        onChange={(e) =>
-                          setCapitalFormData({
-                            ...capitalFormData,
-                            interestRate: e.target.value,
-                          })
-                        }
-                        style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <input
+                    type="radio"
+                    name="fundSourceType"
+                    value="LEND"
+                    checked={capitalFormData.fundSourceType === "LEND"}
+                    onChange={() =>
+                      setCapitalFormData({
+                        ...capitalFormData,
+                        fundSourceType: "LEND",
+                      })
+                    }
+                  />
+                  <span style={{ color: "#7c3aed", fontWeight: "600" }}>Lend / Borrowed Money</span>
+                </label>
               </div>
-            )}
+
+              {capitalFormData.fundSourceType === "LEND" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
+                      From Whom Borrowed (Lender Name) *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="e.g. Ramesh Uncle / ABC Finance"
+                      value={capitalFormData.lenderName || ""}
+                      onChange={(e) =>
+                        setCapitalFormData({
+                          ...capitalFormData,
+                          lenderName: e.target.value,
+                        })
+                      }
+                      style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
+                      Interest Rate Payable (%) *
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 1.5 or 2.0"
+                      value={capitalFormData.interestRate || ""}
+                      onChange={(e) =>
+                        setCapitalFormData({
+                          ...capitalFormData,
+                          interestRate: e.target.value,
+                        })
+                      }
+                      style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Amount */}
             <div className="formGroup">

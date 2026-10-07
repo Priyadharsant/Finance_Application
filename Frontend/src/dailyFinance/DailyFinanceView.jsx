@@ -51,15 +51,15 @@ export default function DailyFinanceView({
   // Dynamic document title
   const dynamicTitle = useMemo(() => {
     if (details?.customer?.customer_name) {
-      return `${details.customer.customer_name} · Customer Details | FinFlow`;
+      return `${details.customer.customer_name} · Customer Details | KAMBAM FINANCE`;
     }
     if (showAdd) {
-      return `New Customer Finance · Daily Finance | FinFlow`;
+      return `New Customer Finance · Daily Finance | KAMBAM FINANCE`;
     }
     if (editingPayment) {
-      return `Edit Payment · Daily Finance | FinFlow`;
+      return `Edit Payment · Daily Finance | KAMBAM FINANCE`;
     }
-    return `${activeMenu} · Daily Finance | FinFlow`;
+    return `${activeMenu} · Daily Finance | KAMBAM FINANCE`;
   }, [activeMenu, details, showAdd, editingPayment]);
 
   useDocumentTitle(dynamicTitle);

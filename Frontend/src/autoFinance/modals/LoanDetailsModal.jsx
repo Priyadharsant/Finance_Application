@@ -205,23 +205,12 @@ export default function LoanDetailsModal({
         </div>
 
         {/* BROKER & GUARANTOR DETAILS */}
-        {selectedLoan.loan.fees_details && (selectedLoan.loan.fees_details.brokerName || selectedLoan.loan.fees_details.jaminName || selectedLoan.loan.fees_details.fundSource === "PARTNER") && (
+        {selectedLoan.loan.fees_details && (selectedLoan.loan.fees_details.brokerName || selectedLoan.loan.fees_details.jaminName) && (
           <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
             <h4 style={{ margin: "0 0 10px 0", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
-              🤝 Stakeholders, Broker & Guarantor
+              🤝 Broker & Guarantor
             </h4>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px" }}>
-              <div>
-                <span style={{ color: "#64748b" }}>Fund Source:</span>{" "}
-                <b style={{ color: selectedLoan.loan.fees_details.fundSource === "PARTNER" ? "#7c3aed" : "#0284c7" }}>
-                  {selectedLoan.loan.fees_details.fundSource === "PARTNER" ? "PARTNER CAPITAL" : "OWN CAPITAL (COMPANY)"}
-                </b>
-                {selectedLoan.loan.fees_details.fundSource === "PARTNER" && (
-                  <span style={{ marginLeft: "6px", color: "#64748b" }}>
-                    (Partner Interest Rate: <b>{selectedLoan.loan.fees_details.partnerInterestRate || 0}%</b>)
-                  </span>
-                )}
-              </div>
               {selectedLoan.loan.fees_details.brokerName && (
                 <div>
                   <span style={{ color: "#64748b" }}>Broker:</span> <b>{selectedLoan.loan.fees_details.brokerName}</b>

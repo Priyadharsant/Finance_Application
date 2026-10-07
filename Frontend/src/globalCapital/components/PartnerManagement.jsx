@@ -324,15 +324,22 @@ export default function PartnerManagement({
                                 }}
                               >
                                 <div>
-                                  <strong style={{ color: "#0f172a" }}>{bf.lender_name || "Lender"}</strong>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <strong style={{ color: "#0f172a" }}>{bf.lender_name || "Lender"}</strong>
+                                    {bf.transaction_type === "WITHDRAWAL" && (
+                                      <span style={{ fontSize: "10px", background: "#fee2e2", color: "#dc2626", padding: "1px 6px", borderRadius: "4px", fontWeight: "600" }}>
+                                        Repaid / Withdrawn
+                                      </span>
+                                    )}
+                                  </div>
                                   <div style={{ color: "#64748b", fontSize: "11px" }}>
                                     Date: {bf.effective_date ? new Date(bf.effective_date).toLocaleDateString("en-IN") : "—"}
                                     {bf.notes ? ` · ${bf.notes}` : ""}
                                   </div>
                                 </div>
                                 <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontWeight: "700", color: "#7c3aed" }}>
-                                    ₹{Number(bf.amount || 0).toLocaleString("en-IN")}
+                                  <div style={{ fontWeight: "700", color: bf.transaction_type === "WITHDRAWAL" ? "#dc2626" : "#7c3aed" }}>
+                                    {bf.transaction_type === "WITHDRAWAL" ? "-" : "+"}₹{Number(bf.amount || 0).toLocaleString("en-IN")}
                                   </div>
                                   <span style={{ fontSize: "11px", color: "#b91c1c", fontWeight: "600" }}>
                                     Interest: {bf.interest_rate || 0}%

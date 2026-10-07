@@ -154,14 +154,19 @@ router.get('/partners', async (req, res) => {
       p.total_withdrawn = stats.totalWithdrawn;
 
       const borrowedRes = await pool.query(
-        `SELECT id, amount, effective_date, lender_name, interest_rate, notes 
+        `SELECT id, amount, transaction_type, effective_date, lender_name, interest_rate, notes 
          FROM partner_capital_transactions 
          WHERE partner_id = $1 AND fund_source_type = 'LEND' 
          ORDER BY effective_date DESC`,
         [p.id]
       );
       p.borrowed_funds = borrowedRes.rows;
-      p.borrowed_total = borrowedRes.rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      p.borrowed_total = borrowedRes.rows.reduce((sum, r) => {
+        if (r.transaction_type === 'WITHDRAWAL') {
+          return sum - Number(r.amount || 0);
+        }
+        return sum + Number(r.amount || 0);
+      }, 0);
     }
 
     res.json(partners);
@@ -350,12 +355,16 @@ const handleWithdrawal = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { partnerId, amount, effectiveDate, notes } = req.body;
+    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate } = req.body;
 
     if (!partnerId) throw new Error('Partner is required');
     if (!amount || Number(amount) <= 0) throw new Error('Valid withdrawal amount is required');
 
-    const tx = await createWithdrawal(client, partnerId, Number(amount), effectiveDate, notes);
+    const tx = await createWithdrawal(client, partnerId, Number(amount), effectiveDate, notes, {
+      fundSourceType,
+      lenderName,
+      interestRate
+    });
 
     await client.query('COMMIT');
     res.json(tx);

@@ -44,7 +44,7 @@ export default function AppFinance() {
         ? "Auto Finance"
         : "Global Capital";
 
-    return `${page} · ${moduleLabel} | Fin Tracker`;
+    return `${page} · ${moduleLabel} | KAMBAM FINANCE`;
   }, [appModule, page]);
 
   useDocumentTitle(dynamicTitle);
@@ -123,7 +123,7 @@ export default function AppFinance() {
           <div
             className="headerBrandLogo"
             onClick={() => setPage(appModule === "GLOBAL" ? "Ledger Overview" : "Dashboard")}
-            title="Fin Tracker Home"
+            title="KAMBAM FINANCE Home"
           >
             <b>
               {appModule === "DAILY" && <Activity size={20} strokeWidth={2.5} />}
@@ -131,7 +131,7 @@ export default function AppFinance() {
               {appModule === "GLOBAL" && <Globe size={20} strokeWidth={2.5} />}
             </b>
             <div className="headerBrandText">
-              <span>Fin Tracker</span>
+              <span>KAMBAM FINANCE</span>
               <small>
                 {appModule === "DAILY" && "Daily Finance"}
                 {appModule === "AUTO" && "Auto Finance"}
@@ -244,6 +244,20 @@ export default function AppFinance() {
                 <span style={{ opacity: 0.7, fontSize: "10px" }}>Check Updates</span>
               )}
             </button>
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.8px",
+                color: "rgba(255, 255, 255, 0.5)",
+                textTransform: "uppercase",
+                padding: "2px 0 4px",
+                userSelect: "none",
+              }}
+            >
+              KAMBAM FINANCE
+            </div>
           </div>
         </aside>
 
@@ -251,7 +265,9 @@ export default function AppFinance() {
           {notice && (
             <div className="toastViewport" aria-live="polite" aria-atomic="true">
               <div className={`toast ${notice.type}`} role="status">
-                <span className="toastIcon">
+                <span className
+                
+                ="toastIcon">
                   <NoticeIcon size={18} />
                 </span>
                 <span className="toastMessage">{notice.text}</span>

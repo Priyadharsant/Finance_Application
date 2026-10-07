@@ -48,24 +48,24 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
   const dynamicTitle = useMemo(() => {
     if (selectedLoan) {
-      return `Loan #${selectedLoan.loan_code || selectedLoan.loan_id} · Auto Finance | FinFlow`;
+      return `Loan #${selectedLoan.loan_code || selectedLoan.loan_id} · Auto Finance | KAMBAM FINANCE`;
     }
     if (selectedCustomer) {
-      return `${selectedCustomer.first_name || ""} ${selectedCustomer.last_name || ""} · Customer Profile · Auto Finance | FinFlow`;
+      return `${selectedCustomer.first_name || ""} ${selectedCustomer.last_name || ""} · Customer Profile · Auto Finance | KAMBAM FINANCE`;
     }
     if (showCreateLoan) {
-      return `New Vehicle Loan · Auto Finance | FinFlow`;
+      return `New Vehicle Loan · Auto Finance | KAMBAM FINANCE`;
     }
     if (payEmiModal) {
-      return `Pay EMI · Auto Finance | FinFlow`;
+      return `Pay EMI · Auto Finance | KAMBAM FINANCE`;
     }
     if (closeLoanModal) {
-      return `Close Loan · Auto Finance | FinFlow`;
+      return `Close Loan · Auto Finance | KAMBAM FINANCE`;
     }
     if (showAddLoanType) {
-      return `New Loan Scheme · Auto Finance | FinFlow`;
+      return `New Loan Scheme · Auto Finance | KAMBAM FINANCE`;
     }
-    return `${activeMenu || "Dashboard"} · Auto Finance | FinFlow`;
+    return `${activeMenu || "Dashboard"} · Auto Finance | KAMBAM FINANCE`;
   }, [
     activeMenu,
     selectedLoan,
@@ -127,8 +127,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     jaminPhone: "",
     jaminRelation: "",
     jaminAddress: "",
-    fundSource: "OWN", // 'OWN' or 'PARTNER'
-    partnerId: "",
+    fundSource: "GLOBAL",
+    partnerId: null,
     partnerInterestRate: "0",
     documents: {
       aadhaar: null,
@@ -302,8 +302,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         jaminPhone: "",
         jaminRelation: "",
         jaminAddress: "",
-        fundSource: "OWN",
-        partnerId: "",
+        fundSource: "GLOBAL",
+        partnerId: null,
         partnerInterestRate: "0",
         documents: {
           aadhaar: null,

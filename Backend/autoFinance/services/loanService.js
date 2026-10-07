@@ -118,9 +118,9 @@ export async function createLoanWithVehicle(data) {
       permit: Number(permit||0), brokerageCustomer: Number(brokerageCustomer||0), brokerageHand: Number(brokerageHand||0),
       brokerName: brokerName || "", brokerPhone: brokerPhone || "", brokerAddress: brokerAddress || "",
       jaminName: jaminName || "", jaminPhone: jaminPhone || "", jaminRelation: jaminRelation || "", jaminAddress: jaminAddress || "",
-      fundSource: fundSource || "OWN",
-      partnerId: partnerId || null,
-      partnerInterestRate: Number(partnerInterestRate || 0)
+      fundSource: "GLOBAL",
+      partnerId: null,
+      partnerInterestRate: 0
     };
 
     // 1. Insert Loan
@@ -147,15 +147,17 @@ export async function createLoanWithVehicle(data) {
     const totalDeductions = feesDetailsObj.incomeDue + feesDetailsObj.documentFee + feesDetailsObj.hirePurchase + feesDetailsObj.taxAmount + feesDetailsObj.insurance + feesDetailsObj.insuranceFine + feesDetailsObj.greenTax + feesDetailsObj.fine + feesDetailsObj.nationalTax + feesDetailsObj.permit + feesDetailsObj.brokerageCustomer;
     const inHandAmount = Number(loanAmount) - totalDeductions;
 
-    // Global Cash Ledger Integration (Disburse in-hand amount)
-    await validateAndDisburseFunds(client, {
-      module: 'AUTO',
-      amount: inHandAmount,
-      effectiveDate: startStr,
-      referenceType: 'AUTO_LOAN',
-      referenceId: loan.id,
-      notes: `Auto Loan Disbursement (In-Hand) for Customer ${finalCustomerId}`
-    });
+    // Global Cash Ledger Integration (Disburse in-hand amount from Global Capital)
+    if (inHandAmount > 0) {
+      await validateAndDisburseFunds(client, {
+        module: 'AUTO',
+        amount: inHandAmount,
+        effectiveDate: startStr,
+        referenceType: 'AUTO_LOAN',
+        referenceId: loan.id,
+        notes: `Auto Loan Disbursement (In-Hand) for Customer ${finalCustomerId}`
+      });
+    }
 
     // Record expense for brokerage provided by hand into expenses table (Category: AUTO)
     if (feesDetailsObj.brokerageHand > 0) {

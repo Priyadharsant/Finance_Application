@@ -392,6 +392,8 @@ export default function AutoReports({
                 <th>Customer</th>
                 <th>Vehicle & Reg No</th>
                 <th>Loan Principal</th>
+                <th>Deductions</th>
+                <th>In-Hand Disbursed</th>
                 <th>Interest Rate</th>
                 <th>Tenure</th>
                 <th>EMI Collected</th>
@@ -401,7 +403,21 @@ export default function AutoReports({
             </thead>
             <tbody>
               {displayedLoans.map((l) => {
+                let fees = {};
+                try {
+                  fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
+                } catch (_) {
+                  fees = {};
+                }
+                const dedAmt = Number(l.totalDeductions ?? (
+                  Number(fees.incomeDue || 0) + Number(fees.documentFee || 0) + Number(fees.hirePurchase || 0) +
+                  Number(fees.taxAmount || 0) + Number(fees.insurance || 0) + Number(fees.insuranceFine || 0) +
+                  Number(fees.greenTax || 0) + Number(fees.fine || 0) + Number(fees.nationalTax || 0) +
+                  Number(fees.permit || 0) + Number(fees.brokerageCustomer || 0)
+                ));
+                const inHand = Number(l.byHand || (Number(l.loan_amount || 0) - dedAmt));
                 const rem = Math.max(0, Number(l.loan_amount || 0) - Number(l.total_paid || 0));
+
                 return (
                   <tr key={l.id}>
                     <td>
@@ -421,6 +437,12 @@ export default function AutoReports({
                       </div>
                     </td>
                     <td>{money(l.loan_amount)}</td>
+                    <td style={{ color: dedAmt > 0 ? "#ef4444" : "#64748b", fontWeight: 600 }}>
+                      {dedAmt > 0 ? `- ${money(dedAmt)}` : "₹0"}
+                    </td>
+                    <td style={{ color: "#059669", fontWeight: 700 }}>
+                      {money(inHand)}
+                    </td>
                     <td>{l.interest_rate}%</td>
                     <td>{l.tenure_months} Mo</td>
                     <td className="greenText">{money(l.total_paid)}</td>

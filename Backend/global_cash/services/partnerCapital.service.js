@@ -52,7 +52,7 @@ export async function createContribution(client, partnerId, amount, effectiveDat
   return capitalTransaction;
 }
 
-export async function createWithdrawal(client, partnerId, amount, effectiveDate, notes) {
+export async function createWithdrawal(client, partnerId, amount, effectiveDate, notes, extraFields = {}) {
   if (amount <= 0) throw new Error("Withdrawal amount must be > 0");
 
   const currentCapital = await getPartnerCurrentCapital(client, partnerId);
@@ -63,16 +63,20 @@ export async function createWithdrawal(client, partnerId, amount, effectiveDate,
   }
 
   const date = effectiveDate || new Date().toISOString().slice(0, 10);
+  const fundSourceType = extraFields.fundSourceType || 'OWN';
+  const lenderName = extraFields.lenderName || null;
+  const interestRate = Number(extraFields.interestRate || 0);
 
   // 1. Insert Partner Capital Transaction (WITHDRAWAL)
   const capQuery = `
     INSERT INTO partner_capital_transactions (
-      partner_id, transaction_type, amount, effective_date, status, notes
+      partner_id, transaction_type, amount, effective_date, status, notes,
+      fund_source_type, lender_name, interest_rate
     )
-    VALUES ($1, 'WITHDRAWAL', $2, $3, 'COMPLETED', $4)
+    VALUES ($1, 'WITHDRAWAL', $2, $3, 'COMPLETED', $4, $5, $6, $7)
     RETURNING *;
   `;
-  const capRes = await client.query(capQuery, [partnerId, amount, date, notes]);
+  const capRes = await client.query(capQuery, [partnerId, amount, date, notes, fundSourceType, lenderName, interestRate]);
   const capitalTransaction = capRes.rows[0];
 
   // 2. Insert Global Cash Ledger Entry (DEBIT)
