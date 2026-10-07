@@ -369,7 +369,15 @@ export default function PartnerManagement({
                       color: "#0f766e",
                     }}
                   >
-                    {money(p.current_capital)}
+                    <div>{money(p.current_capital)}</div>
+                    <div style={{ fontSize: "11px", fontWeight: "600", marginTop: "3px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                      <span style={{ color: "#0d9488", background: "#f0fdfa", padding: "1px 5px", borderRadius: "4px" }}>
+                        Own: {money(p.available_own_capital ?? p.own_capital ?? 0)}
+                      </span>
+                      <span style={{ color: "#7c3aed", background: "#f5f3ff", padding: "1px 5px", borderRadius: "4px" }}>
+                        Lend: {money(p.available_lend_capital ?? p.lend_capital ?? p.borrowed_total ?? 0)}
+                      </span>
+                    </div>
                   </td>
                   <td style={{ textAlign: "center" }}>
                     <div

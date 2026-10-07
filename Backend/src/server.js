@@ -10,6 +10,8 @@ import loanRoutes from '../autoFinance/routes/loanRoutes.js';
 import globalCashRoutes from '../global_cash/routes/globalCash.routes.js';
 import { initMonthlyClosingCron } from '../global_cash/services/monthlyClosingCron.service.js';
 import versionRoutes from './routes/versionRoutes.js';
+import appAuthRoutes from './routes/appAuthRoutes.js';
+import tableEditorRoutes from './routes/tableEditorRoutes.js';
 
 const app = express();
 app.use(express.json({limit:'1mb'}));
@@ -56,6 +58,8 @@ app.use('/api/loan-types', loanTypeRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/global-cash', globalCashRoutes);
 app.use('/api/version', versionRoutes);
+app.use('/api/app-auth', appAuthRoutes);
+app.use('/api/table-editor', tableEditorRoutes);
 app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
 app.listen(Number(process.env.API_PORT||3000),()=>{
   console.log('Daily Finance API running');

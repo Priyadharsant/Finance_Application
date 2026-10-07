@@ -84,50 +84,104 @@ export default function CapitalTransactionModal({
                 }
               >
                 <option value="">-- Choose Partner --</option>
-                {partners.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} (Current: ₹{Number(p.current_capital || 0).toLocaleString("en-IN")})
-                  </option>
-                ))}
+                {partners.map((p) => {
+                  const ownBal = Number(p.available_own_capital ?? p.own_capital ?? 0);
+                  const lendBal = Number(p.available_lend_capital ?? p.lend_capital ?? p.borrowed_total ?? 0);
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name} (Total: ₹{Number(p.current_capital || 0).toLocaleString("en-IN")} | Own: ₹{ownBal.toLocaleString("en-IN")} | Lend: ₹{lendBal.toLocaleString("en-IN")})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
-            {/* Partner Live Balance Banner */}
-            {capitalFormData.partnerId && (
-              <div
-                style={{
-                  background:
-                    capitalActionType === "WITHDRAWAL" ? "#fff1f2" : "#f0fdf4",
-                  border: "1px solid",
-                  borderColor:
-                    capitalActionType === "WITHDRAWAL" ? "#fecdd3" : "#bbf7d0",
-                  borderRadius: "8px",
-                  padding: "10px 14px",
-                  marginBottom: "14px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span style={{ fontSize: "12px", color: "#475569" }}>
-                  Partner Available Capital:
-                </span>
-                <strong
+            {/* Partner Live Balance Summary */}
+            {(() => {
+              const selPartner = partners.find((p) => p.id === capitalFormData.partnerId);
+              if (!selPartner) return null;
+
+              const ownBal = Math.max(0, Number(selPartner.available_own_capital ?? selPartner.own_capital ?? 0));
+              const lendBal = Math.max(0, Number(selPartner.available_lend_capital ?? selPartner.lend_capital ?? selPartner.borrowed_total ?? 0));
+              const totalBal = Number(selPartner.current_capital || (ownBal + lendBal));
+              const isWithdrawal = capitalActionType === "WITHDRAWAL";
+              const isLend = capitalFormData.fundSourceType === "LEND";
+              const activeMax = isLend ? lendBal : ownBal;
+
+              return (
+                <div
                   style={{
-                    fontSize: "14px",
-                    color:
-                      capitalActionType === "WITHDRAWAL" ? "#be123c" : "#047857",
+                    background: isWithdrawal ? "#fff1f2" : "#f0fdf4",
+                    border: "1px solid",
+                    borderColor: isWithdrawal ? "#fecdd3" : "#bbf7d0",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    marginBottom: "14px",
                   }}
                 >
-                  ₹
-                  {Number(
-                    partners.find((p) => p.id === capitalFormData.partnerId)
-                      ?.current_capital || 0
-                  ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </strong>
-              </div>
-            )}
-            
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
+                      Partner Balance Breakdown
+                    </span>
+                    <strong style={{ fontSize: "14px", color: isWithdrawal ? "#be123c" : "#047857" }}>
+                      Total Available: ₹{totalBal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div
+                      style={{
+                        background: isWithdrawal && !isLend ? "rgba(190, 18, 60, 0.08)" : "rgba(255, 255, 255, 0.8)",
+                        border: isWithdrawal && !isLend ? "2px solid #be123c" : "1px solid #e2e8f0",
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>
+                        Personal (Own Money)
+                      </div>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: ownBal > 0 ? "#0f766e" : "#94a3b8" }}>
+                        ₹{ownBal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: isWithdrawal && isLend ? "rgba(124, 58, 237, 0.08)" : "rgba(255, 255, 255, 0.8)",
+                        border: isWithdrawal && isLend ? "2px solid #7c3aed" : "1px solid #e2e8f0",
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>
+                        Lend / Borrowed Money
+                      </div>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: lendBal > 0 ? "#7c3aed" : "#94a3b8" }}>
+                        ₹{lendBal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isWithdrawal && activeMax <= 0 && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        padding: "8px 10px",
+                        background: "#fee2e2",
+                        border: "1px solid #ef4444",
+                        borderRadius: "6px",
+                        color: "#991b1b",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      ⚠️ Cannot withdraw {isLend ? "Lend / Borrowed Money" : "Own Money"}: Available balance is ₹0.00.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Own Money vs Lend Money */}
             <div
               style={{
@@ -139,7 +193,7 @@ export default function CapitalTransactionModal({
               }}
             >
               <label style={{ fontSize: "12.5px", fontWeight: "700", color: "#334155", marginBottom: "6px", display: "block" }}>
-                Source of Capital (Own vs Lend)
+                Source of Capital (Own vs Lend) *
               </label>
               <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
@@ -157,7 +211,9 @@ export default function CapitalTransactionModal({
                       })
                     }
                   />
-                  <span>Own Money (Personal)</span>
+                  <span style={{ fontWeight: capitalFormData.fundSourceType !== "LEND" ? "700" : "400" }}>
+                    Own Money (Personal)
+                  </span>
                 </label>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
                   <input
@@ -172,11 +228,13 @@ export default function CapitalTransactionModal({
                       })
                     }
                   />
-                  <span style={{ color: "#7c3aed", fontWeight: "600" }}>Lend / Borrowed Money</span>
+                  <span style={{ color: "#7c3aed", fontWeight: capitalFormData.fundSourceType === "LEND" ? "700" : "500" }}>
+                    Lend / Borrowed Money
+                  </span>
                 </label>
               </div>
 
-              {capitalFormData.fundSourceType === "LEND" && (
+              {capitalFormData.fundSourceType === "LEND" && capitalActionType === "CONTRIBUTION" && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px" }}>
                   <div>
                     <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
@@ -217,68 +275,126 @@ export default function CapitalTransactionModal({
                   </div>
                 </div>
               )}
+
+              {capitalFormData.fundSourceType === "LEND" && capitalActionType === "WITHDRAWAL" && (() => {
+                const selPartner = partners.find((p) => p.id === capitalFormData.partnerId);
+                const lenderList = selPartner?.lender_breakdown || [];
+                return (
+                  <div style={{ marginTop: "10px" }}>
+                    <label style={{ fontSize: "11.5px", color: "#64748b", fontWeight: "600" }}>
+                      Select Lender to Repay / Withdraw From
+                    </label>
+                    {lenderList.length > 0 ? (
+                      <select
+                        value={capitalFormData.lenderName || ""}
+                        onChange={(e) =>
+                          setCapitalFormData({
+                            ...capitalFormData,
+                            lenderName: e.target.value,
+                          })
+                        }
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                      >
+                        <option value="">-- All / Any Borrowed Funds --</option>
+                        {lenderList.map((lb) => (
+                          <option key={lb.lenderName} value={lb.lenderName}>
+                            {lb.lenderName} (Available to withdraw: ₹{Number(lb.available || 0).toLocaleString("en-IN")})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Lender Name (optional)"
+                        value={capitalFormData.lenderName || ""}
+                        onChange={(e) =>
+                          setCapitalFormData({
+                            ...capitalFormData,
+                            lenderName: e.target.value,
+                          })
+                        }
+                        style={{ width: "100%", padding: "7px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Amount */}
-            <div className="formGroup">
-              <label>
-                {capitalActionType === "WITHDRAWAL"
-                  ? "Withdrawal Amount *"
-                  : "Contribution Amount *"}
-              </label>
-              <div style={{ position: "relative" }}>
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "14px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    fontWeight: "700",
-                    color:
-                      capitalActionType === "WITHDRAWAL"
-                        ? "#e11d48"
-                        : "#059669",
-                    fontSize: "16px",
-                  }}
-                >
-                  ₹
-                </span>
-                <input
-                  required
-                  type="number"
-                  step="any"
-                  min="1"
-                  placeholder="e.g. 500000"
-                  style={{
-                    paddingLeft: "32px",
-                    fontSize: "16px",
-                    fontWeight: "700",
-                  }}
-                  value={capitalFormData.amount}
-                  onChange={(e) =>
-                    setCapitalFormData({
-                      ...capitalFormData,
-                      amount: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              {capitalActionType === "WITHDRAWAL" && capitalFormData.partnerId && (
-                <small
-                  style={{
-                    color: "#64748b",
-                    marginTop: "4px",
-                    display: "block",
-                  }}
-                >
-                  Maximum withdrawable amount: ₹
-                  {Number(
-                    partners.find((p) => p.id === capitalFormData.partnerId)
-                      ?.current_capital || 0
-                  ).toLocaleString("en-IN")}
-                </small>
-              )}
-            </div>
+            {(() => {
+              const selPartner = partners.find((p) => p.id === capitalFormData.partnerId);
+              const isWithdrawal = capitalActionType === "WITHDRAWAL";
+              const isLend = capitalFormData.fundSourceType === "LEND";
+              const ownBal = Math.max(0, Number(selPartner?.available_own_capital ?? selPartner?.own_capital ?? 0));
+              const lendBal = Math.max(0, Number(selPartner?.available_lend_capital ?? selPartner?.lend_capital ?? selPartner?.borrowed_total ?? 0));
+              const maxAllowed = isLend ? lendBal : ownBal;
+              const enteredAmt = Number(capitalFormData.amount || 0);
+              const isOverLimit = isWithdrawal && selPartner && (enteredAmt > maxAllowed || maxAllowed <= 0);
+
+              return (
+                <div className="formGroup">
+                  <label>
+                    {isWithdrawal ? "Withdrawal Amount *" : "Contribution Amount *"}
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: "14px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontWeight: "700",
+                        color: isWithdrawal ? "#e11d48" : "#059669",
+                        fontSize: "16px",
+                      }}
+                    >
+                      ₹
+                    </span>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      min="1"
+                      max={isWithdrawal && maxAllowed > 0 ? maxAllowed : undefined}
+                      placeholder={isWithdrawal ? `Max ₹${maxAllowed.toLocaleString("en-IN")}` : "e.g. 500000"}
+                      style={{
+                        paddingLeft: "32px",
+                        fontSize: "16px",
+                        fontWeight: "700",
+                        borderColor: isOverLimit ? "#ef4444" : undefined,
+                      }}
+                      value={capitalFormData.amount}
+                      onChange={(e) =>
+                        setCapitalFormData({
+                          ...capitalFormData,
+                          amount: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  {isWithdrawal && selPartner && (
+                    <div style={{ marginTop: "5px" }}>
+                      <small
+                        style={{
+                          color: isOverLimit ? "#dc2626" : "#64748b",
+                          fontWeight: isOverLimit ? "700" : "500",
+                          display: "block",
+                        }}
+                      >
+                        Maximum withdrawable {isLend ? "Borrowed" : "Personal Own"} capital: ₹
+                        {maxAllowed.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </small>
+                      {isOverLimit && enteredAmt > maxAllowed && (
+                        <div style={{ color: "#b91c1c", fontSize: "11.5px", fontWeight: "700", marginTop: "2px" }}>
+                          ❌ Amount exceeds partner's available {isLend ? "Lend / Borrowed" : "Own Money"} balance!
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Effective Date */}
             <div className="formGroup">
@@ -326,35 +442,49 @@ export default function CapitalTransactionModal({
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="primaryBtn"
-              disabled={submitting}
-              style={{
-                background:
-                  capitalActionType === "WITHDRAWAL"
-                    ? "linear-gradient(135deg, #e11d48, #be123c)"
-                    : "linear-gradient(135deg, #059669, #047857)",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                opacity: submitting ? 0.75 : 1,
-                cursor: submitting ? "not-allowed" : "pointer",
-              }}
-            >
-              {submitting ? (
-                <>
-                  <span className="autoBtnSpinner" />
-                  {capitalActionType === "WITHDRAWAL"
-                    ? "Processing Withdrawal..."
-                    : "Processing Deposit..."}
-                </>
-              ) : (
-                capitalActionType === "WITHDRAWAL"
-                  ? "Confirm Withdrawal"
-                  : "Confirm Deposit"
-              )}
-            </button>
+            {(() => {
+              const selPartner = partners.find((p) => p.id === capitalFormData.partnerId);
+              const isWithdrawal = capitalActionType === "WITHDRAWAL";
+              const isLend = capitalFormData.fundSourceType === "LEND";
+              const ownBal = Math.max(0, Number(selPartner?.available_own_capital ?? selPartner?.own_capital ?? 0));
+              const lendBal = Math.max(0, Number(selPartner?.available_lend_capital ?? selPartner?.lend_capital ?? selPartner?.borrowed_total ?? 0));
+              const maxAllowed = isLend ? lendBal : ownBal;
+              const enteredAmt = Number(capitalFormData.amount || 0);
+              const isOverLimit = isWithdrawal && selPartner && (enteredAmt > maxAllowed || maxAllowed <= 0);
+              const isDisabled = submitting || isOverLimit;
+
+              return (
+                <button
+                  type="submit"
+                  className="primaryBtn"
+                  disabled={isDisabled}
+                  style={{
+                    background:
+                      capitalActionType === "WITHDRAWAL"
+                        ? "linear-gradient(135deg, #e11d48, #be123c)"
+                        : "linear-gradient(135deg, #059669, #047857)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    opacity: isDisabled ? 0.6 : 1,
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {submitting ? (
+                    <>
+                      <span className="autoBtnSpinner" />
+                      {capitalActionType === "WITHDRAWAL"
+                        ? "Processing Withdrawal..."
+                        : "Processing Deposit..."}
+                    </>
+                  ) : (
+                    capitalActionType === "WITHDRAWAL"
+                      ? "Confirm Withdrawal"
+                      : "Confirm Deposit"
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </form>
       </div>

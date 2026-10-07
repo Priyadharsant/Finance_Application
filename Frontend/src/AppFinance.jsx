@@ -17,6 +17,8 @@ import {
   Users,
   Globe,
   Receipt,
+  Lock,
+  FileSpreadsheet,
 } from "lucide-react";
 import "./App.css";
 import DailyFinanceView from "./DailyFinance.jsx";
@@ -26,8 +28,14 @@ import useDocumentTitle from "./hooks/useDocumentTitle.js";
 import { dateLabel, today } from "./dailyFinance/services/dailyFinanceApi.js";
 import VersionUpdateModal from "./components/VersionUpdateModal.jsx";
 import { APP_VERSION, checkForAppUpdates } from "./version.js";
+import AppLoginScreen from "./components/AppLoginScreen.jsx";
+import ExcelTableEditorView from "./components/ExcelTableEditorView.jsx";
+import { getApiBaseUrl } from "./apiConfig.js";
 
 export default function AppFinance() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [showTableEditor, setShowTableEditor] = useState(false);
   const [appModule, setAppModule] = useState("DAILY"); // 'DAILY' | 'AUTO' | 'GLOBAL'
   const [page, setPage] = useState("Dashboard");
   const [entryDate, setEntryDate] = useState(today());
@@ -54,6 +62,43 @@ export default function AppFinance() {
     const timeout = window.setTimeout(() => setNotice(null), 4200);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  // Check auth state on startup
+  useEffect(() => {
+    const token = localStorage.getItem("kambam_finance_app_auth");
+    if (!token) {
+      setIsAuthenticated(false);
+      setCheckingAuth(false);
+      return;
+    }
+
+    const apiBase = getApiBaseUrl();
+    fetch(`${apiBase}/app-auth/verify`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem("kambam_finance_app_auth");
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(Boolean(token));
+      })
+      .finally(() => {
+        setCheckingAuth(false);
+      });
+  }, []);
+
+  const handleLogout = () => {
+    const apiBase = getApiBaseUrl();
+    localStorage.removeItem("kambam_finance_app_auth");
+    setIsAuthenticated(false);
+    fetch(`${apiBase}/app-auth/logout`, { method: "POST" }).catch(() => {});
+  };
 
   // Check for application updates on launch - enforce latest version
   useEffect(() => {
@@ -116,6 +161,31 @@ export default function AppFinance() {
 
   const NoticeIcon = notice?.type === "error" ? AlertCircle : CheckCircle2;
 
+  if (checkingAuth) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#0f172a",
+          color: "#94a3b8",
+          gap: "12px",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        }}
+      >
+        <RefreshCw size={24} style={{ animation: "spin 1s linear infinite" }} />
+        <span>Loading KAMBAM FINANCE...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AppLoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="financeApp">
       <header className="topAppHeader">
@@ -154,6 +224,14 @@ export default function AppFinance() {
           <span style={{ color: "#94a3b8", fontSize: "13px" }}>{dateLabel(entryDate)}</span>
           <button className="iconTextButton" onClick={handleRefresh}>
             <RefreshCw size={15} /> Refresh
+          </button>
+          <button
+            className="iconTextButton"
+            onClick={handleLogout}
+            title="Lock application and logout"
+            style={{ color: "#f87171", borderColor: "rgba(239, 68, 68, 0.3)" }}
+          >
+            <Lock size={14} /> Lock App
           </button>
         </div>
       </header>
@@ -244,6 +322,33 @@ export default function AppFinance() {
                 <span style={{ opacity: 0.7, fontSize: "10px" }}>Check Updates</span>
               )}
             </button>
+
+            {/* BUTTON BELOW CHECK UPDATES TO OPEN EXCEL TABLE EDITOR */}
+            <button
+              type="button"
+              onClick={() => setShowTableEditor(true)}
+              style={{
+                background: "linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(14, 165, 233, 0.08))",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                borderRadius: "6px",
+                padding: "6px 8px",
+                fontSize: "11px",
+                color: "#38bdf8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                width: "100%",
+                fontWeight: 700,
+                transition: "all 0.2s ease",
+              }}
+              title="Open Excel Table Editor to edit all database tables"
+            >
+              <FileSpreadsheet size={13} />
+              <span>Edit Tables (Excel)</span>
+            </button>
+
             <div
               style={{
                 textAlign: "center",
@@ -318,6 +423,10 @@ export default function AppFinance() {
           }
         }}
       />
+
+      {showTableEditor && (
+        <ExcelTableEditorView onClose={() => setShowTableEditor(false)} />
+      )}
     </div>
   );
 }

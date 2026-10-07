@@ -55,17 +55,45 @@ export async function createContribution(client, partnerId, amount, effectiveDat
 export async function createWithdrawal(client, partnerId, amount, effectiveDate, notes, extraFields = {}) {
   if (amount <= 0) throw new Error("Withdrawal amount must be > 0");
 
-  const currentCapital = await getPartnerCurrentCapital(client, partnerId);
-  if (amount > currentCapital) {
-    throw new Error(
-      `Insufficient partner capital. Partner only has ₹${Number(currentCapital).toLocaleString('en-IN', { minimumFractionDigits: 2 })} available to withdraw.`
-    );
+  const stats = await getPartnerStats(client, partnerId);
+  const fundSourceType = (extraFields.fundSourceType || 'OWN').toUpperCase();
+  const lenderName = extraFields.lenderName ? String(extraFields.lenderName).trim() : null;
+  const interestRate = Number(extraFields.interestRate || 0);
+
+  if (fundSourceType === 'LEND') {
+    if (stats.availableLendCapital <= 0) {
+      throw new Error(
+        `Partner has no available Lend / Borrowed capital to withdraw (Available: ₹0.00).`
+      );
+    }
+    if (amount > stats.availableLendCapital) {
+      throw new Error(
+        `Insufficient Lend / Borrowed capital. Partner only has ₹${Number(stats.availableLendCapital).toLocaleString('en-IN', { minimumFractionDigits: 2 })} available in borrowed funds.`
+      );
+    }
+    if (lenderName && stats.lenderBreakdown && stats.lenderBreakdown.length > 0) {
+      const match = stats.lenderBreakdown.find(l => l.lenderName.toLowerCase() === lenderName.toLowerCase());
+      if (match && amount > match.available) {
+        throw new Error(
+          `Insufficient balance for lender "${lenderName}". Available balance with this lender is only ₹${Number(match.available).toLocaleString('en-IN', { minimumFractionDigits: 2 })}.`
+        );
+      }
+    }
+  } else {
+    // OWN Money (Personal)
+    if (stats.availableOwnCapital <= 0) {
+      throw new Error(
+        `Partner has no available Own Money (Personal) capital to withdraw (Available: ₹0.00).`
+      );
+    }
+    if (amount > stats.availableOwnCapital) {
+      throw new Error(
+        `Insufficient Own Money (Personal) capital. Partner only has ₹${Number(stats.availableOwnCapital).toLocaleString('en-IN', { minimumFractionDigits: 2 })} available in personal own money.`
+      );
+    }
   }
 
   const date = effectiveDate || new Date().toISOString().slice(0, 10);
-  const fundSourceType = extraFields.fundSourceType || 'OWN';
-  const lenderName = extraFields.lenderName || null;
-  const interestRate = Number(extraFields.interestRate || 0);
 
   // 1. Insert Partner Capital Transaction (WITHDRAWAL)
   const capQuery = `
@@ -88,7 +116,7 @@ export async function createWithdrawal(client, partnerId, amount, effectiveDate,
     sourceModule: 'GLOBAL',
     referenceType: 'CAPITAL_TRANSACTION',
     referenceId: capitalTransaction.id,
-    notes: notes || 'Capital withdrawal by partner'
+    notes: notes || `Capital withdrawal by partner (${fundSourceType === 'LEND' ? 'Lend: ' + (lenderName || 'Borrowed') : 'Own Money'})`
   });
 
   return capitalTransaction;
@@ -97,16 +125,22 @@ export async function createWithdrawal(client, partnerId, amount, effectiveDate,
 export async function getPartnerStats(client, partnerId) {
   const query = `
     SELECT 
-      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS base_capital,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS total_contributed,
       COALESCE(SUM(CASE WHEN transaction_type = 'PROFIT_SHARE' THEN amount ELSE 0 END), 0) AS profit_from_tx,
-      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'PROFIT_SHARE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS total_contributed,
-      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS total_withdrawn
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS total_withdrawn,
+      
+      -- Own Money
+      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) THEN amount ELSE 0 END), 0) AS own_contributed,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) THEN amount ELSE 0 END), 0) AS own_withdrawn,
+      
+      -- Lend / Borrowed Money
+      COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') AND fund_source_type = 'LEND' THEN amount ELSE 0 END), 0) AS lend_contributed,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND fund_source_type = 'LEND' THEN amount ELSE 0 END), 0) AS lend_withdrawn
     FROM partner_capital_transactions
     WHERE partner_id = $1 AND status = 'COMPLETED';
   `;
   const res = await client.query(query, [partnerId]);
   const row = res.rows[0];
-  const baseCapital = parseFloat(row.base_capital);
   let totalProfitEarned = parseFloat(row.profit_from_tx);
 
   // If there are finalized profit allocations not yet in capital transactions, also check allocations
@@ -124,16 +158,54 @@ export async function getPartnerStats(client, partnerId) {
     }
   }
 
-  const totalContributed = baseCapital + totalProfitEarned;
-  const totalWithdrawn = parseFloat(row.total_withdrawn);
-  const currentCapital = totalContributed - totalWithdrawn;
+  const ownContributed = parseFloat(row.own_contributed);
+  const ownWithdrawn = parseFloat(row.own_withdrawn);
+  const availableOwnCapital = Math.max(0, (ownContributed + totalProfitEarned) - ownWithdrawn);
+
+  const lendContributed = parseFloat(row.lend_contributed);
+  const lendWithdrawn = parseFloat(row.lend_withdrawn);
+  const availableLendCapital = Math.max(0, lendContributed - lendWithdrawn);
+
+  const totalContributed = ownContributed + lendContributed + totalProfitEarned;
+  const totalWithdrawn = ownWithdrawn + lendWithdrawn;
+  const currentCapital = availableOwnCapital + availableLendCapital;
+
+  // Also fetch breakdown by individual lenders
+  let lenderBreakdown = [];
+  try {
+    const lendersRes = await client.query(`
+      SELECT 
+        lender_name,
+        COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS contributed,
+        COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS withdrawn
+      FROM partner_capital_transactions
+      WHERE partner_id = $1 AND fund_source_type = 'LEND' AND status = 'COMPLETED' AND lender_name IS NOT NULL
+      GROUP BY lender_name;
+    `, [partnerId]);
+
+    lenderBreakdown = lendersRes.rows.map(l => ({
+      lenderName: l.lender_name,
+      contributed: parseFloat(l.contributed),
+      withdrawn: parseFloat(l.withdrawn),
+      available: Math.max(0, parseFloat(l.contributed) - parseFloat(l.withdrawn))
+    }));
+  } catch (err) {
+    console.error('Error fetching lender breakdown:', err);
+  }
 
   return {
-    baseCapital,
+    baseCapital: ownContributed + lendContributed,
     totalProfitEarned,
     totalContributed,
     totalWithdrawn,
-    currentCapital, // Total Amount (+ Profit)
+    currentCapital, // Total Available Capital
+    ownContributed,
+    ownWithdrawn,
+    availableOwnCapital,
+    lendContributed,
+    lendWithdrawn,
+    availableLendCapital,
+    lenderBreakdown
   };
 }
 

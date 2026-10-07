@@ -152,6 +152,11 @@ router.get('/partners', async (req, res) => {
       p.profit_earned = stats.totalProfitEarned;
       p.total_contributed = stats.totalContributed;
       p.total_withdrawn = stats.totalWithdrawn;
+      p.available_own_capital = stats.availableOwnCapital;
+      p.available_lend_capital = stats.availableLendCapital;
+      p.own_capital = stats.availableOwnCapital;
+      p.lend_capital = stats.availableLendCapital;
+      p.lender_breakdown = stats.lenderBreakdown;
 
       const borrowedRes = await pool.query(
         `SELECT id, amount, transaction_type, effective_date, lender_name, interest_rate, notes 
@@ -161,12 +166,7 @@ router.get('/partners', async (req, res) => {
         [p.id]
       );
       p.borrowed_funds = borrowedRes.rows;
-      p.borrowed_total = borrowedRes.rows.reduce((sum, r) => {
-        if (r.transaction_type === 'WITHDRAWAL') {
-          return sum - Number(r.amount || 0);
-        }
-        return sum + Number(r.amount || 0);
-      }, 0);
+      p.borrowed_total = stats.availableLendCapital;
     }
 
     res.json(partners);

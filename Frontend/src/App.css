@@ -62,7 +62,7 @@ body {
 }
 
 /* === SIDEBAR === */
-.financeApp aside { 
+.financeLayout > aside { 
   width: 260px; 
   background: var(--sidebar-bg); 
   color: #94a3b8; 
@@ -303,7 +303,8 @@ body {
   min-height: calc(100vh - 74px);
 }
 
-header { 
+header.topAppHeader,
+.financeApp > header { 
   width: 100vw; 
   box-sizing: border-box;
   height: 74px; 
@@ -316,7 +317,7 @@ header {
   align-items: center;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 20;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
 }
 
@@ -591,14 +592,16 @@ header h1 {
 .exportBar { display: flex; justify-content: flex-end; gap: 10px; margin: -8px 0 16px; }
 
 /* === ENHANCED FORM CONTROLS & MODALS === */
-.modal { 
+.modal,
+.modalBackdrop,
+.modalOverlay { 
   position: fixed; 
   inset: 0; 
   background: rgba(15, 23, 42, 0.65); 
   backdrop-filter: blur(8px);
   display: grid; 
   place-items: center; 
-  z-index: 40; 
+  z-index: 2000; 
   padding: 20px; 
 }
 
