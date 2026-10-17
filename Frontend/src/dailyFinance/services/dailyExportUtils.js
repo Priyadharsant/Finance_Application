@@ -70,7 +70,7 @@ export const exportDailyFinancePeriodReport = (report) => {
     rows.push({
       "S.No": "TOTAL",
       "Customer Name": "SUMMARY TOTALS",
-      "Finance Date": `${report.from} to ${report.to}`,
+      "Finance Date": `${dateLabel(report.from)} to ${dateLabel(report.to)}`,
       "Gross Finance (₹)": Number(t.financeAmount || 0),
       "Upfront Interest (₹)": Number(t.profit || 0),
       "Amount Given / Disbursed (₹)": Number(t.given || 0),
@@ -191,7 +191,7 @@ export const exportCustomerStatement = (customer, collections = []) => {
     { Property: "Recovery Percentage", Value: agreed > 0 ? ((collected / agreed) * 100).toFixed(1) + "%" : "0%" },
     { Property: "Profit Earned (₹)", Value: deduction },
     { Property: "Total Payments Recorded", Value: collections.length },
-    { Property: "Statement Export Date", Value: new Date().toLocaleDateString("en-IN") },
+    { Property: "Statement Export Date", Value: dateLabel(new Date()) },
   ];
 
   // Sheet 2: Collections History

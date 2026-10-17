@@ -538,7 +538,12 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
         }
         if (updates.effective_date !== undefined) {
           setClauses.push(`effective_date = $${pIdx++}`);
-          values.push(updates.effective_date);
+          let effVal = updates.effective_date;
+          if (typeof effVal === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(effVal.trim())) {
+            const [d, m, y] = effVal.trim().split('-');
+            effVal = `${y}-${m}-${d}`;
+          }
+          values.push(effVal || null);
         }
         if (updates.notes !== undefined) {
           setClauses.push(`notes = $${pIdx++}`);
@@ -736,6 +741,10 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
         setClauses.push(`"${key}" = $${paramIdx}`);
         let formattedVal = val;
         if (formattedVal === '') formattedVal = null;
+        if (typeof formattedVal === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(formattedVal.trim())) {
+          const [d, m, y] = formattedVal.trim().split('-');
+          formattedVal = `${y}-${m}-${d}`;
+        }
         values.push(formattedVal);
         paramIdx++;
       }

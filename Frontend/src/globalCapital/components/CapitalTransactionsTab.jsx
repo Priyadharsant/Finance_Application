@@ -10,7 +10,7 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import { money, formatTxNotes } from "../utils/formatters.js";
+import { money, formatTxNotes, formatDate } from "../utils/formatters.js";
 import { exportCapitalTransactions } from "../services/globalCapitalExportUtils.js";
 
 export default function CapitalTransactionsTab({
@@ -327,7 +327,7 @@ export default function CapitalTransactionsTab({
                 return (
                   <tr key={t.id}>
                     <td>
-                      {new Date(t.effective_date).toLocaleDateString("en-IN")}
+                      {formatDate(t.effective_date)}
                     </td>
                     <td style={{ fontWeight: "600", color: "#0f172a" }}>
                       {t.partner_name}

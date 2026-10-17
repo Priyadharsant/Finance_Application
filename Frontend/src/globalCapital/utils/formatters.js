@@ -11,13 +11,41 @@ export function money(val, fallback = "₹0.00") {
 }
 
 export function formatDate(val) {
-  if (!val) return "-";
+  if (!val) return "—";
   try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val).slice(0, 10);
-    return d.toISOString().slice(0, 10);
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return "—";
+      const day = String(val.getDate()).padStart(2, "0");
+      const month = String(val.getMonth() + 1).padStart(2, "0");
+      const year = val.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    const str = String(val).trim();
+    const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateOnlyMatch) {
+      const [, y, m, d] = dateOnlyMatch;
+      return `${d}-${m}-${y}`;
+    }
+    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+      return str;
+    }
+    const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    const fallback = new Date(str);
+    if (!isNaN(fallback.getTime())) {
+      const day = String(fallback.getDate()).padStart(2, "0");
+      const month = String(fallback.getMonth() + 1).padStart(2, "0");
+      const year = fallback.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    return str;
   } catch {
-    return String(val).slice(0, 10);
+    return String(val);
   }
 }
 

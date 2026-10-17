@@ -54,8 +54,7 @@ export default function LedgerTransactionModal({ record, close }) {
     }
   };
 
-  const formatOnlyDate = (val) =>
-    val ? new Date(val).toLocaleDateString("en-IN") : "—";
+  const formatOnlyDate = (val) => formatDate(val);
 
   const isCredit = record.direction === "CREDIT";
 

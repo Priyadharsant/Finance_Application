@@ -1,6 +1,6 @@
 import React from "react";
 import { X } from "lucide-react";
-import { money } from "../utils/formatters.js";
+import { money, formatDate } from "../utils/formatters.js";
 
 export default function SegmentBreakdownModal({ data, close }) {
   if (!data) return null;
@@ -25,7 +25,7 @@ export default function SegmentBreakdownModal({ data, close }) {
             <span className="overline autoBadgeTag">TIME-WEIGHTED SEGMENTS</span>
             <h3>{partnerName}</h3>
             <small style={{ color: "#64748b" }}>
-              Calculation Period: {periodStart} to {periodEnd}
+              Calculation Period: {formatDate(periodStart)} to {formatDate(periodEnd)}
             </small>
           </div>
           <button className="iconBtn" onClick={close} aria-label="Close">
@@ -54,9 +54,7 @@ export default function SegmentBreakdownModal({ data, close }) {
                   <tr key={idx}>
                     <td>
                       <strong>
-                        {new Date(seg.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}{" "}
-                        –{" "}
-                        {new Date(seg.endDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        {formatDate(seg.startDate)} – {formatDate(seg.endDate)}
                       </strong>
                     </td>
                     <td style={{ textAlign: "right", fontWeight: "600", color: "#0f172a" }}>

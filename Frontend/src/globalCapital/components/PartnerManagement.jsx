@@ -14,7 +14,7 @@ import {
   ChevronUp,
   AlertCircle,
 } from "lucide-react";
-import { money } from "../utils/formatters.js";
+import { money, formatDate } from "../utils/formatters.js";
 import { exportPartnerBalances } from "../services/globalCapitalExportUtils.js";
 
 export default function PartnerManagement({
@@ -333,7 +333,7 @@ export default function PartnerManagement({
                                     )}
                                   </div>
                                   <div style={{ color: "#64748b", fontSize: "11px" }}>
-                                    Date: {bf.effective_date ? new Date(bf.effective_date).toLocaleDateString("en-IN") : "—"}
+                                    Date: {formatDate(bf.effective_date)}
                                     {bf.notes ? ` · ${bf.notes}` : ""}
                                   </div>
                                 </div>

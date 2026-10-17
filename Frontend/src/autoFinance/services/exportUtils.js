@@ -175,7 +175,7 @@ export const exportCustomersList = (customers = [], label = "") => {
     "City": c.city || "",
     "State": c.state || "",
     "Address": c.address || "",
-    "Created Date": c.created_at ? String(c.created_at).slice(0, 10) : "—",
+    "Created Date": dateLabel(c.created_at),
   }));
 
   const fileName = `Auto_Customers_${label ? label + "_" : ""}${new Date().toISOString().slice(0, 10)}`;

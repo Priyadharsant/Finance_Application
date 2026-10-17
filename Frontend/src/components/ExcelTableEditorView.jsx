@@ -527,9 +527,25 @@ export default function ExcelTableEditorView({ onClose }) {
       };
     }
 
-    // Format dates
+    // Format dates as dd-mm-yyyy
     if (dataType === "date" || (colName.includes("date") && !colName.includes("time"))) {
-      if (str.length >= 10) return { text: str.slice(0, 10), isDate: true };
+      if (!str) return { text: "—", isDate: true };
+      const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateOnlyMatch) {
+        const [, y, m, d] = dateOnlyMatch;
+        return { text: `${d}-${m}-${y}`, isDate: true };
+      }
+      if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+        return { text: str, isDate: true };
+      }
+      const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        return { text: `${day}-${month}-${year}`, isDate: true };
+      }
+      return { text: str.slice(0, 10), isDate: true };
     }
 
     return { text: str };

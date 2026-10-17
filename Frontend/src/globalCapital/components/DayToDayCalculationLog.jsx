@@ -8,7 +8,7 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import { money } from "../utils/formatters.js";
+import { money, formatDate } from "../utils/formatters.js";
 import { exportDayToDayLogs } from "../services/globalCapitalExportUtils.js";
 
 export default function DayToDayCalculationLog({
@@ -40,7 +40,9 @@ export default function DayToDayCalculationLog({
       // 3. Date Search
       if (dateSearch.trim()) {
         const q = dateSearch.toLowerCase().trim();
-        if (!String(l.calcDate || "").toLowerCase().includes(q)) return false;
+        const rawDate = String(l.calcDate || "").toLowerCase();
+        const formatted = formatDate(l.calcDate).toLowerCase();
+        if (!rawDate.includes(q) && !formatted.includes(q)) return false;
       }
 
       return true;
@@ -244,7 +246,7 @@ export default function DayToDayCalculationLog({
             <Search size={13} color="#94a3b8" />
             <input
               type="text"
-              placeholder="Search date (e.g. 2026-09)..."
+              placeholder="Search date (e.g. 17-10)..."
               value={dateSearch}
               onChange={(e) => setDateSearch(e.target.value)}
               style={{ fontSize: "11.5px", padding: "4px 8px" }}
@@ -365,7 +367,7 @@ export default function DayToDayCalculationLog({
               {money(todayLog.netProfit)}
             </span>
             <span style={{ fontSize: "12px", color: "#64748b" }}>
-              ({todayLog.calcDate})
+              ({formatDate(todayLog.calcDate)})
             </span>
           </div>
 
@@ -426,7 +428,7 @@ export default function DayToDayCalculationLog({
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <strong style={{ fontSize: "13px", color: "#0f172a" }}>
-                        {log.calcDate}
+                        {formatDate(log.calcDate)}
                       </strong>
                       {isToday && (
                         <span

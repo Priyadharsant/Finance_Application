@@ -20,6 +20,7 @@ import {
   Globe,
 } from "lucide-react";
 import { globalCapitalApi } from "../services/globalCapitalApi.js";
+import { formatDate } from "../utils/formatters.js";
 import {
   exportMasterBusinessLedgerReport,
   exportAutoCategoryReport,
@@ -122,7 +123,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
       (l) =>
         (l.customerName && l.customerName.toLowerCase().includes(q)) ||
         (l.mobileNumber && l.mobileNumber.includes(q)) ||
-        (l.date && l.date.includes(q))
+        (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
     );
   }, [data, searchTerm]);
 
@@ -135,7 +136,8 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
         (l.customerName && l.customerName.toLowerCase().includes(q)) ||
         (l.vehicle && l.vehicle.toLowerCase().includes(q)) ||
         (l.regNo && l.regNo.toLowerCase().includes(q)) ||
-        (l.brokerName && l.brokerName.toLowerCase().includes(q))
+        (l.brokerName && l.brokerName.toLowerCase().includes(q)) ||
+        (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
     );
   }, [data, searchTerm]);
 
@@ -147,7 +149,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
       (e) =>
         (e.description && e.description.toLowerCase().includes(q)) ||
         (e.categoryLabel && e.categoryLabel.toLowerCase().includes(q)) ||
-        (e.date && e.date.includes(q))
+        (e.date && (e.date.includes(q) || formatDate(e.date).includes(q)))
     );
   }, [data, searchTerm]);
 
@@ -395,7 +397,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         {filteredDailyLoans.map((row) => (
                           <tr key={row.financeId} className="hover:bg-slate-800/40 transition-colors">
                             <td className="py-2.5 px-3 text-slate-500">{row.sNo}</td>
-                            <td className="py-2.5 px-3 text-slate-300">{row.date}</td>
+                            <td className="py-2.5 px-3 text-slate-300">{formatDate(row.date)}</td>
                             <td className="py-2.5 px-3 text-white font-sans font-medium">{row.customerName}</td>
                             <td className="py-2.5 px-3 text-right text-white font-semibold">{money(row.loanAmount)}</td>
                             <td className="py-2.5 px-3 text-right text-amber-300">{money(row.pitibu)}</td>
@@ -524,7 +526,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         {filteredAutoLoans.map((row) => (
                           <tr key={row.id} className="hover:bg-slate-800/40 transition-colors">
                             <td className="py-2.5 px-3 text-slate-500">{row.sNo}</td>
-                            <td className="py-2.5 px-3 text-slate-300">{row.date}</td>
+                            <td className="py-2.5 px-3 text-slate-300">{formatDate(row.date)}</td>
                             <td className="py-2.5 px-3 text-white font-sans font-medium whitespace-nowrap">{row.customerName}</td>
                             <td className="py-2.5 px-3 text-slate-300 font-sans whitespace-nowrap">{row.vehicle}</td>
                             <td className="py-2.5 px-3 text-right text-white font-semibold">{money(row.loanAmount)}</td>
@@ -693,7 +695,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         {filteredExpenses.map((e) => (
                           <tr key={e.id} className="hover:bg-slate-800/40 transition-colors">
                             <td className="py-2.5 px-4 text-slate-500">{e.sNo}</td>
-                            <td className="py-2.5 px-4 text-slate-300">{e.date}</td>
+                            <td className="py-2.5 px-4 text-slate-300">{formatDate(e.date)}</td>
                             <td className="py-2.5 px-4 text-white font-sans">{e.description}</td>
                             <td className="py-2.5 px-4">
                               <span className="px-2 py-0.5 text-[10px] font-sans font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">

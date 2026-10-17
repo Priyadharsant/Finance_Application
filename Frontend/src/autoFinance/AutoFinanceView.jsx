@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import "./autoFinance.css";
-import { apiCall, API_BASE } from "./services/autoFinanceApi";
+import { apiCall, API_BASE, dateLabel } from "./services/autoFinanceApi";
 import {
   exportToExcel,
   exportTotalPortfolio,
@@ -492,7 +492,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       const res = await apiCall(`/loans/reports/monthly?month=${reportMonth}`);
       if (res.success && res.data) {
         const exportData = res.data.map((p) => ({
-          "Payment Date": p.payment_date ? new Date(p.payment_date).toLocaleDateString("en-IN") : "—",
+          "Payment Date": dateLabel(p.payment_date),
           "Customer Name": `${p.first_name} ${p.last_name}`,
           "Customer Code": p.customer_code,
           Vehicle: `${p.make} ${p.model} (${p.registration_number})`,

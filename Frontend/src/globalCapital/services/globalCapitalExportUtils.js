@@ -53,6 +53,61 @@ export const downloadExcelFile = (data, sheetName, fileName) => {
   XLSX.writeFile(workbook, `${fileName}.xlsx`);
 };
 
+export const formatDate = (val) => {
+  if (!val) return "—";
+  try {
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return "—";
+      const day = String(val.getDate()).padStart(2, "0");
+      const month = String(val.getMonth() + 1).padStart(2, "0");
+      const year = val.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    const str = String(val).trim();
+    const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateOnlyMatch) {
+      const [, y, m, d] = dateOnlyMatch;
+      return `${d}-${m}-${y}`;
+    }
+    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+      return str;
+    }
+    const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    const fallback = new Date(str);
+    if (!isNaN(fallback.getTime())) {
+      const day = String(fallback.getDate()).padStart(2, "0");
+      const month = String(fallback.getMonth() + 1).padStart(2, "0");
+      const year = fallback.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    return str;
+  } catch (_) {
+    return String(val);
+  }
+};
+
+export const formatDateTime = (val) => {
+  if (!val) return "—";
+  try {
+    const d = val instanceof Date ? val : new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    return `${day}-${month}-${year} ${hours}:${mins}`;
+  } catch (_) {
+    return String(val);
+  }
+};
+
 /**
  * Export Partner Balances & Capital Report
  */
@@ -74,7 +129,7 @@ export const exportPartnerBalances = (partners = [], filterPartnerId = "ALL") =>
     "Phone": p.phone || "—",
     "Email": p.email || "—",
     "PAN Number": p.pan_number || p.pan || "—",
-    "Joined Date": (p.created_at || p.effective_date) ? String(p.created_at || p.effective_date).slice(0, 10) : "—",
+    "Joined Date": formatDate(p.created_at || p.effective_date),
   }));
 
   downloadExcelFile(
@@ -169,8 +224,8 @@ export const exportYearWiseClosingReport = (year, monthsData = []) => {
 
     summaryRows.push({
       "Month": `${monthName} ${year}`,
-      "Period Start": m.periodStart || m.period_start?.slice(0, 10) || `${year}-${String(monthNum).padStart(2, "0")}-01`,
-      "Period End": m.asOfDate || m.periodEnd || m.period_end?.slice(0, 10) || "—",
+      "Period Start": formatDate(m.periodStart || m.period_start || `${year}-${String(monthNum).padStart(2, "0")}-01`),
+      "Period End": formatDate(m.asOfDate || m.periodEnd || m.period_end),
       "Auto Revenue (₹)": autoRev,
       "Daily Revenue (₹)": dailyRev,
       "Total Revenue (₹)": totRev,
@@ -249,8 +304,8 @@ export const exportAllPassedMonthsClosings = (allMonthsData = []) => {
     summaryRows.push({
       "S.No": idx + 1,
       "Month": `${m.monthName || m.period_name || m.periodName || ""} (${m.year || m.period_start?.slice(0, 4) || ""})`,
-      "Period Start": m.periodStart || m.period_start?.slice(0, 10) || "—",
-      "Period End": m.asOfDate || m.periodEnd || m.period_end?.slice(0, 10) || "—",
+      "Period Start": formatDate(m.periodStart || m.period_start),
+      "Period End": formatDate(m.asOfDate || m.periodEnd || m.period_end),
       "Auto Revenue (₹)": Number(m.financials?.autoRevenue ?? m.revenue_breakdown?.autoRevenue ?? 0),
       "Daily Revenue (₹)": Number(m.financials?.dailyRevenue ?? m.revenue_breakdown?.dailyRevenue ?? 0),
       "Total Revenue (₹)": Number(m.financials?.totalRevenue ?? m.revenue_breakdown?.totalRevenue ?? 0),
@@ -265,7 +320,7 @@ export const exportAllPassedMonthsClosings = (allMonthsData = []) => {
     allocs.forEach((a) => {
       detailedPartnerRows.push({
         "Month": `${m.monthName || m.period_name || m.periodName || ""} (${m.year || m.period_start?.slice(0, 4) || ""})`,
-        "Period": `${m.periodStart || m.period_start?.slice(0, 10)} to ${m.asOfDate || m.periodEnd || m.period_end?.slice(0, 10)}`,
+        "Period": `${formatDate(m.periodStart || m.period_start)} to ${formatDate(m.asOfDate || m.periodEnd || m.period_end)}`,
         "Partner Name": a.partnerName || a.partner_name || "—",
         "Opening Capital (₹)": Number(a.openingCapital || a.opening_capital || 0),
         "Closing Capital (₹)": Number(a.closingCapital || a.closing_capital || 0),
@@ -407,14 +462,14 @@ export const exportCapitalTransactions = (transactions = [], filters = {}) => {
 
   const rows = list.map((tx, idx) => ({
     "S.No": idx + 1,
-    "Date": (tx.effective_date || tx.transaction_date || tx.created_at) ? String(tx.effective_date || tx.transaction_date || tx.created_at).slice(0, 10) : "—",
+    "Date": formatDate(tx.effective_date || tx.transaction_date || tx.created_at),
     "Partner Name": tx.partner_name || tx.name || "—",
     "Transaction Type": tx.transaction_type || tx.type || "CONTRIBUTION",
     "Amount (₹)": Number(tx.amount || 0),
     "Payment Mode": tx.payment_mode || "BANK_TRANSFER",
     "Reference / UTR": tx.reference_number || tx.reference_id || tx.reference_type || "—",
     "Notes": tx.notes || "—",
-    "Logged At": tx.created_at ? String(tx.created_at).slice(0, 16).replace("T", " ") : "—",
+    "Logged At": formatDateTime(tx.created_at),
   }));
 
   downloadExcelFile(
@@ -454,7 +509,7 @@ export const exportBusinessExpenses = (expenses = [], filters = {}) => {
 
   const rows = list.map((exp, idx) => ({
     "S.No": idx + 1,
-    "Date": exp.expense_date ? String(exp.expense_date).slice(0, 10) : "—",
+    "Date": formatDate(exp.expense_date),
     "Reason (Why)": exp.description || exp.title || "—",
     "Category": exp.category || "GENERAL",
     "Type": exp.expense_type || exp.source_module || "GENERAL",
@@ -466,7 +521,7 @@ export const exportBusinessExpenses = (expenses = [], filters = {}) => {
           ? `Daily Finance #${String(exp.finance_id).slice(0, 8)}`
           : "—",
     "Amount (₹)": Number(exp.amount || 0),
-    "Logged At": exp.created_at ? String(exp.created_at).slice(0, 16).replace("T", " ") : "—",
+    "Logged At": formatDateTime(exp.created_at),
   }));
 
   downloadExcelFile(
@@ -560,7 +615,7 @@ export const exportGlobalLedger = (ledger = [], filters = {}) => {
 
   const rows = filtered.map((item, idx) => ({
     "Entry #": item.id || idx + 1,
-    "Date": item.computedDate,
+    "Date": formatDate(item.computedDate),
     "Category / Type": item.type || item.category || "GENERAL",
     "Direction": item.direction || (item.creditAmt > 0 ? "CREDIT" : "DEBIT"),
     "Description / Narration": item.notes || item.description || item.reference_type || item.type || "—",
@@ -633,8 +688,8 @@ export const exportMasterFinancialReport = ({
     const closingRows = monthsSource.map((c, idx) => ({
       "S.No": idx + 1,
       "Month": `${c.monthName || c.period_name || c.periodName || ""} (${c.year || c.period_start?.slice(0, 4) || ""})`,
-      "Period Start": c.periodStart || c.period_start?.slice(0, 10) || "—",
-      "Period End": c.asOfDate || c.periodEnd || c.period_end?.slice(0, 10) || "—",
+      "Period Start": formatDate(c.periodStart || c.period_start),
+      "Period End": formatDate(c.asOfDate || c.periodEnd || c.period_end),
       "Distributable Profit (₹)": Number(c.expectedDistributableProfit ?? c.distributable_profit ?? c.distributableProfit ?? 0),
       "Auto Revenue (₹)": Number(c.financials?.autoRevenue ?? c.revenue_breakdown?.autoRevenue ?? 0),
       "Daily Revenue (₹)": Number(c.financials?.dailyRevenue ?? c.revenue_breakdown?.dailyRevenue ?? 0),
@@ -686,7 +741,7 @@ export const exportMasterFinancialReport = ({
   if (transactions.length) {
     const txRows = transactions.map((t, idx) => ({
       "Tx ID": t.id || idx + 1,
-      "Date": (t.effective_date || t.transaction_date || t.created_at) ? String(t.effective_date || t.transaction_date || t.created_at).slice(0, 10) : "—",
+      "Date": formatDate(t.effective_date || t.transaction_date || t.created_at),
       "Partner Name": t.partner_name || t.name || "—",
       "Type": t.transaction_type || t.type || "CONTRIBUTION",
       "Amount (₹)": Number(t.amount || 0),
@@ -703,7 +758,7 @@ export const exportMasterFinancialReport = ({
   if (expenses.length) {
     const expRows = expenses.map((e, idx) => ({
       "S.No": idx + 1,
-      "Date": e.expense_date ? String(e.expense_date).slice(0, 10) : "—",
+      "Date": formatDate(e.expense_date),
       "Description": e.title || e.description || "—",
       "Category": e.category || "GENERAL",
       "Module": e.source_module || "GENERAL",
@@ -746,7 +801,7 @@ export const exportMasterFinancialReport = ({
 
       return {
         "Entry #": l.id || idx + 1,
-        "Date": (l.effective_date || l.transaction_date || l.created_at) ? String(l.effective_date || l.transaction_date || l.created_at).slice(0, 10) : "—",
+        "Date": formatDate(l.effective_date || l.transaction_date || l.created_at),
         "Category / Type": l.type || l.category || "GENERAL",
         "Direction": l.direction || (creditAmt > 0 ? "CREDIT" : "DEBIT"),
         "Description / Narration": l.notes || l.description || l.reference_type || l.type || "—",
@@ -809,7 +864,7 @@ export const exportMasterFinancialReport = ({
     const dailyCustRows = dailyCustomers.map((c, idx) => ({
       "S.No": idx + 1,
       "Customer": c.customer_name || "—",
-      "Finance Date": c.finance_date?.slice(0, 10) || "—",
+      "Finance Date": formatDate(c.finance_date),
       "Amount Given (₹)": Number(c.net_disbursement || c.gross_finance_amount || 0),
       "Total Return (₹)": Number(c.agreed_total_payable || 0),
       "Collected (₹)": Number(c.total_collected || 0),
@@ -1111,7 +1166,7 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
     const amt = Number(e.amount || 0);
     sheet4Data.push([
       idx + 1,
-      e.date || (e.expense_date ? String(e.expense_date).slice(0, 10) : "—"),
+      formatDate(e.date || e.expense_date),
       e.description || e.title || "—",
       e.categoryLabel || e.category || "General",
       e.categoryKey === "shopOpen" ? amt : "",
@@ -1183,17 +1238,6 @@ export const sortLoansByStatusAndName = (loans = []) => {
     ).toLowerCase();
     return nameA.localeCompare(nameB);
   });
-};
-
-const formatDate = (val) => {
-  if (!val) return "—";
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val).slice(0, 10);
-    return d.toISOString().slice(0, 10);
-  } catch (_) {
-    return String(val).slice(0, 10);
-  }
 };
 
 // ============================================================================
@@ -1945,7 +1989,7 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     const amt = Number(e.amount || 0);
     sheet2Data.push([
       idx + 1,
-      e.date || (e.expense_date ? String(e.expense_date).slice(0, 10) : "—"),
+      formatDate(e.date || e.expense_date),
       e.description || e.title || "—",
       e.categoryLabel || e.category || "General",
       e.categoryKey === "shopOpen" ? amt : "",
@@ -1997,7 +2041,7 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     totTxAmt += amt;
     return {
       "Sl": idx + 1,
-      "Date": (t.effective_date || t.transaction_date || t.created_at) ? String(t.effective_date || t.transaction_date || t.created_at).slice(0, 10) : "—",
+      "Date": formatDate(t.effective_date || t.transaction_date || t.created_at),
       "Partner / Account": t.partner_name || t.name || t.source || "Company",
       "Transaction Type": t.transaction_type || t.type || "CONTRIBUTION",
       "Description / Narration": t.notes || t.description || t.reference_type || "—",

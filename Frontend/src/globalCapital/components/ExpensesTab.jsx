@@ -11,7 +11,7 @@ import {
   Download,
   Calendar,
 } from "lucide-react";
-import { money } from "../utils/formatters.js";
+import { money, formatDate } from "../utils/formatters.js";
 import { exportBusinessExpenses } from "../services/globalCapitalExportUtils.js";
 
 export default function ExpensesTab({
@@ -287,7 +287,7 @@ export default function ExpensesTab({
             <tbody>
               {expenseList.map((exp) => (
                 <tr key={exp.id}>
-                  <td>{new Date(exp.expense_date).toLocaleDateString("en-IN")}</td>
+                  <td>{formatDate(exp.expense_date)}</td>
                   <td>
                     {(() => {
                       const desc = exp.description || "";

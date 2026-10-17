@@ -7,6 +7,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { money } from "../../autoFinance/services/autoFinanceApi.js";
+import { formatDate } from "../utils/formatters.js";
 import { exportGlobalCategoryReport } from "../services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../services/globalCapitalApi.js";
 
@@ -573,7 +574,7 @@ export default function GlobalReportsTab({
             <tbody>
               {displayedExpenses.map((e, idx) => (
                 <tr key={idx}>
-                  <td>{e.expense_date ? String(e.expense_date).slice(0, 10) : e.date || "—"}</td>
+                  <td>{formatDate(e.expense_date || e.date)}</td>
                   <td><b>{e.description || e.title || "—"}</b></td>
                   <td>
                     <span style={{ padding: "2px 8px", borderRadius: "8px", background: "#f1f5f9", fontSize: "11.5px", fontWeight: 600 }}>

@@ -10,7 +10,7 @@ import {
   Activity,
 } from "lucide-react";
 import { API } from "../services/globalCapitalApi.js";
-import { money, formatTxNotes } from "../utils/formatters.js";
+import { money, formatTxNotes, formatDate } from "../utils/formatters.js";
 
 export default function PartnerDetailsModal({ partner, close, onAddMoney, onWithdraw }) {
   const [fullData, setFullData] = useState(null);
@@ -220,7 +220,7 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                 <span>Joined Date</span>
                 <strong>
                   {p.created_at
-                    ? new Date(p.created_at).toLocaleDateString("en-IN")
+                    ? formatDate(p.created_at)
                     : "—"}
                 </strong>
               </div>
@@ -334,11 +334,7 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                           <td>
                             <div className="partnerTxDate">
                               <strong>
-                                {dateObj.toLocaleDateString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
+                                {formatDate(t.effective_date)}
                               </strong>
                               <small>
                                 {dateObj.toLocaleTimeString("en-IN", {

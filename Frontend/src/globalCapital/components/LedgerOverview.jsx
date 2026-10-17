@@ -10,7 +10,7 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import { money } from "../utils/formatters.js";
+import { money, formatDate } from "../utils/formatters.js";
 import { exportGlobalLedger } from "../services/globalCapitalExportUtils.js";
 
 export default function LedgerOverview({
@@ -391,7 +391,7 @@ export default function LedgerOverview({
                 >
                   <td>
                     <span style={{ fontWeight: "500" }}>
-                      {new Date(tx.effective_date).toLocaleDateString()}
+                      {formatDate(tx.effective_date)}
                     </span>
                   </td>
                   <td>
