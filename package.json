@@ -1,6 +1,6 @@
 {
   "name": "finance-application-workspace",
-  "version": "2.0.0",
+  "version": "2.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,10 @@
     "bump": "node scripts/bump-version.js",
     "version:patch": "node scripts/bump-version.js patch",
     "version:minor": "node scripts/bump-version.js minor",
-    "version:major": "node scripts/bump-version.js major"
+    "version:major": "node scripts/bump-version.js major",
+    "release": "node scripts/bump-version.js --release",
+    "release:patch": "node scripts/bump-version.js patch --release",
+    "release:minor": "node scripts/bump-version.js minor --release",
+    "release:major": "node scripts/bump-version.js major --release"
   }
 }

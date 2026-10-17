@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 import { APP_VERSION, APP_BUILD_DATE, checkForAppUpdates } from "../version.js";
 
-export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propMandatory }) {
-  const [checking, setChecking] = useState(false);
-  const [updateData, setUpdateData] = useState(null);
+export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propMandatory, initialUpdateData }) {
+  const [checking, setChecking] = useState(!initialUpdateData);
+  const [updateData, setUpdateData] = useState(initialUpdateData || null);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, transferred: 0, total: 0 });
   const [readyToInstall, setReadyToInstall] = useState(false);
@@ -35,9 +35,14 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
 
   useEffect(() => {
     if (isOpen) {
-      fetchUpdateInfo();
+      if (initialUpdateData) {
+        setUpdateData(initialUpdateData);
+        setChecking(false);
+      } else {
+        fetchUpdateInfo();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialUpdateData]);
 
   // Listen to IPC download progress events from Electron main process
   useEffect(() => {
@@ -74,7 +79,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
   const handleAutoUpdate = async () => {
     const url =
       updateData?.downloadUrl ||
-      `https://github.com/Priyadharsant/Finance_Application/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
+      `https://github.com/Priyadharsant/Finance_Application/releases/download/v${latestVersion}/KAMBAM.FINANCE-Setup-${latestVersion}.exe`;
 
     // 1-Click in-app auto update for Electron Desktop
     if (window.electronAPI?.downloadAndInstallUpdate) {
@@ -99,7 +104,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
       // In web browser: trigger direct browser file download
       const a = document.createElement("a");
       a.href = url;
-      a.download = `FinFlow-Setup-${latestVersion}.exe`;
+      a.download = `KAMBAM.FINANCE-Setup-${latestVersion}.exe`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -109,7 +114,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
   const handleManualBrowserDownload = () => {
     const url =
       updateData?.downloadUrl ||
-      `https://github.com/Priyadharsant/Finance_Application/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
+      `https://github.com/Priyadharsant/Finance_Application/releases/download/v${latestVersion}/KAMBAM.FINANCE-Setup-${latestVersion}.exe`;
     if (window.electronAPI?.openExternal) {
       window.electronAPI.openExternal(url);
     } else {

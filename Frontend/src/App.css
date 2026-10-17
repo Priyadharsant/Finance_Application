@@ -898,6 +898,58 @@ header h1 {
   }
 }
 
+/* In-Page Data Loading Animation (Contained in page, not as popup) */
+.inPageDataLoader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  width: 100%;
+  padding: 40px 24px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  text-align: center;
+  margin: 16px 0;
+  animation: inPageFadeIn 0.22s ease-out;
+}
+
+@keyframes inPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.inPageDataSpinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #f1f5f9;
+  border-top-color: #059669;
+  border-radius: 50%;
+  animation: autoSpin 0.75s linear infinite;
+  margin-bottom: 14px;
+}
+
+.inPageDataLoader h3 {
+  margin: 0 0 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.inPageDataLoader p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
 /* ==========================================================================
    UNIFIED REPORT BUTTON DESIGN
    Used across all report triggers (Dashboards & Monthly Collection popups)

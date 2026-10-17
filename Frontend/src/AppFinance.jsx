@@ -100,11 +100,14 @@ export default function AppFinance() {
     fetch(`${apiBase}/app-auth/logout`, { method: "POST" }).catch(() => {});
   };
 
+  const [updateInfo, setUpdateInfo] = useState(null);
+
   // Check for application updates on launch - enforce latest version
   useEffect(() => {
     let isMounted = true;
     checkForAppUpdates().then((res) => {
       if (isMounted && res?.hasUpdate) {
+        setUpdateInfo(res);
         setUpdateAvailable(true);
         setShowVersionModal(true);
       }
@@ -416,6 +419,7 @@ export default function AppFinance() {
 
       <VersionUpdateModal
         isOpen={showVersionModal}
+        initialUpdateData={updateInfo}
         isMandatory={updateAvailable}
         onClose={() => {
           if (!updateAvailable) {

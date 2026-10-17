@@ -178,56 +178,56 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   // ----------------------------------------------------
   // Fetch Functions
   // ----------------------------------------------------
-  const fetchMonthlyStats = async () => {
-    setLoading(true);
+  const fetchMonthlyStats = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await globalCapitalApi.getMonthlyStats();
       setMonthlyStats(data);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch monthly stats" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
-  const fetchLedger = async () => {
-    setLoading(true);
+  const fetchLedger = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await globalCapitalApi.getLedger();
       setLedgerData(data);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch global cash ledger" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
-  const fetchPartners = async () => {
-    setLoading(true);
+  const fetchPartners = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await globalCapitalApi.getPartners();
       setPartners(Array.isArray(data) ? data : []);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch partners" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
-  const fetchTransactions = async () => {
-    setLoading(true);
+  const fetchTransactions = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await globalCapitalApi.getPartnerTransactions();
       setTransactions(Array.isArray(data) ? data : []);
     } catch {
       setNotice({ type: "error", text: "Failed to fetch transactions" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
-  const fetchExpenses = async () => {
-    setLoading(true);
+  const fetchExpenses = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await globalCapitalApi.getExpenses({
         year: expenseFilterYear,
@@ -247,7 +247,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     } catch {
       setNotice({ type: "error", text: "Failed to fetch expenses" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -343,8 +343,10 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     setActionLoading("Registering Business Partner...");
     try {
       const res = await globalCapitalApi.createPartner(partnerFormData);
-      setNotice({ type: "success", text: "Partner registered successfully" });
       setShowAddPartner(false);
+      setActionLoading(null);
+      setNotice({ type: "success", text: "Partner registered successfully" });
+      const hadContrib = Boolean(partnerFormData.initialContribution);
       setPartnerFormData({
         name: "",
         phone: "",
@@ -355,13 +357,12 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         initialContribution: "",
         effectiveDate: new Date().toISOString().slice(0, 10),
       });
-      await fetchPartners();
-      if (partnerFormData.initialContribution) {
-        await Promise.all([fetchTransactions(), fetchLedger()]);
+      fetchPartners(false);
+      if (hadContrib) {
+        Promise.all([fetchTransactions(false), fetchLedger(false)]);
       }
     } catch (err) {
       setNotice({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -410,10 +411,10 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         setNotice({ type: "success", text: "Capital contribution added successfully" });
       }
       setShowCapitalModal(false);
-      await Promise.all([fetchTransactions(), fetchPartners(), fetchLedger()]);
+      setActionLoading(null);
+      Promise.all([fetchTransactions(false), fetchPartners(false), fetchLedger(false)]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -427,8 +428,9 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         ...expenseFormData,
         amount: parseFloat(expenseFormData.amount),
       });
-      setNotice({ type: "success", text: "Expense recorded successfully" });
       setShowAddExpense(false);
+      setActionLoading(null);
+      setNotice({ type: "success", text: "Expense recorded successfully" });
       setExpenseFormData({
         amount: "",
         category: "GENERAL",
@@ -436,10 +438,9 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         description: "",
         expenseDate: new Date().toISOString().slice(0, 10),
       });
-      await Promise.all([fetchExpenses(), fetchLedger()]);
+      Promise.all([fetchExpenses(false), fetchLedger(false)]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -449,7 +450,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     try {
       await globalCapitalApi.deleteExpense(id);
       setNotice({ type: "success", text: "Expense removed successfully" });
-      await Promise.all([fetchExpenses(), fetchLedger()]);
+      Promise.all([fetchExpenses(false), fetchLedger(false)]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
     }
@@ -464,12 +465,12 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         year: parseInt(draftData.year, 10),
         month: parseInt(draftData.month, 10),
       });
-      setNotice({ type: "success", text: "Closing draft generated" });
       setShowDraftModal(false);
-      await fetchClosings();
+      setActionLoading(null);
+      setNotice({ type: "success", text: "Closing draft generated" });
+      fetchClosings();
     } catch (err) {
       setNotice({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -535,12 +536,12 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         reference: profitPaymentForm.reference,
         notes: profitPaymentForm.notes,
       });
-      setNotice({ type: "success", text: "Profit settlement payment recorded" });
       setProfitPaymentModal(null);
-      await Promise.all([fetchProfitCalcs(), fetchLedger()]);
+      setActionLoading(null);
+      setNotice({ type: "success", text: "Profit settlement payment recorded" });
+      Promise.all([fetchProfitCalcs(), fetchLedger(false)]);
     } catch (err) {
       setNotice({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -604,75 +605,85 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   }, [expenses, expenseServerSummary, ledgerData.expenses]);
 
   return (
-    <>
-      {/* ---------------- 1. LEDGER OVERVIEW (DASHBOARD) ---------------- */}
-      {activeMenu === "Ledger Overview" && (
-        <LedgerOverview
-          ledgerData={ledgerData}
-          totalCredits={totalCredits}
-          totalDebits={totalDebits}
-          onSelectRecord={setSelectedRecord}
-        />
-      )}
+    <div className="globalCapitalContainer">
+      {/* IN-PAGE DATA LOADING ANIMATION (NO BLOCKING POPUP) */}
+      {loading ? (
+        <div className="inPageDataLoader">
+          <div className="inPageDataSpinner" />
+          <h3>Loading Global Capital Records...</h3>
+          <p>Fetching ledger, partners, and financial statements...</p>
+        </div>
+      ) : (
+        <>
+          {/* ---------------- 1. LEDGER OVERVIEW (DASHBOARD) ---------------- */}
+          {activeMenu === "Ledger Overview" && (
+            <LedgerOverview
+              ledgerData={ledgerData}
+              totalCredits={totalCredits}
+              totalDebits={totalDebits}
+              onSelectRecord={setSelectedRecord}
+            />
+          )}
 
-      {/* ---------------- 1.5. MONTHLY STATS ---------------- */}
-      {activeMenu === "Monthly Stats" && (
-        <MonthlyStatsTab stats={monthlyStats} />
-      )}
+          {/* ---------------- 1.5. MONTHLY STATS ---------------- */}
+          {activeMenu === "Monthly Stats" && (
+            <MonthlyStatsTab stats={monthlyStats} />
+          )}
 
-      {/* ---------------- 2. PARTNER MANAGEMENT ---------------- */}
-      {activeMenu === "Partner Management" && (
-        <PartnerManagement
-          partners={partners}
-          onOpenAddPartner={() => setShowAddPartner(true)}
-          onOpenCapitalAction={openCapitalAction}
-          onSelectRecord={setSelectedRecord}
-        />
-      )}
+          {/* ---------------- 2. PARTNER MANAGEMENT ---------------- */}
+          {activeMenu === "Partner Management" && (
+            <PartnerManagement
+              partners={partners}
+              onOpenAddPartner={() => setShowAddPartner(true)}
+              onOpenCapitalAction={openCapitalAction}
+              onSelectRecord={setSelectedRecord}
+            />
+          )}
 
-      {/* ---------------- 3. CAPITAL TRANSACTIONS ---------------- */}
-      {activeMenu === "Capital Transactions" && (
-        <CapitalTransactionsTab
-          transactions={transactions}
-          partners={partners}
-          txFilterType={txFilterType}
-          setTxFilterType={setTxFilterType}
-          onOpenCapitalAction={openCapitalAction}
-          onSelectRecord={setSelectedRecord}
-        />
-      )}
+          {/* ---------------- 3. CAPITAL TRANSACTIONS ---------------- */}
+          {activeMenu === "Capital Transactions" && (
+            <CapitalTransactionsTab
+              transactions={transactions}
+              partners={partners}
+              txFilterType={txFilterType}
+              setTxFilterType={setTxFilterType}
+              onOpenCapitalAction={openCapitalAction}
+              onSelectRecord={setSelectedRecord}
+            />
+          )}
 
-      {/* ---------------- 4. EXPENSES ---------------- */}
-      {activeMenu === "Expenses" && (
-        <ExpensesTab
-          expenses={expenses}
-          expenseSummary={expenseSummary}
-          expenseFilterMonth={expenseFilterMonth}
-          setExpenseFilterMonth={setExpenseFilterMonth}
-          expenseFilterYear={expenseFilterYear}
-          setExpenseFilterYear={setExpenseFilterYear}
-          expenseFilterCategory={expenseFilterCategory}
-          setExpenseFilterCategory={setExpenseFilterCategory}
-          expenseSearch={expenseSearch}
-          setExpenseSearch={setExpenseSearch}
-          onOpenAddExpense={() => setShowAddExpense(true)}
-          onDeleteExpense={handleDeleteExpense}
-          onSelectRecord={setSelectedRecord}
-        />
-      )}
+          {/* ---------------- 4. EXPENSES ---------------- */}
+          {activeMenu === "Expenses" && (
+            <ExpensesTab
+              expenses={expenses}
+              expenseSummary={expenseSummary}
+              expenseFilterMonth={expenseFilterMonth}
+              setExpenseFilterMonth={setExpenseFilterMonth}
+              expenseFilterYear={expenseFilterYear}
+              setExpenseFilterYear={setExpenseFilterYear}
+              expenseFilterCategory={expenseFilterCategory}
+              setExpenseFilterCategory={setExpenseFilterCategory}
+              expenseSearch={expenseSearch}
+              setExpenseSearch={setExpenseSearch}
+              onOpenAddExpense={() => setShowAddExpense(true)}
+              onDeleteExpense={handleDeleteExpense}
+              onSelectRecord={setSelectedRecord}
+            />
+          )}
 
-
-      {/* ---------------- 6. REPORTS (EXCEL DOWNLOADS) ---------------- */}
-      {activeMenu === "Reports" && (
-        <GlobalReportsTab
-          ledgerData={ledgerData}
-          partners={partners}
-          transactions={transactions}
-          expenses={expenses}
-          closings={closings}
-          dailyLogsData={dailyLogsData}
-          setNotice={setNotice}
-        />
+          {/* ---------------- 6. REPORTS (EXCEL DOWNLOADS) ---------------- */}
+          {activeMenu === "Reports" && (
+            <GlobalReportsTab
+              ledgerData={ledgerData}
+              partners={partners}
+              transactions={transactions}
+              expenses={expenses}
+              closings={closings}
+              dailyLogsData={dailyLogsData}
+              setNotice={setNotice}
+            />
+          )}
+        </>
       )}
 
       {/* ---------------- MODALS ---------------- */}
@@ -765,23 +776,6 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         close={() => setProfitPaymentModal(null)}
         submitting={Boolean(actionLoading)}
       />
-
-      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
-      {(actionLoading || loading) && (
-        <div className="autoLoadingScreenOverlay">
-          <div className="autoLoadingCard">
-            <div className="autoLoadingSpinner" />
-            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
-              {actionLoading || "Loading Global Capital..."}
-            </h4>
-            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
-              {actionLoading
-                ? "Processing transaction and updating ledger. Please wait..."
-                : "Fetching ledger, partners, and financial statements..."}
-            </p>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

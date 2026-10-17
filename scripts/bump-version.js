@@ -14,9 +14,23 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
+import { execSync } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
+
+function loadEnvToken() {
+  if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  for (const envFile of [path.join(ROOT_DIR, ".env"), path.join(ROOT_DIR, "Backend", ".env")]) {
+    if (fs.existsSync(envFile)) {
+      const content = fs.readFileSync(envFile, "utf-8");
+      const match = content.match(/^(?:GH_TOKEN|GITHUB_TOKEN)=(.*)$/m);
+      if (match && match[1].trim()) return match[1].trim();
+    }
+  }
+  return null;
+}
 
 const FILES = {
   rootPackage: path.join(ROOT_DIR, "package.json"),
@@ -93,6 +107,17 @@ function updateFile(filePath, updater) {
   return false;
 }
 
+async function askYesNo(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (ans) => {
+      rl.close();
+      const lower = ans.trim().toLowerCase();
+      resolve(lower === "y" || lower === "yes");
+    });
+  });
+}
+
 async function promptForVersion(current) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -104,7 +129,7 @@ async function promptForVersion(current) {
   const nextMajor = computeNextVersion(current, "major");
 
   console.log("\n========================================================");
-  console.log(` FinFlow Version Manager (Current: v${current})`);
+  console.log(` KAMBAM FINANCE Version Manager (Current: v${current})`);
   console.log("========================================================");
   console.log(` 1) patch -> v${nextPatch}`);
   console.log(` 2) minor -> v${nextMinor}`);
@@ -121,7 +146,7 @@ async function promptForVersion(current) {
       else if (trimmed === "3" || trimmed.toLowerCase() === "major") resolve(nextMajor);
       else if (trimmed === "4") {
         const rlCustom = readline.createInterface({ input: process.stdin, output: process.stdout });
-        rlCustom.question("Enter custom semver (e.g. 1.3.1): ", (customVer) => {
+        rlCustom.question("Enter custom semver (e.g. 2.1.1): ", (customVer) => {
           rlCustom.close();
           resolve(customVer.trim().replace(/^v/i, ""));
         });
@@ -137,16 +162,23 @@ async function promptForVersion(current) {
 
 async function main() {
   const currentVersion = getCurrentVersion();
-  let targetArg = process.argv[2];
+  const isReleaseFlag = process.argv.includes("--release") || process.argv.includes("-r");
+  const nonFlagArgs = process.argv.slice(2).filter((a) => !a.startsWith("-"));
+  let targetArg = nonFlagArgs[0];
 
   let nextVersion = "";
+  let shouldRelease = isReleaseFlag;
+
   if (!targetArg) {
     if (!process.stdin.isTTY) {
       console.log(`Current version: ${currentVersion}`);
-      console.log("Usage: node scripts/bump-version.js [patch | minor | major | <version>]");
+      console.log("Usage: node scripts/bump-version.js [patch | minor | major | <version>] [--release]");
       process.exit(0);
     }
     nextVersion = await promptForVersion(currentVersion);
+    if (!isReleaseFlag) {
+      shouldRelease = await askYesNo("Would you like to build EXE & publish/upload release now? (y/N): ");
+    }
   } else {
     nextVersion = computeNextVersion(currentVersion, targetArg);
   }
@@ -218,12 +250,85 @@ async function main() {
   console.log("========================================================");
   console.log("Updated files:");
   modifiedFiles.forEach((file) => console.log(`  ✓ ${file}`));
-  console.log("--------------------------------------------------------");
-  console.log("Next steps:");
-  console.log(`  1. Build Installer : npm run build:exe`);
-  console.log(`  2. Commit changes  : git commit -am "chore: bump version to v${nextVersion}"`);
-  console.log(`  3. Tag release     : git tag v${nextVersion}`);
-  console.log("========================================================\n");
+
+  if (shouldRelease) {
+    console.log("\n========================================================");
+    console.log(` Executing Automated Release for v${nextVersion}`);
+    console.log("========================================================");
+
+    try {
+      console.log("\n📦 Staging and committing release version files...");
+      execSync("git add -A", {
+        stdio: "inherit",
+        cwd: ROOT_DIR,
+      });
+      execSync(`git commit -m "chore(release): v${nextVersion}"`, {
+        stdio: "inherit",
+        cwd: ROOT_DIR,
+      });
+      console.log(`✓ Committed release commit for v${nextVersion}`);
+    } catch (gitErr) {
+      console.warn("⚠️ Git commit notice:", gitErr.message);
+    }
+
+    try {
+      execSync(`git tag v${nextVersion}`, { stdio: "inherit", cwd: ROOT_DIR });
+      console.log(`✓ Created git tag v${nextVersion}`);
+    } catch (tagErr) {
+      console.warn("⚠️ Git tag notice:", tagErr.message);
+    }
+
+    try {
+      console.log("\n🚀 Pushing release commit and tag to GitHub origin...");
+      execSync("git push origin main && git push origin --tags", {
+        stdio: "inherit",
+        cwd: ROOT_DIR,
+      });
+      console.log("✓ Pushed to GitHub origin");
+    } catch (pushErr) {
+      console.warn("⚠️ Git push notice:", pushErr.message);
+    }
+
+    console.log(`\n🔨 Building frontend for production...`);
+    execSync("npm --prefix Frontend run build", { stdio: "inherit", cwd: ROOT_DIR });
+
+    const token = loadEnvToken();
+    if (token) {
+      console.log(`\n🔑 GitHub Token detected. Building and publishing release v${nextVersion} to GitHub...`);
+      try {
+        execSync("npx electron-builder --publish always", {
+          stdio: "inherit",
+          cwd: path.join(ROOT_DIR, "Frontend"),
+          env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token },
+        });
+        console.log(`\n🎉 Release v${nextVersion} published successfully with EXE uploaded to GitHub!`);
+      } catch (err) {
+        console.error("⚠️ Publish error:", err.message);
+        console.log("Falling back to local build...");
+        execSync("npx electron-builder", {
+          stdio: "inherit",
+          cwd: path.join(ROOT_DIR, "Frontend"),
+        });
+      }
+    } else {
+      console.log(`\nℹ️ No GH_TOKEN found in environment or .env.`);
+      console.log(`Building installer executable locally...`);
+      execSync("npx electron-builder", {
+        stdio: "inherit",
+        cwd: path.join(ROOT_DIR, "Frontend"),
+      });
+      console.log(`\n✅ Local installer built successfully in: App/`);
+      console.log(`💡 Tip: Add GH_TOKEN=<your-github-token> to .env to automatically upload EXE to GitHub Releases!`);
+    }
+  } else {
+    console.log("--------------------------------------------------------");
+    console.log("Next steps (manual):");
+    console.log(`  1. Build Installer : npm run build:exe`);
+    console.log(`  2. Commit changes  : git commit -am "chore: bump version to v${nextVersion}"`);
+    console.log(`  3. Tag release     : git tag v${nextVersion}`);
+    console.log(`  (Or run 'npm run release' to automate build & upload)`);
+    console.log("========================================================\n");
+  }
 }
 
 main().catch((err) => {

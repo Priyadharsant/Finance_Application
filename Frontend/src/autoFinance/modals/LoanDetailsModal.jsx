@@ -448,7 +448,7 @@ export default function LoanDetailsModal({
                               </span>
                             )}
                             <span style={{ fontSize: "11px", fontWeight: "bold", color: "#0f172a" }}>
-                              Total Collected: {money(s.total_cash_collected)}
+                              Total Collected: {money(s.total_cash_collected || s.collected_amount || s.total_emi)}
                             </span>
                           </div>
                         ) : s.status === "PARTIAL" ? (
@@ -457,7 +457,7 @@ export default function LoanDetailsModal({
                               PARTIAL
                             </span>
                             <span style={{ fontSize: "11px", color: "#64748b" }}>
-                              Paid: {money(s.scheduled_amount_paid)}
+                              Paid: {money(s.total_cash_collected || s.scheduled_amount_paid || s.collected_amount)}
                             </span>
                             {Number(s.extra_principal_paid || 0) > 0 && (
                               <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
@@ -478,7 +478,7 @@ export default function LoanDetailsModal({
                       <td>
                         {selectedLoan.loan.status === "COMPLETED" || s.status === "CANCELLED" ? (
                           <div style={{ color: s.status === "PAID" ? "#047857" : "#94a3b8", fontWeight: s.status === "PAID" ? "bold" : "normal", fontSize: "12px" }}>
-                            {s.status === "PAID" ? money(s.collected_amount || s.total_emi) : "Cancelled"}
+                            {s.status === "PAID" ? money(s.total_cash_collected || s.collected_amount || s.total_emi) : "Cancelled"}
                           </div>
                         ) : s.status !== "PAID" ? (
                           <button
@@ -529,7 +529,7 @@ export default function LoanDetailsModal({
                           </button>
                         ) : (
                           <div style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
-                            {money(s.collected_amount || s.total_emi)}
+                            {money(s.total_cash_collected || s.collected_amount || s.total_emi)}
                           </div>
                         )}
                       </td>

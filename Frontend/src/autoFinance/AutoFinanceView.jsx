@@ -158,8 +158,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     direction: "desc",
   });
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const [dashRes, custRes, typesRes, loansRes, partnersRes] = await Promise.allSettled([
         apiCall("/loans/dashboard"),
@@ -182,7 +182,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -211,10 +211,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         baseInterestRate: "12",
         defaultTenureMonths: "12",
       });
-      await loadData();
+      setActionLoading(null);
+      loadData(false);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -312,10 +312,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           other: null
         }
       });
-      await loadData();
+      setActionLoading(null);
+      loadData(false);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -342,14 +342,15 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         paymentMethod: "CASH",
         referenceNumber: "",
       });
+      setActionLoading(null);
       if (selectedLoan) {
-        const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
-        if (details.success) setSelectedLoan(details.data);
+        apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
+          if (details?.success) setSelectedLoan(details.data);
+        });
       }
-      await loadData();
+      loadData(false);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -400,14 +401,15 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       const discNote = discount > 0 ? ` (₹${discount.toLocaleString()} discount recorded in expenses)` : '';
       setNotice?.({ type: "success", text: `Loan successfully closed early!${discNote}` });
       setCloseLoanModal(null);
+      setActionLoading(null);
       if (selectedLoan) {
-        const details = await apiCall(`/loans/${selectedLoan.loan.id}`);
-        if (details.success) setSelectedLoan(details.data);
+        apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
+          if (details?.success) setSelectedLoan(details.data);
+        });
       }
-      await loadData();
+      loadData(false);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
-    } finally {
       setActionLoading(null);
     }
   };
@@ -708,68 +710,77 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
   return (
     <div className="autoFinanceContainer">
-      {/* 1. DASHBOARD */}
-      {activeMenu === "Dashboard" && (
-        <AutoDashboard
-          overview={overview}
-          dashboardLoans={dashboardLoans}
-          dashboardData={dashboardData}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          dashboardMonthFilter={dashboardMonthFilter}
-          setDashboardMonthFilter={setDashboardMonthFilter}
-          handleExportDashboardLoans={handleExportDashboardLoans}
-          sortConfig={sortConfig}
-          handleSort={handleSort}
-          setShowCreateLoan={setShowCreateLoan}
-          openLoanDetails={openLoanDetails}
-          setPayEmiModal={setPayEmiModal}
-          setPayForm={setPayForm}
-        />
+      {/* IN-PAGE DATA LOADING ANIMATION (NO BLOCKING POPUP) */}
+      {loading ? (
+        <div className="inPageDataLoader">
+          <div className="inPageDataSpinner" />
+          <h3>Loading Auto Finance Records...</h3>
+          <p>Fetching active vehicle loans, dues, and payment schedules...</p>
+        </div>
+      ) : (
+        <>
+          {/* 1. DASHBOARD */}
+          {activeMenu === "Dashboard" && (
+            <AutoDashboard
+              overview={overview}
+              dashboardLoans={dashboardLoans}
+              dashboardData={dashboardData}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              dashboardMonthFilter={dashboardMonthFilter}
+              setDashboardMonthFilter={setDashboardMonthFilter}
+              handleExportDashboardLoans={handleExportDashboardLoans}
+              sortConfig={sortConfig}
+              handleSort={handleSort}
+              setShowCreateLoan={setShowCreateLoan}
+              openLoanDetails={openLoanDetails}
+              setPayEmiModal={setPayEmiModal}
+              setPayForm={setPayForm}
+            />
+          )}
+
+          {/* 2. CUSTOMERS */}
+          {activeMenu === "Customers" && (
+            <AutoCustomers
+              filteredCustomers={filteredCustomers}
+              customerMonthFilter={customerMonthFilter}
+              setCustomerMonthFilter={setCustomerMonthFilter}
+              search={search}
+              setSearch={setSearch}
+              handleExportCustomers={handleExportCustomers}
+              setSelectedCustomer={setSelectedCustomer}
+            />
+          )}
+
+          {selectedCustomer && (
+            <CustomerDetailsModal
+              customer={selectedCustomer}
+              loans={loans}
+              onClose={() => setSelectedCustomer(null)}
+            />
+          )}
+
+          {/* 4. VEHICLE LOANS */}
+          {activeMenu === "Vehicle Loans" && (
+            <AutoVehicleLoans
+              overview={overview}
+              loans={loans}
+              vehiclePageLoans={vehiclePageLoans}
+              loanTabFilter={loanTabFilter}
+              setLoanTabFilter={setLoanTabFilter}
+              loanMonthFilter={loanMonthFilter}
+              setLoanMonthFilter={setLoanMonthFilter}
+              search={search}
+              setSearch={setSearch}
+              vehicleTypeFilter={vehicleTypeFilter}
+              setVehicleTypeFilter={setVehicleTypeFilter}
+              setShowCreateLoan={setShowCreateLoan}
+              openLoanDetails={openLoanDetails}
+              handleExportVehicleLoans={handleExportVehicleLoans}
+            />
+          )}
+        </>
       )}
-
-      {/* 2. CUSTOMERS */}
-      {activeMenu === "Customers" && (
-        <AutoCustomers
-          filteredCustomers={filteredCustomers}
-          customerMonthFilter={customerMonthFilter}
-          setCustomerMonthFilter={setCustomerMonthFilter}
-          search={search}
-          setSearch={setSearch}
-          handleExportCustomers={handleExportCustomers}
-          setSelectedCustomer={setSelectedCustomer}
-        />
-      )}
-
-      {selectedCustomer && (
-        <CustomerDetailsModal
-          customer={selectedCustomer}
-          loans={loans}
-          onClose={() => setSelectedCustomer(null)}
-        />
-      )}
-
-      {/* 4. VEHICLE LOANS */}
-      {activeMenu === "Vehicle Loans" && (
-        <AutoVehicleLoans
-          overview={overview}
-          loans={loans}
-          vehiclePageLoans={vehiclePageLoans}
-          loanTabFilter={loanTabFilter}
-          setLoanTabFilter={setLoanTabFilter}
-          loanMonthFilter={loanMonthFilter}
-          setLoanMonthFilter={setLoanMonthFilter}
-          search={search}
-          setSearch={setSearch}
-          vehicleTypeFilter={vehicleTypeFilter}
-          setVehicleTypeFilter={setVehicleTypeFilter}
-          setShowCreateLoan={setShowCreateLoan}
-          openLoanDetails={openLoanDetails}
-          handleExportVehicleLoans={handleExportVehicleLoans}
-        />
-      )}
-
-
 
       {/* MODAL: ADD LOAN SCHEME */}
       <AddLoanSchemeModal
@@ -824,23 +835,6 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         submitCloseLoan={submitCloseLoan}
         submitting={Boolean(actionLoading)}
       />
-
-      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
-      {(actionLoading || loading) && (
-        <div className="autoLoadingScreenOverlay">
-          <div className="autoLoadingCard">
-            <div className="autoLoadingSpinner" />
-            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
-              {actionLoading || "Loading Auto Finance..."}
-            </h4>
-            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
-              {actionLoading
-                ? "Processing transaction and securing records. Please wait..."
-                : "Fetching active loans, dues, and payment schedules..."}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

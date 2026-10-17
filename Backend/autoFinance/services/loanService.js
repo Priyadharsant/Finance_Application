@@ -287,7 +287,7 @@ export async function getAllLoans() {
       c.first_name, c.last_name, c.phone, c.customer_code,
       lt.name as loan_type_name,
       v.vehicle_type, v.make, v.model, v.registration_number,
-      COALESCE(p.total_paid, 0) as total_paid,
+      COALESCE(p.total_paid, s.schedule_total_paid, 0) as total_paid,
       COALESCE(CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE s.pending_dues_count END, 0) as pending_dues_count,
       COALESCE(s.paid_dues_count, 0) as paid_dues_count,
       COALESCE(s.total_dues_count, l.tenure_months) as total_dues_count,
@@ -314,7 +314,12 @@ export async function getAllLoans() {
         COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END) as pending_dues_count,
         COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_dues_count,
         COUNT(id) as total_dues_count,
-        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date < CURRENT_DATE THEN 1 END) as overdue_dues_count
+        COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date < CURRENT_DATE THEN 1 END) as overdue_dues_count,
+        COALESCE(SUM(
+          LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
+          LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0)) +
+          COALESCE(extra_principal_paid, 0)
+        ), 0) as schedule_total_paid
       FROM autofinance_emi_schedules
       GROUP BY loan_id
     ) s ON l.id = s.loan_id
@@ -584,6 +589,11 @@ export async function rescheduleFutureEMIs(client, loanId) {
       [loanId]
     );
     return;
+  } else {
+    await client.query(
+      `UPDATE autofinance_loans SET status = 'ACTIVE', updated_at = NOW() WHERE id = $1 AND status = 'COMPLETED'`,
+      [loanId]
+    );
   }
   
   const n_pending = pendingSchedules.length;
@@ -681,5 +691,104 @@ export async function rescheduleFutureEMIs(client, loanId) {
     );
   }
 }
+
+/**
+ * Reconciles schedule accounting and autofinance_payments ledger for an entire loan.
+ * Ensures total_emi = P + I, breakdown (interest, principal, extra) is mathematically sound,
+ * and autofinance_payments matches collected installments 1-to-1.
+ */
+export async function reconcileLoanAccounting(client, loanId) {
+  const loanRes = await client.query(
+    `SELECT id, loan_amount, interest_rate, tenure_months, interest_type, status FROM autofinance_loans WHERE id = $1`,
+    [loanId]
+  );
+  if (!loanRes.rows[0]) return;
+
+  const schedRes = await client.query(
+    `SELECT id, installment_number, principal_component, interest_component, total_emi, collected_amount, paid_principal, paid_interest, extra_principal_paid, status
+     FROM autofinance_emi_schedules
+     WHERE loan_id = $1
+     ORDER BY installment_number ASC`,
+    [loanId]
+  );
+
+  for (const s of schedRes.rows) {
+    const pComp = Number(s.principal_component || 0);
+    const iComp = Number(s.interest_component || 0);
+    const contractualEmi = Number((pComp + iComp).toFixed(2));
+
+    const rawCol = s.collected_amount;
+    const colAmt = (rawCol === null || rawCol === '' || isNaN(Number(rawCol))) ? 0 : Math.max(0, Number(Number(rawCol).toFixed(2)));
+
+    let paidInterest = 0;
+    let paidPrincipal = 0;
+    let extraPrincipal = 0;
+    let newStatus = 'PENDING';
+
+    if (colAmt > 0) {
+      let rem = colAmt;
+      paidInterest = Number(Math.min(rem, iComp).toFixed(2));
+      rem = Number((rem - paidInterest).toFixed(2));
+      paidPrincipal = Number(Math.min(rem, pComp).toFixed(2));
+      rem = Number((rem - paidPrincipal).toFixed(2));
+      extraPrincipal = Number(Math.max(0, rem).toFixed(2));
+
+      const isFullyPaid = (paidInterest >= iComp - 0.01) && (paidPrincipal >= pComp - 0.01) && contractualEmi > 0;
+      newStatus = isFullyPaid ? 'PAID' : 'PARTIAL';
+    }
+
+    await client.query(
+      `UPDATE autofinance_emi_schedules
+       SET total_emi = $1,
+           collected_amount = $2,
+           paid_interest = $3,
+           paid_principal = $4,
+           extra_principal_paid = $5,
+           status = $6
+       WHERE id = $7`,
+      [
+        contractualEmi,
+        colAmt > 0 ? colAmt : null,
+        paidInterest,
+        paidPrincipal,
+        extraPrincipal,
+        newStatus,
+        s.id
+      ]
+    );
+
+    if (colAmt > 0) {
+      const payRes = await client.query(
+        `SELECT id FROM autofinance_payments WHERE emi_id = $1 ORDER BY created_at ASC`,
+        [s.id]
+      );
+      if (payRes.rows.length > 0) {
+        const primaryId = payRes.rows[0].id;
+        await client.query(
+          `UPDATE autofinance_payments
+           SET amount_paid = $1, principal_paid = $2, interest_paid = $3, extra_principal_paid = $4, payment_date = CURRENT_DATE
+           WHERE id = $5`,
+          [colAmt, paidPrincipal, paidInterest, extraPrincipal, primaryId]
+        );
+        if (payRes.rows.length > 1) {
+          const duplicateIds = payRes.rows.slice(1).map((r) => r.id);
+          await client.query(`DELETE FROM autofinance_payments WHERE id = ANY($1)`, [duplicateIds]);
+        }
+      } else {
+        await client.query(
+          `INSERT INTO autofinance_payments (
+            loan_id, emi_id, payment_date, amount_paid, principal_paid, interest_paid, extra_principal_paid, payment_method, reference_number
+          ) VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6, 'CASH', 'Table Studio Sync')`,
+          [loanId, s.id, colAmt, paidPrincipal, paidInterest, extraPrincipal]
+        );
+      }
+    } else {
+      await client.query(`DELETE FROM autofinance_payments WHERE emi_id = $1`, [s.id]);
+    }
+  }
+
+  await rescheduleFutureEMIs(client, loanId);
+}
+
 
 

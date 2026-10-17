@@ -76,8 +76,8 @@ export default function DailyFinanceView({
       .then(setDaily)
       .catch((error) => setNotice?.({ type: "error", text: error.message }));
 
-  const loadInitialData = async () => {
-    setLoading(true);
+  const loadInitialData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       await Promise.allSettled([
         dailyFinanceApi.getDashboard(entryDate).then(setDashboard),
@@ -86,7 +86,7 @@ export default function DailyFinanceView({
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -103,12 +103,13 @@ export default function DailyFinanceView({
       await dailyFinanceApi.createFinance(finance);
       setFinance(emptyFinance);
       setShowAdd(false);
+      setBusy(false);
+      setActionLoading(null);
       setPage?.("Customers");
       setNotice?.({ type: "success", text: "Finance saved successfully" });
-      await loadDashboard();
+      loadDashboard();
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
-    } finally {
       setBusy(false);
       setActionLoading(null);
     }
@@ -132,16 +133,17 @@ export default function DailyFinanceView({
           amount,
         });
       }
+      setBusy(false);
+      setActionLoading(null);
       setNotice?.({
         type: "success",
         text: customer.today_payment_id
           ? "Collection updated"
           : "Collection saved",
       });
-      await Promise.all([loadDashboard(), loadDaily()]);
+      Promise.all([loadDashboard(), loadDaily()]);
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
-    } finally {
       setBusy(false);
       setActionLoading(null);
     }
@@ -157,13 +159,15 @@ export default function DailyFinanceView({
         editingPayment.payment_id,
         editingPayment,
       );
+      const custId = details?.customer?.customer_id;
       setEditingPayment(null);
+      setBusy(false);
+      setActionLoading(null);
       setNotice?.({ type: "success", text: "Collection updated" });
-      await Promise.all([loadDashboard(), loadDaily()]);
-      if (details) openDetails(details.customer.customer_id);
+      Promise.all([loadDashboard(), loadDaily()]);
+      if (custId) openDetails(custId);
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
-    } finally {
       setBusy(false);
       setActionLoading(null);
     }
@@ -175,13 +179,15 @@ export default function DailyFinanceView({
     setActionLoading("Closing Loan Account...");
     try {
       await dailyFinanceApi.closeLoan(payload.financeId, payload);
+      const custId = details?.customer?.customer_id;
       setClosingCustomer(null);
+      setBusy(false);
+      setActionLoading(null);
       setNotice?.({ type: "success", text: "Loan closed successfully" });
-      await Promise.all([loadDashboard(), loadDaily()]);
-      if (details) openDetails(details.customer.customer_id);
+      Promise.all([loadDashboard(), loadDaily()]);
+      if (custId) openDetails(custId);
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
-    } finally {
       setBusy(false);
       setActionLoading(null);
     }
@@ -193,13 +199,15 @@ export default function DailyFinanceView({
     setActionLoading("Increasing Loan Amount...");
     try {
       await dailyFinanceApi.increaseLoanAmount(payload.financeId, payload);
+      const custId = details?.customer?.customer_id;
       setIncreasingCustomer(null);
+      setBusy(false);
+      setActionLoading(null);
       setNotice?.({ type: "success", text: "Loan amount increased successfully" });
-      await Promise.all([loadDashboard(), loadDaily()]);
-      if (details) openDetails(details.customer.customer_id);
+      Promise.all([loadDashboard(), loadDaily()]);
+      if (custId) openDetails(custId);
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
-    } finally {
       setBusy(false);
       setActionLoading(null);
     }
@@ -232,44 +240,53 @@ export default function DailyFinanceView({
   const position = dashboard.position || {};
 
   return (
-    <>
-      {activeMenu === "Dashboard" && (
-        <DailyDashboard
-          position={position}
-          customers={dashboard.customers}
-          recent={dashboard.recentPayments}
-          setPage={setPage}
-          openDetails={openDetails}
-        />
+    <div className="dailyFinanceContainer">
+      {/* IN-PAGE DATA LOADING ANIMATION (NO BLOCKING POPUP) */}
+      {loading ? (
+        <div className="inPageDataLoader">
+          <div className="inPageDataSpinner" />
+          <h3>Loading Daily Finance Records...</h3>
+          <p>Fetching daily accounts, payments, and customer records...</p>
+        </div>
+      ) : (
+        <>
+          {activeMenu === "Dashboard" && (
+            <DailyDashboard
+              position={position}
+              customers={dashboard.customers}
+              recent={dashboard.recentPayments}
+              setPage={setPage}
+              openDetails={openDetails}
+            />
+          )}
+
+          {activeMenu === "Customers" && (
+            <DailyCustomers
+              customers={filteredCustomers}
+              search={customerSearch}
+              setSearch={setCustomerSearch}
+              status={customerStatus}
+              setStatus={setCustomerStatus}
+              setShowAdd={setShowAdd}
+              openDetails={openDetails}
+              onOpenCloseLoan={setClosingCustomer}
+              onOpenIncreaseLoan={setIncreasingCustomer}
+            />
+          )}
+
+          {activeMenu === "Daily entry" && (
+            <DailyEntryTab
+              date={entryDate}
+              setDate={setEntryDate}
+              daily={daily.customers}
+              savePayment={savePayment}
+              openDetails={openDetails}
+              onEditPayment={setEditingPayment}
+              busy={busy}
+            />
+          )}
+        </>
       )}
-
-      {activeMenu === "Customers" && (
-        <DailyCustomers
-          customers={filteredCustomers}
-          search={customerSearch}
-          setSearch={setCustomerSearch}
-          status={customerStatus}
-          setStatus={setCustomerStatus}
-          setShowAdd={setShowAdd}
-          openDetails={openDetails}
-          onOpenCloseLoan={setClosingCustomer}
-          onOpenIncreaseLoan={setIncreasingCustomer}
-        />
-      )}
-
-      {activeMenu === "Daily entry" && (
-        <DailyEntryTab
-          date={entryDate}
-          setDate={setEntryDate}
-          daily={daily.customers}
-          savePayment={savePayment}
-          openDetails={openDetails}
-          onEditPayment={setEditingPayment}
-          busy={busy}
-        />
-      )}
-
-
 
       {/* Modals */}
       {showAdd && (
@@ -319,23 +336,6 @@ export default function DailyFinanceView({
           busy={busy}
         />
       )}
-
-      {/* GLOBAL LOADING SCREEN (UNTIL DATA LOADS OR ACTION PROCESSES) */}
-      {(actionLoading || loading) && (
-        <div className="autoLoadingScreenOverlay">
-          <div className="autoLoadingCard">
-            <div className="autoLoadingSpinner" />
-            <h4 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "700" }}>
-              {actionLoading || "Loading Daily Finance..."}
-            </h4>
-            <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
-              {actionLoading
-                ? "Processing transaction and updating ledger. Please wait..."
-                : "Fetching daily accounts, payments, and customer records..."}
-            </p>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

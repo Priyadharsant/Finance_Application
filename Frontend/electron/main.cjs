@@ -36,11 +36,16 @@ function downloadFile(url, destPath, onProgress) {
           const totalBytes = parseInt(res.headers["content-length"] || "0", 10);
           let receivedBytes = 0;
           const fileStream = fs.createWriteStream(destPath);
+          let lastReportTime = 0;
+          let lastPercent = -1;
 
           res.on("data", (chunk) => {
             receivedBytes += chunk.length;
             const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
-            if (onProgress) {
+            const now = Date.now();
+            if (onProgress && (percent !== lastPercent || now - lastReportTime > 120 || percent === 100)) {
+              lastPercent = percent;
+              lastReportTime = now;
               onProgress({
                 percent,
                 transferred: receivedBytes,
@@ -89,7 +94,7 @@ ipcMain.handle("download-and-install-update", async (event, { url, version }) =>
     if (!url) throw new Error("No download URL provided");
     const safeVersion = String(version || "latest").replace(/[^a-zA-Z0-9._-]/g, "");
     const tempDir = app.getPath("temp");
-    const installerFilename = `FinFlow-Setup-${safeVersion}.exe`;
+    const installerFilename = `KAMBAM-FINANCE-Setup-${safeVersion}.exe`;
     const destPath = path.join(tempDir, installerFilename);
 
     // Stream download with live progress events
@@ -114,7 +119,7 @@ ipcMain.handle("download-and-install-update", async (event, { url, version }) =>
     // Close current Electron application so installer can overwrite files seamlessly
     setTimeout(() => {
       app.quit();
-    }, 1200);
+    }, 100);
 
     return { success: true };
   } catch (err) {

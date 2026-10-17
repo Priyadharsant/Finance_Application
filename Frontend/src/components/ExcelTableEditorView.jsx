@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Table,
-  Trash2,
   Save,
   RefreshCw,
   Search,
@@ -16,34 +15,31 @@ import {
   FileSpreadsheet,
   Users,
   Landmark,
-  CarFront,
   UserRound,
   Calendar,
   Receipt,
   Globe,
-  ChevronDown,
+  Lock,
 } from "lucide-react";
 import { getApiBaseUrl } from "../apiConfig.js";
 
-// Core 5-7 essential business fields per table (using person names instead of raw IDs)
+// Core essential business fields per table
 const ESSENTIAL_COLUMNS_MAP = {
-  global_partners: ["name", "phone", "email", "status", "notes"],
-  partner_capital_transactions: [
-    "partner_name",
-    "transaction_type",
-    "fund_source_type",
-    "lender_name",
-    "amount",
-    "effective_date",
-    "status",
-  ],
-  autofinance_loans: [
+  daily_finance_accounts: [
     "customer_name",
-    "loan_amount",
-    "interest_rate",
-    "tenure_months",
-    "start_date",
+    "gross_finance_amount",
+    "mobile_number",
+    "finance_date",
     "status",
+    "notes",
+  ],
+  daily_finance_payments: [
+    "customer_name",
+    "collection_date",
+    "amount",
+    "payment_method",
+    "status",
+    "notes",
   ],
   autofinance_customers: [
     "customer_code",
@@ -52,13 +48,7 @@ const ESSENTIAL_COLUMNS_MAP = {
     "phone",
     "city",
     "address",
-  ],
-  daily_finance_customers: [
-    "customer_name",
-    "mobile_number",
-    "address",
-    "status",
-    "notes",
+    "alternate_phone",
   ],
   autofinance_emi_schedules: [
     "customer_name",
@@ -68,18 +58,30 @@ const ESSENTIAL_COLUMNS_MAP = {
     "collected_amount",
     "status",
   ],
-  autofinance_payments: [
-    "customer_name",
-    "payment_date",
-    "amount_paid",
-    "payment_method",
-    "reference_number",
-  ],
-  daily_finance_payments: [
-    "customer_name",
-    "collection_date",
+  expenses: [
+    "expense_date",
+    "category",
+    "expense_type",
     "amount",
-    "payment_method",
+    "description",
+  ],
+  partner_capital_amounts: [
+    "partner_name",
+    "fund_source_type",
+    "lender_name",
+    "amount",
+    "interest_rate",
+    "effective_date",
+    "status",
+    "notes",
+  ],
+  partner_capital_transactions: [
+    "partner_name",
+    "transaction_type",
+    "fund_source_type",
+    "lender_name",
+    "amount",
+    "effective_date",
     "status",
     "notes",
   ],
@@ -91,82 +93,66 @@ const ESSENTIAL_COLUMNS_MAP = {
     "source_module",
     "notes",
   ],
-  expenses: [
-    "expense_date",
-    "category",
-    "expense_type",
-    "amount",
-    "description",
-  ],
 };
 
 // Friendly column labels
 const COLUMN_LABEL_MAP = {
   id: "ID",
-  name: "Partner Name",
   partner_name: "Partner Name",
   customer_name: "Customer Name",
-  phone: "Phone",
-  email: "Email",
-  status: "Status",
-  notes: "Notes",
-  partner_id: "Partner",
-  transaction_type: "Type",
-  fund_source_type: "Source (Own/Lend)",
-  lender_name: "Lender Name",
-  amount: "Amount",
-  effective_date: "Date",
-  customer_id: "Customer",
-  loan_amount: "Loan Amount",
+  gross_finance_amount: "Total Loan Amount",
+  fund_source_type: "Capital Source",
+  lender_name: "Lender / Source",
   interest_rate: "Interest %",
-  tenure_months: "Tenure (Mo)",
-  start_date: "Start Date",
-  end_date: "End Date",
+  amount: "Amount",
+  amount_paid: "Collected Amount",
+  collected_amount: "Collected Amount",
+  total_emi: "Total EMI",
+  installment_number: "EMI #",
+  due_date: "Due Date",
+  payment_date: "Payment Date",
+  collection_date: "Collection Date",
+  finance_date: "Finance Date",
   customer_code: "Customer Code",
   first_name: "First Name",
   last_name: "Last Name",
+  phone: "Phone",
+  mobile_number: "Mobile Number",
+  alternate_phone: "Alt Phone",
   city: "City",
   address: "Address",
-  mobile_number: "Mobile Number",
-  loan_id: "Loan",
-  installment_number: "EMI #",
-  due_date: "Due Date",
-  total_emi: "Total EMI",
-  collected_amount: "Collected",
-  payment_date: "Payment Date",
-  amount_paid: "Amount Paid",
+  status: "Status",
   payment_method: "Payment Method",
   reference_number: "Ref Number",
-  collection_date: "Collection Date",
-  transaction_date: "Txn Date",
-  direction: "Direction",
-  source_module: "Source Module",
   expense_date: "Expense Date",
   category: "Category",
   expense_type: "Expense Type",
   description: "Description",
+  notes: "Notes",
+  transaction_type: "Txn Type",
+  transaction_date: "Txn Date",
+  direction: "Direction",
+  source_module: "Source Module",
 };
 
 const getTableIcon = (tableName) => {
   switch (tableName) {
-    case "global_partners":
+    case "daily_finance_accounts":
       return Users;
-    case "partner_capital_transactions":
-      return Landmark;
-    case "autofinance_loans":
-      return CarFront;
+    case "daily_finance_payments":
+      return Receipt;
     case "autofinance_customers":
-    case "daily_finance_customers":
       return UserRound;
     case "autofinance_emi_schedules":
       return Calendar;
-    case "autofinance_payments":
-    case "daily_finance_payments":
-      return Receipt;
-    case "global_cash_ledger":
-      return Globe;
     case "expenses":
       return Receipt;
+    case "partner_capital_amounts":
+      return Landmark;
+    case "partner_capital_transactions":
+      return Database;
+    case "global_cash_ledger":
+      return Globe;
     default:
       return Table;
   }
@@ -187,6 +173,7 @@ export default function ExcelTableEditorView({ onClose }) {
   const [modifiedRows, setModifiedRows] = useState({});
   const [editingCell, setEditingCell] = useState(null); // { rowId, colName }
   const [savingRows, setSavingRows] = useState({});
+  const [isSavingAll, setIsSavingAll] = useState(false);
   const [notification, setNotification] = useState(null);
   const editInputRef = useRef(null);
 
@@ -207,7 +194,8 @@ export default function ExcelTableEditorView({ onClose }) {
       if (data.success && data.tables?.length > 0) {
         setTables(data.tables);
         if (!selectedTable) {
-          const defaultTbl = data.tables.find((t) => t.name === "partner_capital_transactions") || data.tables[0];
+          const defaultTbl =
+            data.tables.find((t) => t.name === "daily_finance_accounts") || data.tables[0];
           setSelectedTable(defaultTbl.name);
         }
       }
@@ -275,7 +263,7 @@ export default function ExcelTableEditorView({ onClose }) {
     }
   };
 
-  // Compute visible columns: ALWAYS ESSENTIAL, ordered with Person Name first, excluding 'id'
+  // Compute visible columns: ALWAYS ESSENTIAL, ordered logically, excluding 'id'
   const visibleColumns = useMemo(() => {
     if (!tableData?.columns) return [];
 
@@ -289,17 +277,64 @@ export default function ExcelTableEditorView({ onClose }) {
       essentialList.forEach((colName, idx) => orderMap.set(colName.toLowerCase(), idx));
 
       const matched = columnsWithoutId.filter((c) => orderMap.has(c.column_name.toLowerCase()));
-      matched.sort((a, b) => orderMap.get(a.column_name.toLowerCase()) - orderMap.get(b.column_name.toLowerCase()));
+      matched.sort(
+        (a, b) => orderMap.get(a.column_name.toLowerCase()) - orderMap.get(b.column_name.toLowerCase())
+      );
       return matched.length > 0 ? matched : columnsWithoutId;
     }
 
-    return columnsWithoutId.slice(0, 7);
+    return columnsWithoutId.slice(0, 8);
   }, [tableData, selectedTable]);
 
-  // Cell editing (Person Names and PKs are read-only references; operational fields are editable)
-  const handleCellClick = (rowId, colName) => {
+  // Check if a cell is editable
+  const isCellEditable = (colName, isPK, row) => {
+    if (isPK) return false;
+
+    // Strict rule for Auto Collections: ONLY collected_amount is editable! total_emi, dates, status are read-only!
+    if (selectedTable === "autofinance_emi_schedules") {
+      return colName === "collected_amount";
+    }
+
+    // Strict rule for Daily Finance Loans: Only customer_name, gross_finance_amount, mobile_number, and notes are editable
+    if (selectedTable === "daily_finance_accounts") {
+      return ["customer_name", "gross_finance_amount", "mobile_number", "notes"].includes(colName);
+    }
+
+    if (
+      colName === "customer_name" &&
+      selectedTable !== "daily_finance_accounts" &&
+      selectedTable !== "daily_finance_customers"
+    ) {
+      return false;
+    }
+    if (
+      colName === "partner_name" &&
+      selectedTable !== "partner_capital_amounts" &&
+      selectedTable !== "global_partners"
+    ) {
+      return false;
+    }
+    if (
+      selectedTable === "partner_capital_amounts" &&
+      colName === "fund_source_type"
+    ) {
+      return false;
+    }
+    if (
+      selectedTable === "partner_capital_amounts" &&
+      colName === "lender_name" &&
+      row?.fund_source_type === "OWN"
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const handleCellClick = (rowId, colName, row) => {
     const colDef = tableData?.columns.find((c) => c.column_name === colName);
-    if (colDef?.is_primary || colName === "partner_name" || colName === "customer_name") return;
+    const targetRow =
+      row || tableData?.rows.find((r) => String(r[tableData.primaryKey || "id"]) === String(rowId));
+    if (!isCellEditable(colName, colDef?.is_primary, targetRow)) return;
     setEditingCell({ rowId, colName });
   };
 
@@ -340,24 +375,28 @@ export default function ExcelTableEditorView({ onClose }) {
     }
   };
 
-  // Save single row
+  // Save / Update single row
   const saveRow = async (row) => {
     const pkCol = tableData?.primaryKey || "id";
     const rowId = row[pkCol];
+    if (savingRows[rowId]) return;
     const changes = modifiedRows[rowId];
     if (!changes || Object.keys(changes).length === 0) return;
 
     setSavingRows((prev) => ({ ...prev, [rowId]: true }));
     try {
       const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/table-editor/data/${selectedTable}/${encodeURIComponent(rowId)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getAuthToken()}`,
-        },
-        body: JSON.stringify(changes),
-      });
+      const res = await fetch(
+        `${apiBase}/table-editor/data/${selectedTable}/${encodeURIComponent(rowId)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getAuthToken()}`,
+          },
+          body: JSON.stringify(changes),
+        }
+      );
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Save failed");
@@ -365,7 +404,21 @@ export default function ExcelTableEditorView({ onClose }) {
 
       setTableData((prev) => ({
         ...prev,
-        rows: prev.rows.map((r) => (r[pkCol] === rowId ? { ...r, ...data.updatedRow } : r)),
+        rows: prev.rows.map((r) => {
+          if (String(r[pkCol]) === String(rowId)) {
+            return { ...r, ...data.updatedRow };
+          }
+          if (
+            selectedTable === "partner_capital_amounts" &&
+            data.updatedRow?.partner_name &&
+            r.partner_id &&
+            data.updatedRow?.partner_id &&
+            String(r.partner_id) === String(data.updatedRow.partner_id)
+          ) {
+            return { ...r, partner_name: data.updatedRow.partner_name };
+          }
+          return r;
+        }),
       }));
 
       setModifiedRows((prev) => {
@@ -374,7 +427,7 @@ export default function ExcelTableEditorView({ onClose }) {
         return next;
       });
 
-      showNotice("success", `Row updated in ${selectedTable}`);
+      showNotice("success", `Row updated successfully`);
     } catch (err) {
       showNotice("error", `Failed to save: ${err.message}`);
     } finally {
@@ -382,50 +435,74 @@ export default function ExcelTableEditorView({ onClose }) {
     }
   };
 
-  // Save all modified rows
+  // Save / Update all modified rows
   const saveAllChanges = async () => {
+    if (isSavingAll) return;
     const rowIds = Object.keys(modifiedRows);
     if (rowIds.length === 0) return;
 
-    for (const rId of rowIds) {
-      const row = tableData.rows.find((r) => String(r[tableData.primaryKey || "id"]) === String(rId));
-      if (row) {
-        await saveRow(row);
-      }
-    }
-  };
-
-  // Delete row
-  const deleteRow = async (row) => {
-    const pkCol = tableData?.primaryKey || "id";
-    const rowId = row[pkCol];
-    if (!window.confirm(`Are you sure you want to delete this row (${pkCol} = ${rowId})? This action cannot be undone.`)) {
-      return;
-    }
-
+    setIsSavingAll(true);
     try {
-      const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/table-editor/data/${selectedTable}/${encodeURIComponent(rowId)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getAuthToken()}` },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Delete failed");
+      for (const rId of rowIds) {
+        const row = tableData.rows.find(
+          (r) => String(r[tableData.primaryKey || "id"]) === String(rId)
+        );
+        if (row) {
+          await saveRow(row);
+        }
       }
-
-      setTableData((prev) => ({
-        ...prev,
-        rows: prev.rows.filter((r) => r[pkCol] !== rowId),
-        totalCount: Math.max(0, prev.totalCount - 1),
-      }));
-      showNotice("success", "Row deleted successfully");
-    } catch (err) {
-      showNotice("error", `Failed to delete row: ${err.message}`);
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
-  // Group tables by module
+  // Group partner_capital_amounts table rows by partner:
+  // Merges Sl No and Partner Name across OWN row (1st) and all associated LEND rows
+  const partnerGroups = useMemo(() => {
+    if (selectedTable !== "partner_capital_amounts" || !tableData?.rows) {
+      return null;
+    }
+
+    const groups = [];
+    let currentGroup = null;
+
+    tableData.rows.forEach((row, rowIndex) => {
+      const partnerKey = String(row.partner_id || row.partner_name || rowIndex);
+      if (!currentGroup || currentGroup.partnerKey !== partnerKey) {
+        currentGroup = {
+          partnerKey,
+          partnerName: row.partner_name,
+          startIndex: rowIndex,
+          count: 1,
+          slNo: (page - 1) * limit + groups.length + 1,
+          rows: [row],
+        };
+        groups.push(currentGroup);
+      } else {
+        currentGroup.count++;
+        currentGroup.rows.push(row);
+      }
+    });
+
+    const rowMeta = {};
+    groups.forEach((g) => {
+      g.rows.forEach((r, idxInGroup) => {
+        const globalIdx = g.startIndex + idxInGroup;
+        rowMeta[globalIdx] = {
+          isFirstInGroup: idxInGroup === 0,
+          isLastInGroup: idxInGroup === g.count - 1,
+          count: g.count,
+          slNo: g.slNo,
+          idxInGroup,
+          group: g,
+        };
+      });
+    });
+
+    return { groups, rowMeta };
+  }, [selectedTable, tableData?.rows, page, limit]);
+
+  // Group tables strictly by module
   const groupedTables = tables.reduce((acc, t) => {
     acc[t.module] = acc[t.module] || [];
     acc[t.module].push(t);
@@ -448,7 +525,9 @@ export default function ExcelTableEditorView({ onClose }) {
       colName.includes("interest_amount") ||
       colName.includes("total_emi") ||
       colName.includes("principal_component") ||
-      colName.includes("interest_component");
+      colName.includes("interest_component") ||
+      colName.includes("daily_agreed_due") ||
+      colName.includes("agreed_total_payable");
 
     if (isAmountCol && !isNaN(Number(val)) && val !== "") {
       const num = Number(val);
@@ -535,7 +614,14 @@ export default function ExcelTableEditorView({ onClose }) {
             >
               <FileSpreadsheet size={15} color="#ffffff" />
             </div>
-            <span style={{ fontWeight: "800", fontSize: "13.5px", letterSpacing: "-0.2px", color: "#ffffff" }}>
+            <span
+              style={{
+                fontWeight: "800",
+                fontSize: "13.5px",
+                letterSpacing: "-0.2px",
+                color: "#ffffff",
+              }}
+            >
               Table Studio
             </span>
           </div>
@@ -572,7 +658,7 @@ export default function ExcelTableEditorView({ onClose }) {
           )}
         </div>
 
-        {/* Right Side: Search, Save, Refresh, Close */}
+        {/* Right Side: Search, Save All, Refresh, Close (NO INSERT, NO DELETE) */}
         <div style={{ display: "flex", alignItems: "center", gap: "7px", flexShrink: 0 }}>
           {/* SEARCH INPUT */}
           <form onSubmit={handleSearchSubmit} style={{ display: "flex", alignItems: "center" }}>
@@ -616,24 +702,27 @@ export default function ExcelTableEditorView({ onClose }) {
           {totalModified > 0 && (
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || isSavingAll}
               onClick={saveAllChanges}
               style={{
-                background: "linear-gradient(135deg, #10b981, #059669)",
+                background: isSavingAll ? "#047857" : "linear-gradient(135deg, #10b981, #059669)",
                 border: "none",
                 color: "#ffffff",
                 borderRadius: "7px",
-                padding: "5px 11px",
+                padding: "5px 12px",
                 fontSize: "12px",
                 fontWeight: "700",
-                cursor: loading ? "not-allowed" : "pointer",
+                cursor: loading || isSavingAll ? "not-allowed" : "pointer",
+                opacity: loading || isSavingAll ? 0.65 : 1,
+                pointerEvents: isSavingAll ? "none" : "auto",
                 display: "flex",
                 alignItems: "center",
                 gap: "5px",
-                boxShadow: "0 0 10px rgba(16, 185, 129, 0.5)",
+                boxShadow: isSavingAll ? "none" : "0 0 10px rgba(16, 185, 129, 0.5)",
               }}
             >
-              <Save size={14} /> Save ({totalModified})
+              <Save size={14} className={isSavingAll ? "animate-spin" : ""} />
+              <span>{isSavingAll ? "Updating..." : `Update All (${totalModified})`}</span>
             </button>
           )}
 
@@ -651,7 +740,7 @@ export default function ExcelTableEditorView({ onClose }) {
               fontSize: "11.5px",
               cursor: loading ? "not-allowed" : "pointer",
             }}
-            title="Refresh"
+            title="Refresh table"
           >
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           </button>
@@ -712,14 +801,14 @@ export default function ExcelTableEditorView({ onClose }) {
           boxSizing: "border-box",
         }}
       >
-        {/* COMPACT LEFT SIDEBAR: STRICTLY 210px WIDTH, NEVER OVERFLOWS OR OVERLAPS TABLE */}
+        {/* COMPACT LEFT SIDEBAR: STRICTLY 230px WIDTH */}
         <div
           className="studioSidebarNav"
           style={{
             position: "relative",
-            width: "210px",
-            minWidth: "210px",
-            maxWidth: "210px",
+            width: "230px",
+            minWidth: "230px",
+            maxWidth: "230px",
             flexShrink: 0,
             height: "100%",
             background: "#0c1322",
@@ -751,7 +840,9 @@ export default function ExcelTableEditorView({ onClose }) {
             }}
           >
             <span>Tables ({tables.length})</span>
-            {loading && <RefreshCw size={11} style={{ animation: "spin 0.8s linear infinite", color: "#38bdf8" }} />}
+            {loading && (
+              <RefreshCw size={11} style={{ animation: "spin 0.8s linear infinite", color: "#38bdf8" }} />
+            )}
           </div>
 
           <div style={{ padding: "8px 6px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -761,13 +852,21 @@ export default function ExcelTableEditorView({ onClose }) {
                   style={{
                     fontSize: "9.5px",
                     fontWeight: "800",
-                    color: "#64748b",
+                    color:
+                      moduleName === "Daily Finance"
+                        ? "#38bdf8"
+                        : moduleName === "Auto Finance"
+                        ? "#fbbf24"
+                        : "#34d399",
                     textTransform: "uppercase",
                     letterSpacing: "0.5px",
-                    padding: "2px 6px 4px",
+                    padding: "3px 6px 4px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
                   }}
                 >
-                  {moduleName}
+                  <span>{moduleName}</span>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -809,7 +908,15 @@ export default function ExcelTableEditorView({ onClose }) {
                         }}
                         title={t.description || t.label}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden", minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            overflow: "hidden",
+                            minWidth: 0,
+                          }}
+                        >
                           <div
                             style={{
                               width: "20px",
@@ -828,7 +935,7 @@ export default function ExcelTableEditorView({ onClose }) {
 
                           <div
                             style={{
-                              fontSize: "11.5px",
+                              fontSize: "11px",
                               fontWeight: isSelected ? "700" : "500",
                               color: isSelected ? "#ffffff" : "#cbd5e1",
                               whiteSpace: "nowrap",
@@ -862,12 +969,12 @@ export default function ExcelTableEditorView({ onClose }) {
           </div>
         </div>
 
-        {/* RIGHT AREA: SPREADSHEET TABLE GRID CONTAINER (FLEX: 1, MINWIDTH: 0) */}
+        {/* RIGHT AREA: SPREADSHEET TABLE GRID CONTAINER */}
         <div
           style={{
             flex: 1,
             minWidth: 0,
-            width: "calc(100% - 210px)",
+            width: "calc(100% - 230px)",
             height: "100%",
             display: "flex",
             flexDirection: "column",
@@ -957,11 +1064,11 @@ export default function ExcelTableEditorView({ onClose }) {
                       #
                     </th>
 
-                    {/* Actions Header */}
+                    {/* Update / Save Header (NO DELETE) */}
                     <th
                       style={{
                         padding: "8px 9px",
-                        width: "74px",
+                        width: "60px",
                         textAlign: "center",
                         borderRight: "1px solid #243044",
                         color: "#94a3b8",
@@ -971,14 +1078,19 @@ export default function ExcelTableEditorView({ onClose }) {
                         background: "#101624",
                       }}
                     >
-                      Actions
+                      Save
                     </th>
 
                     {/* Data Columns */}
                     {visibleColumns.map((col) => {
                       const label = COLUMN_LABEL_MAP[col.column_name] || col.column_name;
-                      const isAmount = col.column_name.includes("amount") || col.column_name.includes("total_emi");
-                      const isPerson = col.column_name === "partner_name" || col.column_name === "customer_name";
+                      const isAmount =
+                        col.column_name.includes("amount") ||
+                        col.column_name.includes("total_emi") ||
+                        col.column_name.includes("agreed_total_payable") ||
+                        col.column_name.includes("daily_agreed_due");
+                      const isPerson =
+                        col.column_name === "partner_name" || col.column_name === "customer_name";
 
                       return (
                         <th
@@ -1002,12 +1114,30 @@ export default function ExcelTableEditorView({ onClose }) {
                               gap: "5px",
                             }}
                           >
-                            {col.is_primary && <Key size={11} color="#f59e0b" title="Primary Key" />}
-                            {isPerson && <UserRound size={11} color="#38bdf8" title="Person Identity" />}
+                            {col.is_primary && (
+                              <Key size={11} color="#f59e0b" title="Primary Key" />
+                            )}
+                            {isPerson && (
+                              <UserRound size={11} color="#38bdf8" title="Person Identity" />
+                            )}
+                            {selectedTable === "autofinance_emi_schedules" && col.column_name === "total_emi" && (
+                              <Lock size={11} color="#94a3b8" title="Scheduled EMI (Locked / Read-Only)" />
+                            )}
+                            {selectedTable === "autofinance_emi_schedules" && col.column_name === "collected_amount" && (
+                              <span style={{ color: "#34d399", fontSize: "11px", fontWeight: "900" }} title="Editable Collected Amount">✎</span>
+                            )}
                             <span
                               style={{
                                 fontWeight: "700",
-                                color: col.is_primary ? "#fbbf24" : isPerson ? "#38bdf8" : "#f1f5f9",
+                                color: col.is_primary
+                                  ? "#fbbf24"
+                                  : isPerson
+                                  ? "#38bdf8"
+                                  : selectedTable === "autofinance_emi_schedules" && col.column_name === "collected_amount"
+                                  ? "#34d399"
+                                  : selectedTable === "autofinance_emi_schedules" && col.column_name === "total_emi"
+                                  ? "#94a3b8"
+                                  : "#f1f5f9",
                                 fontSize: "11.5px",
                               }}
                             >
@@ -1033,10 +1163,19 @@ export default function ExcelTableEditorView({ onClose }) {
                         colSpan={visibleColumns.length + 2}
                         style={{ textAlign: "center", padding: "40px 16px", color: "#64748b" }}
                       >
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
                           <Table size={32} color="#334155" />
                           <span style={{ fontSize: "13px", fontWeight: "600", color: "#94a3b8" }}>
-                            No records in `{selectedTable}`
+                            {selectedTable === "autofinance_emi_schedules"
+                              ? "No collected installments recorded yet in Auto Finance"
+                              : `No records found in \`${selectedTable}\``}
                           </span>
                         </div>
                       </td>
@@ -1048,124 +1187,238 @@ export default function ExcelTableEditorView({ onClose }) {
                       const hasChanges = Boolean(modifiedRows[rowId]);
                       const isSaving = Boolean(savingRows[rowId]);
 
+                      const pGroupMeta = partnerGroups?.rowMeta[idx];
+                      const isChildRow = Boolean(pGroupMeta && pGroupMeta.idxInGroup > 0);
+                      const isLastInGroup = Boolean(pGroupMeta ? pGroupMeta.isLastInGroup : true);
+
                       return (
                         <tr
                           key={rowId || idx}
                           style={{
                             background: hasChanges
                               ? "rgba(16, 185, 129, 0.12)"
+                              : isChildRow
+                              ? "rgba(139, 92, 246, 0.04)"
                               : idx % 2 === 0
                               ? "#090f1a"
                               : "#0c1322",
-                            borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
+                            borderBottom: pGroupMeta
+                              ? isLastInGroup
+                                ? "2px solid rgba(56, 189, 248, 0.3)"
+                                : "1px dashed rgba(255, 255, 255, 0.08)"
+                              : "1px solid rgba(255, 255, 255, 0.04)",
                             transition: "background 0.1s ease",
                           }}
                         >
-                          {/* Row Index */}
-                          <td
-                            style={{
-                              textAlign: "center",
-                              color: "#475569",
-                              fontSize: "10.5px",
-                              borderRight: "1px solid rgba(255, 255, 255, 0.04)",
-                              userSelect: "none",
-                              background: hasChanges ? "rgba(16, 185, 129, 0.15)" : undefined,
-                            }}
-                          >
-                            {(page - 1) * limit + idx + 1}
-                          </td>
-
-                          {/* Row Actions */}
-                          <td
-                            style={{
-                              textAlign: "center",
-                              borderRight: "1px solid rgba(255, 255, 255, 0.04)",
-                              padding: "3px",
-                            }}
-                          >
-                            <div style={{ display: "inline-flex", gap: "4px", alignItems: "center" }}>
-                              {hasChanges && (
-                                <button
-                                  type="button"
-                                  onClick={() => saveRow(row)}
-                                  disabled={isSaving}
+                          {/* Row Index / Merged Sl No */}
+                          {pGroupMeta ? (
+                            pGroupMeta.isFirstInGroup ? (
+                              <td
+                                rowSpan={pGroupMeta.count}
+                                style={{
+                                  textAlign: "center",
+                                  color: "#38bdf8",
+                                  fontSize: "11px",
+                                  fontWeight: "800",
+                                  borderRight: "1px solid #243044",
+                                  borderBottom: "2px solid rgba(56, 189, 248, 0.3)",
+                                  userSelect: "none",
+                                  background:
+                                    "linear-gradient(180deg, rgba(14, 165, 233, 0.14) 0%, rgba(14, 165, 233, 0.04) 100%)",
+                                  verticalAlign: "middle",
+                                  padding: "8px 4px",
+                                }}
+                              >
+                                <div
                                   style={{
-                                    background: "#10b981",
-                                    border: "none",
-                                    color: "#ffffff",
-                                    borderRadius: "4px",
-                                    padding: "2px 6px",
-                                    cursor: "pointer",
-                                    fontSize: "10.5px",
-                                    fontWeight: "700",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: "3px",
                                   }}
-                                  title="Save row"
                                 >
-                                  {isSaving ? "..." : <Save size={12} />}
-                                </button>
-                              )}
+                                  <span style={{ fontSize: "13px", fontWeight: "900", color: "#38bdf8" }}>
+                                    {pGroupMeta.slNo}
+                                  </span>
+                                  {pGroupMeta.count > 1 && (
+                                    <span
+                                      style={{
+                                        fontSize: "8.5px",
+                                        color: "#94a3b8",
+                                        fontWeight: "700",
+                                        background: "rgba(255, 255, 255, 0.06)",
+                                        padding: "1px 5px",
+                                        borderRadius: "6px",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                      title={`1 OWN + ${pGroupMeta.count - 1} LEND`}
+                                    >
+                                      1 OWN + {pGroupMeta.count - 1} LEND
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            ) : null
+                          ) : (
+                            <td
+                              style={{
+                                textAlign: "center",
+                                color: "#475569",
+                                fontSize: "10.5px",
+                                borderRight: "1px solid rgba(255, 255, 255, 0.04)",
+                                userSelect: "none",
+                                background: hasChanges ? "rgba(16, 185, 129, 0.15)" : undefined,
+                              }}
+                            >
+                              {(page - 1) * limit + idx + 1}
+                            </td>
+                          )}
+
+                          {/* Row Update Button (NO DELETE) */}
+                          <td
+                            style={{
+                              textAlign: "center",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.04)",
+                              borderBottom: pGroupMeta
+                                ? isLastInGroup
+                                  ? "2px solid rgba(56, 189, 248, 0.3)"
+                                  : "1px dashed rgba(255, 255, 255, 0.08)"
+                                : undefined,
+                              padding: "3px",
+                              verticalAlign: "middle",
+                            }}
+                          >
+                            {hasChanges ? (
                               <button
                                 type="button"
-                                onClick={() => deleteRow(row)}
+                                onClick={() => saveRow(row)}
+                                disabled={isSaving || isSavingAll}
                                 style={{
-                                  background: "rgba(239, 68, 68, 0.12)",
-                                  border: "1px solid rgba(239, 68, 68, 0.25)",
-                                  color: "#f87171",
+                                  background: isSaving ? "#475569" : "#10b981",
+                                  border: "none",
+                                  color: "#ffffff",
                                   borderRadius: "4px",
-                                  padding: "2px 5px",
-                                  cursor: "pointer",
+                                  padding: "2px 7px",
+                                  cursor: isSaving || isSavingAll ? "not-allowed" : "pointer",
+                                  opacity: isSaving || isSavingAll ? 0.6 : 1,
+                                  pointerEvents: isSaving || isSavingAll ? "none" : "auto",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  boxShadow: isSaving ? "none" : "0 0 6px rgba(16, 185, 129, 0.4)",
                                 }}
-                                title="Delete row"
+                                title={isSaving ? "Saving changes..." : "Save / Update row changes"}
                               >
-                                <Trash2 size={12} />
+                                <Save size={12} className={isSaving ? "animate-spin" : ""} />
+                                <span>{isSaving ? "Saving..." : "Save"}</span>
                               </button>
-                            </div>
+                            ) : (
+                              <span style={{ color: "#334155", fontSize: "11px" }}>—</span>
+                            )}
                           </td>
 
                           {/* Editable Cells */}
                           {visibleColumns.map((col) => {
                             const colName = col.column_name;
                             const isPK = col.is_primary;
-                            const isEditing = editingCell?.rowId === rowId && editingCell?.colName === colName;
-                            const isModified = modifiedRows[rowId] && colName in modifiedRows[rowId];
+                            const isPartnerNameMerged = Boolean(pGroupMeta && colName === "partner_name");
+
+                            if (isPartnerNameMerged && !pGroupMeta.isFirstInGroup) {
+                              return null; // Merged via rowSpan on first row
+                            }
+
+                            const isEditing =
+                              editingCell?.rowId === rowId && editingCell?.colName === colName;
+                            const isModified =
+                              modifiedRows[rowId] && colName in modifiedRows[rowId];
                             const currentValue = isModified
                               ? modifiedRows[rowId][colName]
                               : row[colName];
 
                             const formatted = formatCellValue(currentValue, colName, col.data_type);
 
+                            // Check editable status
+                            const editable = isCellEditable(colName, isPK, row);
+
                             // Status pill styling
                             const isStatus = colName === "status";
                             const statusUpper = String(currentValue || "").toUpperCase();
-                            const isGood = ["ACTIVE", "APPROVED", "PAID", "COMPLETED", "SUCCESS"].includes(statusUpper);
-                            const isWarning = ["PENDING", "DUE", "PARTIAL", "WAITING"].includes(statusUpper);
-                            const isBad = ["INACTIVE", "REJECTED", "OVERDUE", "FAILED", "CANCELLED"].includes(statusUpper);
+                            const isGood = [
+                              "ACTIVE",
+                              "APPROVED",
+                              "PAID",
+                              "COMPLETED",
+                              "SUCCESS",
+                              "CONFIRMED",
+                            ].includes(statusUpper);
+                            const isWarning = [
+                              "PENDING",
+                              "DUE",
+                              "PARTIAL",
+                              "WAITING",
+                            ].includes(statusUpper);
+                            const isBad = [
+                              "INACTIVE",
+                              "REJECTED",
+                              "OVERDUE",
+                              "FAILED",
+                              "CANCELLED",
+                              "VOID",
+                            ].includes(statusUpper);
 
-                            const isAmount = colName.includes("amount") || colName.includes("total_emi");
-                            const isPerson = (colName === "partner_name" || colName === "customer_name") && !formatted.isNull;
+                            const isAmount =
+                              colName.includes("amount") ||
+                              colName.includes("total_emi") ||
+                              colName.includes("agreed_total_payable") ||
+                              colName.includes("daily_agreed_due");
+                            const isPerson =
+                              (colName === "partner_name" || colName === "customer_name") &&
+                              !formatted.isNull;
+                            const isFundSource = colName === "fund_source_type";
+                            const isLenderName = colName === "lender_name";
+
+                            const cellRowSpan = isPartnerNameMerged ? pGroupMeta.count : undefined;
 
                             return (
                               <td
                                 key={colName}
-                                onDoubleClick={() => !isPK && !isPerson && handleCellClick(rowId, colName)}
+                                rowSpan={cellRowSpan}
+                                onDoubleClick={() => editable && handleCellClick(rowId, colName, row)}
                                 style={{
                                   padding: isEditing ? "2px" : "6px 12px",
                                   borderRight: "1px solid rgba(255, 255, 255, 0.04)",
-                                  cursor: isPK || isPerson ? "default" : "cell",
-                                  background: isModified ? "rgba(16, 185, 129, 0.16)" : undefined,
+                                  borderBottom: isPartnerNameMerged
+                                    ? "2px solid rgba(56, 189, 248, 0.3)"
+                                    : pGroupMeta
+                                    ? isLastInGroup
+                                      ? "2px solid rgba(56, 189, 248, 0.3)"
+                                      : "1px dashed rgba(255, 255, 255, 0.08)"
+                                    : "1px solid rgba(255, 255, 255, 0.04)",
+                                  verticalAlign: isPartnerNameMerged ? "middle" : "inherit",
+                                  cursor: editable ? "cell" : "default",
+                                  background: isModified
+                                    ? "rgba(16, 185, 129, 0.16)"
+                                    : isPartnerNameMerged
+                                    ? "rgba(14, 165, 233, 0.03)"
+                                    : undefined,
                                   color: formatted.isNull ? "#475569" : "#e2e8f0",
                                   fontStyle: formatted.isNull ? "italic" : "normal",
                                   textAlign: isAmount ? "right" : "left",
                                   fontFamily:
-                                    isPK || isAmount || col.data_type.includes("numeric") || col.data_type.includes("integer")
+                                    isPK ||
+                                    isAmount ||
+                                    col.data_type.includes("numeric") ||
+                                    col.data_type.includes("integer")
                                       ? "'JetBrains Mono', monospace"
                                       : "inherit",
                                 }}
                                 title={
                                   isPK
                                     ? "Primary Key"
-                                    : isPerson
-                                    ? "Person Identity (Read-only reference)"
+                                    : !editable
+                                    ? "Reference identity"
                                     : "Double-click to edit cell"
                                 }
                               >
@@ -1174,7 +1427,9 @@ export default function ExcelTableEditorView({ onClose }) {
                                     ref={editInputRef}
                                     type="text"
                                     value={currentValue === null ? "" : currentValue}
-                                    onChange={(e) => handleCellChange(rowId, colName, e.target.value)}
+                                    onChange={(e) =>
+                                      handleCellChange(rowId, colName, e.target.value)
+                                    }
                                     onBlur={handleCellBlur}
                                     onKeyDown={(e) => handleCellKeyDown(e, rowId, colName)}
                                     style={{
@@ -1198,7 +1453,62 @@ export default function ExcelTableEditorView({ onClose }) {
                                       gap: "6px",
                                     }}
                                   >
-                                    {isStatus && !formatted.isNull ? (
+                                    {isFundSource && !formatted.isNull ? (
+                                      <span
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "4px",
+                                          padding: "2px 8px",
+                                          borderRadius: "6px",
+                                          fontSize: "10.5px",
+                                          fontWeight: "800",
+                                          letterSpacing: "0.4px",
+                                          background:
+                                            String(currentValue).toUpperCase() === "OWN"
+                                              ? "rgba(16, 185, 129, 0.18)"
+                                              : "rgba(139, 92, 246, 0.18)",
+                                          border:
+                                            String(currentValue).toUpperCase() === "OWN"
+                                              ? "1px solid rgba(16, 185, 129, 0.4)"
+                                              : "1px solid rgba(139, 92, 246, 0.4)",
+                                          color:
+                                            String(currentValue).toUpperCase() === "OWN"
+                                              ? "#34d399"
+                                              : "#c084fc",
+                                        }}
+                                      >
+                                        {String(currentValue).toUpperCase() === "OWN"
+                                          ? "👑 OWN (1st Row)"
+                                          : "🤝 LEND"}
+                                      </span>
+                                    ) : isLenderName ? (
+                                      row.fund_source_type === "OWN" ? (
+                                        <span
+                                          style={{
+                                            color: "#94a3b8",
+                                            fontStyle: "italic",
+                                            fontSize: "11px",
+                                          }}
+                                        >
+                                          Own Funds
+                                        </span>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            color: "#c084fc",
+                                            fontWeight: "600",
+                                            fontSize: "12px",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                          }}
+                                        >
+                                          <span style={{ color: "#a855f7", fontSize: "13px", fontWeight: "900" }}>↳</span>
+                                          <span>{formatted.text}</span>
+                                        </span>
+                                      )
+                                    ) : isStatus && !formatted.isNull ? (
                                       <span
                                         style={{
                                           padding: "1px 7px",
@@ -1248,9 +1558,14 @@ export default function ExcelTableEditorView({ onClose }) {
                                           textOverflow: "ellipsis",
                                           whiteSpace: "nowrap",
                                         }}
-                                        title={`${colName === "partner_name" ? "Partner" : "Customer"}: ${formatted.text}`}
+                                        title={`${
+                                          colName === "partner_name" ? "Partner" : "Borrower"
+                                        }: ${formatted.text} (Double-click to edit)`}
                                       >
-                                        <UserRound size={11} style={{ flexShrink: 0, opacity: 0.85 }} />
+                                        <UserRound
+                                          size={11}
+                                          style={{ flexShrink: 0, opacity: 0.85 }}
+                                        />
                                         <span>{formatted.text}</span>
                                       </span>
                                     ) : (
@@ -1313,6 +1628,11 @@ export default function ExcelTableEditorView({ onClose }) {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span>
                 Total: <strong style={{ color: "#38bdf8" }}>{tableData?.totalCount || 0}</strong>
+                {partnerGroups && (
+                  <span style={{ color: "#a855f7", marginLeft: "6px", fontWeight: "700" }}>
+                    ({partnerGroups.groups.length} Partners)
+                  </span>
+                )}
               </span>
               <span>
                 Showing: <strong style={{ color: "#e2e8f0" }}>{visibleColumns.length}</strong> columns
