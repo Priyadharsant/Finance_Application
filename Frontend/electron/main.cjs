@@ -5,8 +5,172 @@ const http = require("http");
 const fs = require("fs");
 const { spawn } = require("child_process");
 
-// Helper to stream-download file with HTTP/HTTPS redirect support
-function downloadFile(url, destPath, onProgress) {
+// Helper to resolve redirects and get content-length + accept-ranges metadata
+function resolveUrlAndMetadata(url, maxRedirects = 8) {
+  return new Promise((resolve, reject) => {
+    function follow(currentUrl, depth) {
+      if (depth > maxRedirects) return reject(new Error("Too many redirects"));
+      const parsed = new URL(currentUrl);
+      const client = parsed.protocol === "https:" ? https : http;
+
+      const req = client.request(
+        currentUrl,
+        {
+          method: "HEAD",
+          headers: {
+            "User-Agent": "KAMBAM-FINANCE-AutoUpdater/2.0",
+            Accept: "*/*",
+          },
+        },
+        (res) => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+            const nextUrl = new URL(res.headers.location, currentUrl).toString();
+            res.resume();
+            return follow(nextUrl, depth + 1);
+          }
+
+          const contentLength = parseInt(res.headers["content-length"] || "0", 10);
+          const acceptRanges = String(res.headers["accept-ranges"] || "").toLowerCase().includes("bytes");
+          res.resume();
+          resolve({
+            finalUrl: currentUrl,
+            contentLength,
+            acceptRanges,
+          });
+        }
+      );
+
+      req.on("error", reject);
+      req.setTimeout(10000, () => {
+        req.destroy();
+        reject(new Error("Metadata request timed out"));
+      });
+      req.end();
+    }
+
+    follow(url, 0);
+  });
+}
+
+// Multi-stream parallel range chunk downloader (4 parallel streams writing directly to file descriptor)
+function downloadMultiStream(finalUrl, destPath, totalBytes, concurrency = 4, onProgress) {
+  return new Promise((resolve, reject) => {
+    const fd = fs.openSync(destPath, "w");
+    try {
+      fs.ftruncateSync(fd, totalBytes);
+    } catch (_) {}
+
+    const chunkSize = Math.ceil(totalBytes / concurrency);
+    let transferred = 0;
+    let lastReportTime = 0;
+    let lastPercent = -1;
+    const startTime = Date.now();
+    let isAborted = false;
+    const activeReqs = [];
+
+    const cleanup = (err) => {
+      if (isAborted) return;
+      isAborted = true;
+      activeReqs.forEach((r) => {
+        try { r.destroy(); } catch (_) {}
+      });
+      try { fs.closeSync(fd); } catch (_) {}
+      if (err) {
+        fs.unlink(destPath, () => {});
+        reject(err);
+      }
+    };
+
+    const tasks = [];
+    for (let i = 0; i < concurrency; i++) {
+      const start = i * chunkSize;
+      const end = i === concurrency - 1 ? totalBytes - 1 : (i + 1) * chunkSize - 1;
+
+      tasks.push(
+        new Promise((taskResolve, taskReject) => {
+          let currentOffset = start;
+          const parsed = new URL(finalUrl);
+          const client = parsed.protocol === "https:" ? https : http;
+
+          const req = client.get(
+            finalUrl,
+            {
+              headers: {
+                Range: `bytes=${start}-${end}`,
+                "User-Agent": "KAMBAM-FINANCE-AutoUpdater/2.0",
+                Accept: "application/octet-stream, */*",
+              },
+            },
+            (res) => {
+              if (res.statusCode !== 206 && res.statusCode !== 200) {
+                return taskReject(new Error(`Chunk stream ${i} failed: HTTP ${res.statusCode}`));
+              }
+
+              res.on("data", (chunk) => {
+                if (isAborted) return;
+                const writePos = currentOffset;
+                currentOffset += chunk.length;
+                transferred += chunk.length;
+
+                fs.write(fd, chunk, 0, chunk.length, writePos, (writeErr) => {
+                  if (writeErr) {
+                    cleanup(writeErr);
+                    return taskReject(writeErr);
+                  }
+                });
+
+                const now = Date.now();
+                const percent = Math.round((transferred / totalBytes) * 100);
+                if (onProgress && (percent !== lastPercent || now - lastReportTime > 150 || percent >= 100)) {
+                  lastPercent = percent;
+                  lastReportTime = now;
+                  const elapsedSec = (now - startTime) / 1000 || 0.001;
+                  const bytesPerSec = transferred / elapsedSec;
+                  const mbps = (bytesPerSec / (1024 * 1024)).toFixed(1);
+                  onProgress({
+                    percent,
+                    transferred,
+                    total: totalBytes,
+                    speed: `${mbps} MB/s`,
+                    streams: concurrency,
+                  });
+                }
+              });
+
+              res.on("end", () => taskResolve());
+              res.on("error", (err) => {
+                cleanup(err);
+                taskReject(err);
+              });
+            }
+          );
+
+          req.on("error", (err) => {
+            cleanup(err);
+            taskReject(err);
+          });
+          req.setTimeout(60000, () => {
+            req.destroy();
+            taskReject(new Error(`Stream ${i} timed out`));
+          });
+          activeReqs.push(req);
+        })
+      );
+    }
+
+    Promise.all(tasks)
+      .then(() => {
+        try {
+          fs.closeSync(fd);
+        } catch (_) {}
+        resolve(destPath);
+      })
+      .catch((err) => cleanup(err));
+  });
+}
+
+// Single-stream download with large 2MB buffer fallback
+function downloadSingleStream(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
     function requestWithRedirect(currentUrl, redirectCount = 0) {
       if (redirectCount > 8) {
@@ -14,11 +178,12 @@ function downloadFile(url, destPath, onProgress) {
       }
 
       const client = currentUrl.startsWith("https://") ? https : http;
+      const startTime = Date.now();
       const req = client.get(
         currentUrl,
         {
           headers: {
-            "User-Agent": "KAMBAM-FINANCE-AutoUpdater/1.0",
+            "User-Agent": "KAMBAM-FINANCE-AutoUpdater/2.0",
             Accept: "application/octet-stream, */*",
           },
         },
@@ -35,7 +200,7 @@ function downloadFile(url, destPath, onProgress) {
 
           const totalBytes = parseInt(res.headers["content-length"] || "0", 10);
           let receivedBytes = 0;
-          const fileStream = fs.createWriteStream(destPath);
+          const fileStream = fs.createWriteStream(destPath, { highWaterMark: 2 * 1024 * 1024 });
           let lastReportTime = 0;
           let lastPercent = -1;
 
@@ -43,13 +208,17 @@ function downloadFile(url, destPath, onProgress) {
             receivedBytes += chunk.length;
             const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
             const now = Date.now();
-            if (onProgress && (percent !== lastPercent || now - lastReportTime > 120 || percent === 100)) {
+            if (onProgress && (percent !== lastPercent || now - lastReportTime > 150 || percent === 100)) {
               lastPercent = percent;
               lastReportTime = now;
+              const elapsedSec = (now - startTime) / 1000 || 0.001;
+              const mbps = (receivedBytes / (1024 * 1024) / elapsedSec).toFixed(1);
               onProgress({
                 percent,
                 transferred: receivedBytes,
                 total: totalBytes,
+                speed: `${mbps} MB/s`,
+                streams: 1,
               });
             }
           });
@@ -75,6 +244,20 @@ function downloadFile(url, destPath, onProgress) {
 
     requestWithRedirect(url);
   });
+}
+
+// Master downloader: Automatically uses 4-stream parallel Range download when supported
+async function downloadFile(url, destPath, onProgress) {
+  try {
+    const meta = await resolveUrlAndMetadata(url);
+    if (meta.acceptRanges && meta.contentLength > 5 * 1024 * 1024) {
+      console.log(`[AutoUpdater] Fast Multi-Stream active (4 streams, total: ${(meta.contentLength / (1024 * 1024)).toFixed(1)} MB)`);
+      return await downloadMultiStream(meta.finalUrl, destPath, meta.contentLength, 4, onProgress);
+    }
+  } catch (err) {
+    console.warn("[AutoUpdater] Multi-stream check notice:", err.message, "Falling back to single stream...");
+  }
+  return await downloadSingleStream(url, destPath, onProgress);
 }
 
 // IPC handlers for external links and version checks

@@ -313,6 +313,8 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
                 {downloadProgress.total > 0
                   ? `${formatBytes(downloadProgress.transferred)} / ${formatBytes(downloadProgress.total)}`
                   : "Connecting to server..."}
+                {downloadProgress.speed && ` · ⚡ ${downloadProgress.speed}`}
+                {downloadProgress.streams && ` · 🚀 ${downloadProgress.streams} Multi-Streams`}
               </span>
               <span>{readyToInstall ? "Closing app to apply update..." : "Please wait while download completes"}</span>
             </div>
