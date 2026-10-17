@@ -111,6 +111,13 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
     }
   };
 
+  // Automatically start download and install as soon as an update is detected
+  useEffect(() => {
+    if (isOpen && hasUpdate && !downloading && !readyToInstall && !downloadError) {
+      handleAutoUpdate();
+    }
+  }, [isOpen, hasUpdate, downloading, readyToInstall, downloadError]);
+
   const handleManualBrowserDownload = () => {
     const url =
       updateData?.downloadUrl ||

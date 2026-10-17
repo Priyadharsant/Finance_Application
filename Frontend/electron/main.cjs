@@ -292,17 +292,42 @@ ipcMain.handle("download-and-install-update", async (event, { url, version }) =>
       throw new Error("Downloaded installer file is empty");
     }
 
-    // Launch the downloaded installer in a detached process
-    const installer = spawn(destPath, [], {
-      detached: true,
-      stdio: "ignore",
-    });
-    installer.unref();
+    // For NSIS, /S performs completely silent background installation with zero configuration prompts.
+    // Launch installer with /S and ensure the application automatically relaunches after installation finishes.
+    const currentExe = process.execPath;
+    const isPackaged = app.isPackaged;
 
-    // Close current Electron application so installer can overwrite files seamlessly
+    if (isPackaged) {
+      const updaterScript = path.join(tempDir, `kambam_silent_update_${Date.now()}.bat`);
+      const scriptContent = [
+        `@echo off`,
+        `timeout /t 1 /nobreak >nul`,
+        `start /wait "" "${destPath}" /S`,
+        `timeout /t 1 /nobreak >nul`,
+        `start "" "${currentExe}"`,
+        `del "%~f0"`,
+      ].join("\r\n");
+
+      fs.writeFileSync(updaterScript, scriptContent, "utf-8");
+
+      const updaterProc = spawn("cmd.exe", ["/c", updaterScript], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      updaterProc.unref();
+    } else {
+      const installer = spawn(destPath, ["/S"], {
+        detached: true,
+        stdio: "ignore",
+      });
+      installer.unref();
+    }
+
+    // Close current Electron application immediately so installer can overwrite files without lock
     setTimeout(() => {
-      app.quit();
-    }, 100);
+      app.exit(0);
+    }, 200);
 
     return { success: true };
   } catch (err) {
