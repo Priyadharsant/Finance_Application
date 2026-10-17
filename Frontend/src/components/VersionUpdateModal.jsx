@@ -22,6 +22,24 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, transferred: 0, total: 0 });
   const [readyToInstall, setReadyToInstall] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
+  const autoStartedRef = useRef(false);
+
+  const hasUpdate = Boolean(updateData?.hasUpdate);
+  const isMandatory = hasUpdate || propMandatory || Boolean(updateData?.isMandatory);
+  const latestVersion = updateData?.latestVersion || APP_VERSION;
+  const releaseNotes = updateData?.releaseNotes || [
+    "Strict Version Enforcement: Exe operates exclusively on latest verified releases",
+    "Supabase Cloud Storage: Secure cloud uploads for Aadhaar, RC Book, and loan dossiers with instant previews",
+    "Unified Categorized Excel Reports: Clean single-report exports for Auto Finance, Daily Finance, and Global Capital",
+    "Live Financial Forecasting: Opening in-hand cash and next-month projected collection analytics",
+    "Master Business Ledger: Multi-category unified audit trail and balance reconciliation",
+  ];
+
+  const formatBytes = (bytes) => {
+    if (!bytes || isNaN(bytes)) return "0 MB";
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  };
 
   const fetchUpdateInfo = async () => {
     setChecking(true);
@@ -56,27 +74,6 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
       return cleanup;
     }
   }, []);
-
-  if (!isOpen) return null;
-
-  const hasUpdate = Boolean(updateData?.hasUpdate);
-  const isMandatory = hasUpdate || propMandatory || Boolean(updateData?.isMandatory);
-  const latestVersion = updateData?.latestVersion || APP_VERSION;
-  const releaseNotes = updateData?.releaseNotes || [
-    "Strict Version Enforcement: Exe operates exclusively on latest verified releases",
-    "Supabase Cloud Storage: Secure cloud uploads for Aadhaar, RC Book, and loan dossiers with instant previews",
-    "Unified Categorized Excel Reports: Clean single-report exports for Auto Finance, Daily Finance, and Global Capital",
-    "Live Financial Forecasting: Opening in-hand cash and next-month projected collection analytics",
-    "Master Business Ledger: Multi-category unified audit trail and balance reconciliation",
-  ];
-
-  const formatBytes = (bytes) => {
-    if (!bytes || isNaN(bytes)) return "0 MB";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
-
-  const autoStartedRef = useRef(false);
 
   const handleAutoUpdate = async () => {
     const url =
@@ -142,9 +139,11 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
 
   const handleModalClose = () => {
     // If update is required or currently downloading, do NOT allow closing!
-    if ((isMandatory && hasUpdate) || downloading) return;
+    if ((isMandatory && hasUpdate && !downloadError) || downloading) return;
     if (onClose) onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div
