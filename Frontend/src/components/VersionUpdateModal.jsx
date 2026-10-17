@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Sparkles,
@@ -76,6 +76,8 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
     return `${mb.toFixed(1)} MB`;
   };
 
+  const autoStartedRef = useRef(false);
+
   const handleAutoUpdate = async () => {
     const url =
       updateData?.downloadUrl ||
@@ -93,12 +95,14 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
         if (!result.success) {
           setDownloadError(result.error || "Update download failed");
           setDownloading(false);
+          autoStartedRef.current = false;
         } else {
           setReadyToInstall(true);
         }
       } catch (err) {
         setDownloadError(err.message || "Failed to download update");
         setDownloading(false);
+        autoStartedRef.current = false;
       }
     } else {
       // In web browser: trigger direct browser file download
@@ -111,9 +115,16 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
     }
   };
 
+  const handleRetryAutoUpdate = () => {
+    setDownloadError(null);
+    autoStartedRef.current = false;
+    handleAutoUpdate();
+  };
+
   // Automatically start download and install as soon as an update is detected
   useEffect(() => {
-    if (isOpen && hasUpdate && !downloading && !readyToInstall && !downloadError) {
+    if (isOpen && hasUpdate && !downloading && !readyToInstall && !downloadError && !autoStartedRef.current) {
+      autoStartedRef.current = true;
       handleAutoUpdate();
     }
   }, [isOpen, hasUpdate, downloading, readyToInstall, downloadError]);
@@ -217,8 +228,8 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
           style={{
             padding: "14px 16px",
             borderRadius: "12px",
-            background: hasUpdate ? "#fef2f2" : "#f0fdf4",
-            border: `1px solid ${hasUpdate ? "#fecaca" : "#bbf7d0"}`,
+            background: hasUpdate ? (downloadError ? "#fef2f2" : "#f0fdf4") : "#f0fdf4",
+            border: `1px solid ${hasUpdate ? (downloadError ? "#fecaca" : "#bbf7d0") : "#bbf7d0"}`,
             marginBottom: "16px",
             display: "flex",
             alignItems: "center",
@@ -227,24 +238,49 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {hasUpdate ? (
-              <AlertTriangle size={22} color="#dc2626" />
+              downloadError ? (
+                <AlertTriangle size={22} color="#dc2626" />
+              ) : (
+                <Loader2 size={22} className="spin" color="#059669" />
+              )
             ) : (
               <CheckCircle2 size={20} color="#16a34a" />
             )}
             <div>
-              <div style={{ fontWeight: 700, fontSize: "13px", color: hasUpdate ? "#991b1b" : "#166534" }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  color: hasUpdate ? (downloadError ? "#991b1b" : "#065f46") : "#166534",
+                }}
+              >
                 {hasUpdate
-                  ? `Update to v${latestVersion} to continue`
+                  ? downloadError
+                    ? `Automatic Update Failed (v${latestVersion})`
+                    : readyToInstall
+                    ? `Update Downloaded — Installing v${latestVersion}...`
+                    : `Updating to v${latestVersion} Automatically...`
                   : "You are running the latest official release"}
               </div>
-              <small style={{ color: hasUpdate ? "#b91c1c" : "#15803d", fontSize: "11px", display: "block", marginTop: "2px" }}>
+              <small
+                style={{
+                  color: hasUpdate ? (downloadError ? "#b91c1c" : "#047857") : "#15803d",
+                  fontSize: "11px",
+                  display: "block",
+                  marginTop: "2px",
+                }}
+              >
                 {hasUpdate
-                  ? "Click 'Auto Update' to download and install automatically."
+                  ? downloadError
+                    ? "Automatic download encountered an issue. You can retry or download manually below."
+                    : readyToInstall
+                    ? "Applying zero-config silent installation and relaunching..."
+                    : "High-speed multi-stream download in progress. No clicks needed."
                   : "All daily finance, vehicle loans, and capital ledgers are synchronized."}
               </small>
             </div>
           </div>
-          {!downloading && (
+          {!downloading && !hasUpdate && (
             <button
               type="button"
               onClick={fetchUpdateInfo}
@@ -270,7 +306,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
         </div>
 
         {/* LIVE IN-APP DOWNLOAD PROGRESS SECTION */}
-        {downloading && (
+        {hasUpdate && !downloadError && (
           <div
             style={{
               padding: "16px",
@@ -285,8 +321,10 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
                 <Loader2 size={16} className="spin" color="#059669" />
                 <span style={{ fontSize: "13px", fontWeight: 700, color: "#065f46" }}>
                   {readyToInstall
-                    ? "Download complete! Launching installer and restarting..."
-                    : `Downloading update v${latestVersion}...`}
+                    ? "Download complete! Launching silent installer..."
+                    : downloadProgress.percent > 0
+                    ? `Downloading update v${latestVersion}...`
+                    : "Connecting to server & allocating download streams..."}
                 </span>
               </div>
               <span style={{ fontSize: "13px", fontWeight: 800, color: "#059669" }}>
@@ -319,11 +357,11 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
               <span>
                 {downloadProgress.total > 0
                   ? `${formatBytes(downloadProgress.transferred)} / ${formatBytes(downloadProgress.total)}`
-                  : "Connecting to server..."}
+                  : "Connecting..."}
                 {downloadProgress.speed && ` · ⚡ ${downloadProgress.speed}`}
                 {downloadProgress.streams && ` · 🚀 ${downloadProgress.streams} Multi-Streams`}
               </span>
-              <span>{readyToInstall ? "Closing app to apply update..." : "Please wait while download completes"}</span>
+              <span>{readyToInstall ? "Closing app to apply update..." : "Auto-installs and relaunches when finished"}</span>
             </div>
           </div>
         )}
@@ -332,36 +370,22 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
         {downloadError && (
           <div
             style={{
-              padding: "12px 14px",
+              padding: "14px 16px",
               borderRadius: "10px",
               background: "#fef2f2",
               border: "1px solid #fecaca",
-              color: "#b91c1c",
-              fontSize: "12px",
+              color: "#991b1b",
+              fontSize: "12.5px",
               marginBottom: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "8px",
             }}
           >
-            <span>{downloadError}</span>
-            <button
-              type="button"
-              onClick={handleManualBrowserDownload}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#dc2626",
-                textDecoration: "underline",
-                cursor: "pointer",
-                fontSize: "11.5px",
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              Browser Fallback
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, marginBottom: "4px" }}>
+              <AlertTriangle size={16} color="#dc2626" />
+              <span>Auto-download failed: {downloadError}</span>
+            </div>
+            <p style={{ margin: 0, fontSize: "12px", color: "#b91c1c", lineHeight: 1.5 }}>
+              Could not complete the automatic download. You can download the setup exe manually via your browser using the button below, or retry the automatic download.
+            </p>
           </div>
         )}
 
@@ -388,14 +412,79 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
         </div>
 
         {/* ACTIONS */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "14px", borderTop: "1px solid #e2e8f0" }}>
-          {!hasUpdate || !isMandatory ? (
-            <>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", paddingTop: "14px", borderTop: "1px solid #e2e8f0" }}>
+          {hasUpdate ? (
+            downloadError ? (
+              <>
+                <div style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>
+                  Please choose a download method:
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="secondary autoBtn"
+                    onClick={handleRetryAutoUpdate}
+                    style={{
+                      padding: "8px 14px",
+                      fontSize: "12.5px",
+                      borderRadius: "8px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#334155",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <RefreshCw size={13} /> Retry Auto Download
+                  </button>
+
+                  <button
+                    type="button"
+                    className="primary autoBtn"
+                    onClick={handleManualBrowserDownload}
+                    style={{
+                      padding: "8px 18px",
+                      fontSize: "12.5px",
+                      borderRadius: "8px",
+                      background: "#dc2626",
+                      borderColor: "#dc2626",
+                      color: "#ffffff",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(220, 38, 38, 0.3)",
+                    }}
+                  >
+                    <Download size={14} /> Download Setup Exe Manually
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#059669", fontSize: "12.5px", fontWeight: 700 }}>
+                  <Loader2 size={16} className="spin" color="#059669" />
+                  <span>
+                    {readyToInstall
+                      ? "Download complete! Applying update & restarting..."
+                      : `Downloading update package (${downloadProgress.percent}%)...`}
+                  </span>
+                </div>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  Installs automatically · No click required
+                </span>
+              </>
+            )
+          ) : (
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", width: "100%" }}>
               <button
                 type="button"
                 className="secondary autoBtn"
                 onClick={handleModalClose}
-                disabled={downloading}
                 style={{ padding: "8px 16px", fontSize: "13px", borderRadius: "8px" }}
               >
                 Close
@@ -415,61 +504,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
               >
                 <ExternalLink size={13} /> View Releases
               </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="secondary autoBtn"
-                onClick={handleManualBrowserDownload}
-                disabled={downloading}
-                style={{
-                  padding: "9px 14px",
-                  fontSize: "12.5px",
-                  borderRadius: "8px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  cursor: downloading ? "not-allowed" : "pointer",
-                  color: "#64748b",
-                }}
-                title="Download installer directly via browser"
-              >
-                <Download size={14} /> Manual Download
-              </button>
-
-              <button
-                type="button"
-                className="primary autoBtn"
-                onClick={handleAutoUpdate}
-                disabled={downloading}
-                style={{
-                  padding: "9px 20px",
-                  fontSize: "13px",
-                  borderRadius: "8px",
-                  background: downloading ? "#059669" : "#dc2626",
-                  borderColor: downloading ? "#059669" : "#dc2626",
-                  color: "#ffffff",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontWeight: 700,
-                  cursor: downloading ? "not-allowed" : "pointer",
-                  boxShadow: downloading ? "none" : "0 4px 12px rgba(220, 38, 38, 0.3)",
-                }}
-              >
-                {downloading ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    {readyToInstall ? "Installing..." : `Downloading (${downloadProgress.percent}%)`}
-                  </>
-                ) : (
-                  <>
-                    <ArrowUpCircle size={16} /> Auto Update to v{latestVersion}
-                  </>
-                )}
-              </button>
-            </>
+            </div>
           )}
         </div>
       </div>

@@ -134,7 +134,7 @@ async function main() {
         tag_name: tag,
         target_commitish: "main",
         name: `KAMBAM FINANCE v${version}`,
-        body: `### KAMBAM FINANCE v${version}\n\n- In-Page Data Loading Animation (No full-screen blocking popups)\n- Instant modal closures and background table refresh\n- Auto Finance accounting synchronization & total collected consistency\n- Reduced delay on application version check & auto-updater\n- Streamlined release packaging and asset publishing`,
+        body: `### KAMBAM FINANCE v${version}\n\n- Fully Automated Update: Downloads & installs silently in background with zero confirmation click needed\n- Fallback Manual Download Button: Instant browser download fallback if auto-download encounters any connection error\n- Multi-Stream Concurrent Downloader: 4 parallel HTTP Range chunk streams (~18-22 MB/s download speed)\n- Single Instance Lock & Silent Auto-Relaunch: Seamless upgrade with zero NSIS wizard prompts\n- In-Page Loading Animation: Embedded non-blocking loaders with instant modal closures`,
         draft: false,
         prerelease: false,
       }),
