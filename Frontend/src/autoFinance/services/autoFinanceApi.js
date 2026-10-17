@@ -3,7 +3,7 @@ export const API_BASE =
     ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")}/api`
     : import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace(/\/daily-finance\/?$/, "")
-    : "https://finance-application-y6oo.onrender.com/api";
+    : "https://finance-application-1q00.onrender.com/api";
 
 export const money = (value) =>
   new Intl.NumberFormat("en-IN", {

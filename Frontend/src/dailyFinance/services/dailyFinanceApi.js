@@ -3,7 +3,7 @@ const resolveApi = () => {
     import.meta.env.VITE_API_URL ||
     (import.meta.env.VITE_BACKEND_URL
       ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")}/api/daily-finance`
-      : "https://finance-application-y6oo.onrender.com/api/daily-finance");
+      : "https://finance-application-1q00.onrender.com/api/daily-finance");
   const clean = url.replace(/\/$/, "");
   return clean.endsWith("/api/daily-finance") ? clean : `${clean}/api/daily-finance`;
 };

@@ -82,7 +82,7 @@ export async function checkForAppUpdates() {
       import.meta.env.VITE_API_BASE_URL ||
       (import.meta.env.VITE_BACKEND_URL
         ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")}/api`
-        : "https://finance-application-y6oo.onrender.com/api");
+        : "https://finance-application-1q00.onrender.com/api");
     const res = await fetch(`${apiBase}/version?current=${APP_VERSION}`, {
       signal: controller.signal,
       headers: { Accept: "application/json" },

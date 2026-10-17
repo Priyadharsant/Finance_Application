@@ -3,7 +3,7 @@ const BASE_BACKEND =
     ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "")
     : import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace(/\/api\/daily-finance\/?$/, "").replace(/\/daily-finance\/?$/, "")
-    : "https://finance-application-y6oo.onrender.com";
+    : "https://finance-application-1q00.onrender.com";
 
 const BASE_API = `${BASE_BACKEND}/api/global-cash`;
 
