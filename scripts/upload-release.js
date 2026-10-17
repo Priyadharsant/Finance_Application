@@ -11,9 +11,14 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 function loadToken() {
   if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
-  for (const f of [path.join(ROOT_DIR, ".env"), path.join(ROOT_DIR, "Backend", ".env")]) {
+  for (const f of [
+    path.join(ROOT_DIR, ".env"),
+    path.join(ROOT_DIR, "Backend", ".env"),
+  ]) {
     if (fs.existsSync(f)) {
-      const match = fs.readFileSync(f, "utf-8").match(/^(?:GH_TOKEN|GITHUB_TOKEN)=(.*)$/m);
+      const match = fs
+        .readFileSync(f, "utf-8")
+        .match(/^(?:GH_TOKEN|GITHUB_TOKEN)=(.*)$/m);
       if (match && match[1].trim()) return match[1].trim();
     }
   }
@@ -59,7 +64,9 @@ function uploadFileStream(uploadUrl, filePath, contentType, token) {
             resolve(data);
           }
         } else {
-          reject(new Error(`Upload failed with status ${res.statusCode}: ${data}`));
+          reject(
+            new Error(`Upload failed with status ${res.statusCode}: ${data}`),
+          );
         }
       });
     });
@@ -72,14 +79,18 @@ function uploadFileStream(uploadUrl, filePath, contentType, token) {
 
     let uploadedBytes = 0;
     let lastPercent = -1;
-    const stream = fs.createReadStream(filePath, { highWaterMark: 1024 * 1024 });
+    const stream = fs.createReadStream(filePath, {
+      highWaterMark: 1024 * 1024,
+    });
 
     stream.on("data", (chunk) => {
       uploadedBytes += chunk.length;
       const pct = Math.round((uploadedBytes / totalBytes) * 100);
-      if (pct !== lastPercent && pct % 10 === 0) {
+      if (pct !== lastPercent && pct % 1 === 0) {
         lastPercent = pct;
-        process.stdout.write(`  ⏳ ${pct}% (${(uploadedBytes / (1024 * 1024)).toFixed(1)} / ${(totalBytes / (1024 * 1024)).toFixed(1)} MB)\r`);
+        process.stdout.write(
+          `  ⏳ ${pct}% (${(uploadedBytes / (1024 * 1024)).toFixed(1)} / ${(totalBytes / (1024 * 1024)).toFixed(1)} MB)\r`,
+        );
       }
     });
 
@@ -103,7 +114,9 @@ async function main() {
     process.exit(1);
   }
 
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, "package.json"), "utf-8"));
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(ROOT_DIR, "package.json"), "utf-8"),
+  );
   const version = pkg.version;
   const tag = `v${version}`;
   const owner = "Priyadharsant";
@@ -121,27 +134,35 @@ async function main() {
 
   // 1. Get or create release
   let release = null;
-  const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, { headers });
+  const getRes = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`,
+    { headers },
+  );
   if (getRes.ok) {
     release = await getRes.json();
     console.log(`✓ Found existing release ${tag} (id: ${release.id})`);
   } else {
     console.log(`Creating release for ${tag}...`);
-    const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tag_name: tag,
-        target_commitish: "main",
-        name: `KAMBAM FINANCE v${version}`,
-        body: `### KAMBAM FINANCE v${version}\n\n- Fully Automated Update: Downloads & installs silently in background with zero confirmation click needed\n- Fallback Manual Download Button: Instant browser download fallback if auto-download encounters any connection error\n- Multi-Stream Concurrent Downloader: 4 parallel HTTP Range chunk streams (~18-22 MB/s download speed)\n- Single Instance Lock & Silent Auto-Relaunch: Seamless upgrade with zero NSIS wizard prompts\n- In-Page Loading Animation: Embedded non-blocking loaders with instant modal closures`,
-        draft: false,
-        prerelease: false,
-      }),
-    });
+    const createRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/releases`,
+      {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag_name: tag,
+          target_commitish: "main",
+          name: `KAMBAM FINANCE v${version}`,
+          body: `### KAMBAM FINANCE v${version}\n\n- Fully Automated Update: Downloads & installs silently in background with zero confirmation click needed\n- Fallback Manual Download Button: Instant browser download fallback if auto-download encounters any connection error\n- Multi-Stream Concurrent Downloader: 4 parallel HTTP Range chunk streams (~18-22 MB/s download speed)\n- Single Instance Lock & Silent Auto-Relaunch: Seamless upgrade with zero NSIS wizard prompts\n- In-Page Loading Animation: Embedded non-blocking loaders with instant modal closures`,
+          draft: false,
+          prerelease: false,
+        }),
+      },
+    );
     if (!createRes.ok) {
       const errText = await createRes.text();
-      throw new Error(`Failed to create release: ${createRes.status} ${errText}`);
+      throw new Error(
+        `Failed to create release: ${createRes.status} ${errText}`,
+      );
     }
     release = await createRes.json();
     console.log(`✓ Created GitHub release ${tag} (id: ${release.id})`);
@@ -155,11 +176,15 @@ async function main() {
   const blockmapPath = path.join(appDir, `${rawExeName}.blockmap`);
 
   if (!fs.existsSync(exePath)) {
-    throw new Error(`Installer executable not found at ${exePath}. Run build first!`);
+    throw new Error(
+      `Installer executable not found at ${exePath}. Run build first!`,
+    );
   }
 
   const exeStats = fs.statSync(exePath);
-  console.log(`Found installer: ${rawExeName} (${(exeStats.size / (1024 * 1024)).toFixed(1)} MB)`);
+  console.log(
+    `Found installer: ${rawExeName} (${(exeStats.size / (1024 * 1024)).toFixed(1)} MB)`,
+  );
 
   // Generate latest.yml for auto-updater
   const sha512 = computeSha512(exePath);
@@ -199,26 +224,40 @@ async function main() {
   for (const asset of release.assets || []) {
     if (filesToUpload.some((f) => f.name === asset.name)) {
       console.log(`Removing old asset ${asset.name} (id: ${asset.id})...`);
-      await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/assets/${asset.id}`, {
-        method: "DELETE",
-        headers,
-      });
+      await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/releases/assets/${asset.id}`,
+        {
+          method: "DELETE",
+          headers,
+        },
+      );
     }
   }
 
   // 4. Upload each asset to uploads.github.com using streaming
   for (const item of filesToUpload) {
     const fileStats = fs.statSync(item.localPath);
-    console.log(`\nUploading ${item.name} (${(fileStats.size / 1024).toFixed(1)} KB)...`);
+    console.log(
+      `\nUploading ${item.name} (${(fileStats.size / 1024).toFixed(1)} KB)...`,
+    );
 
     const uploadUrl = `https://uploads.github.com/repos/${owner}/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(item.name)}`;
-    const uploadedAsset = await uploadFileStream(uploadUrl, item.localPath, item.contentType, token);
-    console.log(`✓ Uploaded ${item.name} (Download: ${uploadedAsset.browser_download_url || "Done"})`);
+    const uploadedAsset = await uploadFileStream(
+      uploadUrl,
+      item.localPath,
+      item.contentType,
+      token,
+    );
+    console.log(
+      `✓ Uploaded ${item.name} (Download: ${uploadedAsset.browser_download_url || "Done"})`,
+    );
   }
 
   console.log(`\n========================================================`);
   console.log(`🎉 Successfully released and uploaded KAMBAM FINANCE ${tag}!`);
-  console.log(`GitHub Release: https://github.com/${owner}/${repo}/releases/tag/${tag}`);
+  console.log(
+    `GitHub Release: https://github.com/${owner}/${repo}/releases/tag/${tag}`,
+  );
   console.log(`========================================================\n`);
 }
 
