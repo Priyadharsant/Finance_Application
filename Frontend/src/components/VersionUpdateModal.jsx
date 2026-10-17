@@ -273,7 +273,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
                   ? downloadError
                     ? "Automatic download encountered an issue. You can retry or download manually below."
                     : readyToInstall
-                    ? "Applying zero-config silent installation and relaunching..."
+                    ? "Opening installer window... Installation will be visible on screen."
                     : "High-speed multi-stream download in progress. No clicks needed."
                   : "All daily finance, vehicle loans, and capital ledgers are synchronized."}
               </small>
@@ -320,7 +320,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
                 <Loader2 size={16} className="spin" color="#059669" />
                 <span style={{ fontSize: "13px", fontWeight: 700, color: "#065f46" }}>
                   {readyToInstall
-                    ? "Download complete! Launching silent installer..."
+                    ? "Download complete! Opening installer window..."
                     : downloadProgress.percent > 0
                     ? `Downloading update v${latestVersion}...`
                     : "Connecting to server & allocating download streams..."}
@@ -360,7 +360,7 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
                 {downloadProgress.speed && ` · ⚡ ${downloadProgress.speed}`}
                 {downloadProgress.streams && ` · 🚀 ${downloadProgress.streams} Multi-Streams`}
               </span>
-              <span>{readyToInstall ? "Closing app to apply update..." : "Auto-installs and relaunches when finished"}</span>
+              <span>{readyToInstall ? "Closing app to run installer..." : "Installer window opens automatically when downloaded"}</span>
             </div>
           </div>
         )}

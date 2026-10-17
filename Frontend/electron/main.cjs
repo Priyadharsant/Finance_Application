@@ -292,19 +292,16 @@ ipcMain.handle("download-and-install-update", async (event, { url, version }) =>
       throw new Error("Downloaded installer file is empty");
     }
 
-    // For NSIS, /S performs completely silent background installation with zero configuration prompts.
-    // Launch installer with /S and ensure the application automatically relaunches after installation finishes.
-    const currentExe = process.execPath;
+    // Launch NSIS installer visibly (without /S) so the user can see installation progress on screen.
+    // Since oneClick: true is configured, it automatically installs without prompting for folders or settings.
     const isPackaged = app.isPackaged;
 
     if (isPackaged) {
-      const updaterScript = path.join(tempDir, `kambam_silent_update_${Date.now()}.bat`);
+      const updaterScript = path.join(tempDir, `kambam_visible_update_${Date.now()}.bat`);
       const scriptContent = [
         `@echo off`,
         `timeout /t 1 /nobreak >nul`,
-        `start /wait "" "${destPath}" /S`,
-        `timeout /t 1 /nobreak >nul`,
-        `start "" "${currentExe}"`,
+        `start "" "${destPath}"`,
         `del "%~f0"`,
       ].join("\r\n");
 
@@ -317,7 +314,7 @@ ipcMain.handle("download-and-install-update", async (event, { url, version }) =>
       });
       updaterProc.unref();
     } else {
-      const installer = spawn(destPath, ["/S"], {
+      const installer = spawn(destPath, [], {
         detached: true,
         stdio: "ignore",
       });
