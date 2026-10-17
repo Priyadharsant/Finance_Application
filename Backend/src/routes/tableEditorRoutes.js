@@ -94,14 +94,6 @@ const MAIN_TABLES_CONFIG = [
     description: 'Edit capital transactions, deposits, withdrawals, dates, and amounts',
     icon: 'Database',
   },
-  {
-    id: 'global_cash_ledger',
-    name: 'global_cash_ledger',
-    label: 'Global Cash Ledger (Reference)',
-    module: 'Global Capital',
-    description: 'All company cash movements, credits, and debits',
-    icon: 'Globe',
-  },
 ];
 
 // Check if table is valid (handles physical and virtual tables)

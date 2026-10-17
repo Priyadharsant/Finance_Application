@@ -85,14 +85,6 @@ const ESSENTIAL_COLUMNS_MAP = {
     "status",
     "notes",
   ],
-  global_cash_ledger: [
-    "transaction_date",
-    "type",
-    "direction",
-    "amount",
-    "source_module",
-    "notes",
-  ],
 };
 
 // Friendly column labels
@@ -151,8 +143,6 @@ const getTableIcon = (tableName) => {
       return Landmark;
     case "partner_capital_transactions":
       return Database;
-    case "global_cash_ledger":
-      return Globe;
     default:
       return Table;
   }
