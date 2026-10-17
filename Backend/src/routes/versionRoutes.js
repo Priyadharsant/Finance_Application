@@ -36,7 +36,7 @@ router.get("/", (req, res) => {
   const latestVersion = (process.env.LATEST_APP_VERSION || backendPackageVersion).trim();
   const repoOwner = process.env.GITHUB_REPO_OWNER || "Priyadharsant";
   const repoName = process.env.GITHUB_REPO_NAME || "Finance_Application";
-  const defaultReleaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/download/v${latestVersion}/FinFlow-Setup-${latestVersion}.exe`;
+  const defaultReleaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/download/v${latestVersion}/KAMBAM.FINANCE-Setup-${latestVersion}.exe`;
   const downloadUrl = process.env.APP_DOWNLOAD_URL || defaultReleaseUrl;
   const minSupportedVersion = (process.env.MIN_SUPPORTED_VERSION || "1.0.0").trim();
 

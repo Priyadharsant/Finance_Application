@@ -12,6 +12,7 @@ import { initMonthlyClosingCron } from '../global_cash/services/monthlyClosingCr
 import versionRoutes from './routes/versionRoutes.js';
 import appAuthRoutes from './routes/appAuthRoutes.js';
 import tableEditorRoutes from './routes/tableEditorRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
 
 const app = express();
 app.use(express.json({limit:'1mb'}));
@@ -48,6 +49,21 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Health and liveness endpoints for Render and uptime monitoring
+app.use('/health', healthRoutes);
+app.use('/api/health', healthRoutes);
+
+// Root informational endpoint
+app.get('/', (req, res) => {
+  res.json({
+    service: 'KAMBAM FINANCE Backend API',
+    status: 'online',
+    health: '/health',
+    version: '2.2.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use('/api/daily-finance',createDailyFinanceRouter(db));
 app.use('/api/daily-finance',createSimpleFinanceRouter(db));
 
