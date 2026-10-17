@@ -293,31 +293,21 @@ async function main() {
     execSync("npm --prefix Frontend run build", { stdio: "inherit", cwd: ROOT_DIR });
 
     const token = loadEnvToken();
+    console.log(`\n🔨 Packaging installer with Electron Builder...`);
+    execSync("npx electron-builder", {
+      stdio: "inherit",
+      cwd: path.join(ROOT_DIR, "Frontend"),
+    });
+
     if (token) {
-      console.log(`\n🔑 GitHub Token detected. Building and publishing release v${nextVersion} to GitHub...`);
-      try {
-        execSync("npx electron-builder --publish always", {
-          stdio: "inherit",
-          cwd: path.join(ROOT_DIR, "Frontend"),
-          env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token },
-        });
-        console.log(`\n🎉 Release v${nextVersion} published successfully with EXE uploaded to GitHub!`);
-      } catch (err) {
-        console.error("⚠️ Publish error:", err.message);
-        console.log("Falling back to local build...");
-        execSync("npx electron-builder", {
-          stdio: "inherit",
-          cwd: path.join(ROOT_DIR, "Frontend"),
-        });
-      }
+      console.log(`\n🔑 GitHub Token detected. Uploading release v${nextVersion} assets to GitHub...`);
+      execSync("node scripts/upload-release.js", {
+        stdio: "inherit",
+        cwd: ROOT_DIR,
+      });
     } else {
       console.log(`\nℹ️ No GH_TOKEN found in environment or .env.`);
-      console.log(`Building installer executable locally...`);
-      execSync("npx electron-builder", {
-        stdio: "inherit",
-        cwd: path.join(ROOT_DIR, "Frontend"),
-      });
-      console.log(`\n✅ Local installer built successfully in: App/`);
+      console.log(`✅ Local installer built successfully in: App/`);
       console.log(`💡 Tip: Add GH_TOKEN=<your-github-token> to .env to automatically upload EXE to GitHub Releases!`);
     }
   } else {
