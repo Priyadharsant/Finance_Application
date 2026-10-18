@@ -15,6 +15,9 @@ export const pool = new Pool(
     ? {
         connectionString,
         ssl: isRemote ? { rejectUnauthorized: false } : undefined,
+        max: 15,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
       }
     : {
         host: process.env.POSTGRES_HOST || 'localhost',
@@ -22,14 +25,21 @@ export const pool = new Pool(
         database: process.env.POSTGRES_DB || 'finance',
         user: process.env.POSTGRES_USER || 'postgres',
         password: process.env.POSTGRES_PASSWORD || '1607',
+        max: 15,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
       }
 );
 
+let hasLoggedConnection = false;
 pool.on('connect', () => {
-  const target = connectionString
-    ? new URL(connectionString).host
-    : `${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || 5432}`;
-  console.log(`Connected to PostgreSQL database (${target}).`);
+  if (!hasLoggedConnection) {
+    const target = connectionString
+      ? new URL(connectionString).host
+      : `${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || 5432}`;
+    console.log(`Connected to PostgreSQL database (${target}).`);
+    hasLoggedConnection = true;
+  }
 });
 
 pool.on('error', (err) => {

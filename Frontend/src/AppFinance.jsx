@@ -19,12 +19,14 @@ import {
   Receipt,
   Lock,
   FileSpreadsheet,
+  WifiOff,
 } from "lucide-react";
 import "./App.css";
 import DailyFinanceView from "./DailyFinance.jsx";
 import AutoFinanceView from "./AutoFinance.jsx";
 import GlobalCapitalView from "./GlobalCapital.jsx";
 import useDocumentTitle from "./hooks/useDocumentTitle.js";
+import useNetworkStatus from "./hooks/useNetworkStatus.js";
 import { dateLabel, today } from "./dailyFinance/services/dailyFinanceApi.js";
 import VersionUpdateModal from "./components/VersionUpdateModal.jsx";
 import { APP_VERSION, checkForAppUpdates } from "./version.js";
@@ -43,6 +45,8 @@ export default function AppFinance() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const isOnline = useNetworkStatus();
+  const prevOnlineRef = React.useRef(isOnline);
 
   const dynamicTitle = useMemo(() => {
     const moduleLabel =
@@ -52,10 +56,29 @@ export default function AppFinance() {
         ? "Auto Finance"
         : "Global Capital";
 
-    return `${page} · ${moduleLabel} | KAMBAM FINANCE`;
-  }, [appModule, page]);
+    const offlinePrefix = !isOnline ? "⚠️ [OFFLINE] " : "";
+    return `${offlinePrefix}${page} · ${moduleLabel} | KAMBAM FINANCE`;
+  }, [appModule, page, isOnline]);
 
   useDocumentTitle(dynamicTitle);
+
+  useEffect(() => {
+    if (prevOnlineRef.current !== isOnline) {
+      if (!isOnline) {
+        setNotice({
+          type: "error",
+          text: "You are currently OFFLINE. Check your internet connection.",
+        });
+      } else {
+        setNotice({
+          type: "success",
+          text: "Back ONLINE! Connection restored.",
+        });
+        setRefreshKey((k) => k + 1);
+      }
+      prevOnlineRef.current = isOnline;
+    }
+  }, [isOnline]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -191,6 +214,14 @@ export default function AppFinance() {
 
   return (
     <div className="financeApp">
+      {/* Prominent Offline Alert Banner */}
+      {!isOnline && (
+        <div className="offlineBannerBar" role="alert">
+          <WifiOff size={16} />
+          <span>You are currently Offline — Please check your network connection</span>
+        </div>
+      )}
+
       <header className="topAppHeader">
         <div className="headerLeft">
           <div
@@ -224,6 +255,14 @@ export default function AppFinance() {
         </div>
 
         <div className="headerRight">
+          <div
+            className={`networkStatusPill ${isOnline ? "online" : "offline"}`}
+            title={isOnline ? "Network Status: Online" : "Network Status: Offline"}
+          >
+            <span className="networkStatusDot" />
+            <span>{isOnline ? "Online" : "Offline"}</span>
+          </div>
+
           <span style={{ color: "#94a3b8", fontSize: "13px" }}>{dateLabel(entryDate)}</span>
           <button className="iconTextButton" onClick={handleRefresh}>
             <RefreshCw size={15} /> Refresh

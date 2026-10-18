@@ -45,6 +45,15 @@ async function resetTables() {
     console.log(`Connecting to: ${targetDb} on ${targetHost}`);
     console.log(`========================================\n`);
 
+    // CRITICAL SAFETY GUARDS: Never touch production Render database
+    if (targetHost.includes("render.com") || targetHost.includes("oregon-postgres") || isRemote) {
+      throw new Error(`CRITICAL SAFETY BLOCK: Remote Render database detected (${targetHost})! Refusing to reset production.`);
+    }
+
+    if (targetMode === "local" && clientConfig.host !== "localhost" && clientConfig.host !== "127.0.0.1") {
+      throw new Error(`CRITICAL SAFETY BLOCK: Host is not local (${clientConfig.host})!`);
+    }
+
     // Get all base tables in the public schema
     const res = await client.query(`
       SELECT table_name 
