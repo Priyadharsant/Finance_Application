@@ -6,6 +6,13 @@ const amountPattern = /^\d+(\.\d{1,2})?$/;
 
 export function createSimpleFinanceRouter(db) {
   const router = Router();
+  const customerDetailsCache = new Map();
+  const CACHE_TTL_MS = 60 * 1000; // 1 minute TTL
+
+  const invalidateCustomerCache = (customerId) => {
+    if (customerId) customerDetailsCache.delete(customerId);
+    else customerDetailsCache.clear();
+  };
 
   router.get('/dashboard', async (req, res, next) => {
     try {
@@ -20,18 +27,19 @@ export function createSimpleFinanceRouter(db) {
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID'),0) AS today_collected,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='ACTIVE') AS active_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='COMPLETED') AS completed_accounts,
+          (SELECT COUNT(*) FROM daily_finance_accounts WHERE status <> 'CANCELLED') AS total_accounts,
           COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS expenses,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0)
           - COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0)
           - COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS in_hand`, [asOf]),
-        db.query(`SELECT c.customer_id,c.customer_name,c.mobile_number,c.address,c.notes,a.finance_id,a.finance_date,a.gross_finance_amount,a.initial_deduction,a.interest_type,a.interest_value,a.net_disbursement,a.agreed_total_payable,a.daily_agreed_due,a.status,
+        db.query(`SELECT c.customer_id,c.customer_name,c.mobile_number,c.address,c.notes,a.finance_id,a.finance_date,a.gross_finance_amount,a.initial_deduction,a.interest_type,a.interest_value,a.net_disbursement,a.agreed_total_payable,a.daily_agreed_due,a.status,a.created_at,
           COALESCE(SUM(p.amount),0) AS total_collected,
           a.agreed_total_payable-COALESCE(SUM(p.amount),0) AS outstanding_receivable,
           a.agreed_total_payable-COALESCE(SUM(p.amount),0) AS remaining
           FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id
           LEFT JOIN daily_finance_payments p ON p.finance_id=a.finance_id AND p.status <> 'VOID'
           WHERE c.status='ACTIVE' AND a.status <> 'CANCELLED'
-          GROUP BY c.customer_id,a.finance_id ORDER BY c.customer_name`),
+          GROUP BY c.customer_id,a.finance_id ORDER BY a.finance_date ASC, a.created_at ASC`),
         db.query(`SELECT p.payment_id,p.collection_date,p.amount,p.payment_method,c.customer_name FROM daily_finance_payments p JOIN daily_finance_customers c ON c.customer_id=p.customer_id WHERE p.status <> 'VOID' ORDER BY p.collection_date DESC,p.created_at DESC LIMIT 10`),
       ]);
       res.json({ asOf, position: position.rows[0], customers: customers.rows, recentPayments: recent.rows });
@@ -64,6 +72,7 @@ export function createSimpleFinanceRouter(db) {
       });
 
       await client.query('COMMIT');
+      invalidateCustomerCache();
       res.status(201).json({ customer: customer.rows[0], account: account.rows[0] });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message || 'Unable to create customer' }); } finally { client.release(); }
   });
@@ -127,6 +136,7 @@ export function createSimpleFinanceRouter(db) {
       });
 
       await client.query('COMMIT');
+      invalidateCustomerCache(customerId);
       res.status(201).json(payment.rows[0]);
     } catch (error) {
       await client.query('ROLLBACK');
@@ -207,6 +217,7 @@ export function createSimpleFinanceRouter(db) {
       }
 
       await client.query('COMMIT');
+      invalidateCustomerCache();
       res.json(result.rows[0]);
     } catch (error) {
       await client.query('ROLLBACK');
@@ -222,28 +233,67 @@ export function createSimpleFinanceRouter(db) {
       const result = await db.query(`SELECT c.customer_id, c.customer_name, c.mobile_number,
         a.finance_id, a.finance_date, a.gross_finance_amount, a.initial_deduction,
         a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable,
-        COALESCE(a.daily_agreed_due, 0) AS daily_agreed_due, a.status,
+        COALESCE(a.daily_agreed_due, 0) AS daily_agreed_due, a.status, a.created_at,
         COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0) AS total_collected,
         COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID'), 0) AS today_collection,
         (SELECT x.payment_id FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_payment_id,
         (SELECT x.payment_method FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_payment_method,
         GREATEST(a.agreed_total_payable - COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0), 0) AS remaining
         FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id
-        WHERE c.status='ACTIVE' AND a.status='ACTIVE' ORDER BY c.customer_name`, [entryDate]);
+        WHERE c.status='ACTIVE' AND a.status='ACTIVE' ORDER BY a.finance_date ASC, a.created_at ASC`, [entryDate]);
       res.json({ date: entryDate, customers: result.rows });
     } catch (error) { next(error); }
   });
 
   router.get('/customers/:customerId', async (req, res, next) => {
     try {
-      const result = await db.query(`SELECT c.customer_id,c.customer_name,c.mobile_number,c.address,c.notes,a.finance_id,a.finance_date,a.gross_finance_amount,a.initial_deduction,a.interest_type,a.interest_value,a.net_disbursement,a.agreed_total_payable,a.status,
-        COALESCE(SUM(p.amount) FILTER (WHERE p.status <> 'VOID'),0) AS total_collected,
-        a.agreed_total_payable-COALESCE(SUM(p.amount) FILTER (WHERE p.status <> 'VOID'),0) AS remaining
-        FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id LEFT JOIN daily_finance_payments p ON p.finance_id=a.finance_id
-        WHERE c.customer_id=$1 GROUP BY c.customer_id,a.finance_id ORDER BY a.finance_date DESC`, [req.params.customerId]);
-      if (!result.rowCount) return res.status(404).json({ error: 'Customer not found' });
-      const history = await db.query(`WITH ordered AS (SELECT payment_id,collection_date,amount,payment_method,notes,created_at,updated_at,SUM(amount) OVER (ORDER BY collection_date,created_at,payment_id) AS total_collected FROM daily_finance_payments WHERE customer_id=$1 AND status <> 'VOID') SELECT *,GREATEST($2::numeric-total_collected,0) AS remaining FROM ordered ORDER BY collection_date DESC,created_at DESC`, [req.params.customerId, result.rows[0].agreed_total_payable]);
-      res.json({ customer: result.rows[0], collections: history.rows });
+      const customerId = req.params.customerId;
+      const cached = customerDetailsCache.get(customerId);
+      if (cached && Date.now() - cached.time < CACHE_TTL_MS) {
+        return res.json(cached.data);
+      }
+
+      const result = await db.query(`
+        SELECT 
+          COALESCE((
+            SELECT json_agg(acc) FROM (
+              SELECT c.customer_id, c.customer_name, c.mobile_number, c.address, c.notes,
+                     a.finance_id, a.finance_date, a.gross_finance_amount, a.initial_deduction,
+                     a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable, a.status,
+                     COALESCE((SELECT SUM(p.amount) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), 0) AS total_collected,
+                     a.agreed_total_payable - COALESCE((SELECT SUM(p.amount) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), 0) AS remaining
+              FROM daily_finance_customers c
+              JOIN daily_finance_accounts a ON a.customer_id = c.customer_id
+              WHERE c.customer_id = $1
+              ORDER BY (a.status = 'ACTIVE') DESC, a.finance_date DESC, a.created_at DESC
+            ) acc
+          ), '[]'::json) AS accounts,
+          COALESCE((
+            SELECT json_agg(pay) FROM (
+              SELECT p.payment_id, p.finance_id, p.collection_date, p.amount, p.payment_method, p.notes, p.created_at, p.updated_at,
+                     GREATEST(COALESCE(a.agreed_total_payable, 0) - SUM(p.amount) OVER (PARTITION BY p.finance_id ORDER BY p.collection_date, p.created_at, p.payment_id), 0) AS remaining
+              FROM daily_finance_payments p
+              LEFT JOIN daily_finance_accounts a ON a.finance_id = p.finance_id
+              WHERE p.customer_id = $1 AND p.status <> 'VOID'
+              ORDER BY p.collection_date DESC, p.created_at DESC
+            ) pay
+          ), '[]'::json) AS collections;
+      `, [customerId]);
+
+      const accounts = result.rows[0]?.accounts || [];
+      const collections = result.rows[0]?.collections || [];
+
+      if (!accounts.length) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      const activeAccount = accounts[0];
+      const payload = { customer: activeAccount, accounts, collections };
+
+      if (customerDetailsCache.size > 500) customerDetailsCache.clear();
+      customerDetailsCache.set(customerId, { time: Date.now(), data: payload });
+
+      res.json(payload);
     } catch (error) { next(error); }
   });
 
@@ -297,7 +347,7 @@ export function createSimpleFinanceRouter(db) {
       const queryStr = `
         SELECT c.customer_id, c.customer_name, c.mobile_number, c.address, c.notes,
           a.finance_id, a.finance_date, a.gross_finance_amount, a.initial_deduction,
-          a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable, a.status,
+          a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable, a.status, a.created_at,
           COALESCE(SUM(p.amount),0) AS period_collected,
           COALESCE((SELECT SUM(allp.amount) FROM daily_finance_payments allp WHERE allp.finance_id=a.finance_id AND allp.status <> 'VOID'),0) AS total_collected,
           a.agreed_total_payable - COALESCE((SELECT SUM(allp.amount) FROM daily_finance_payments allp WHERE allp.finance_id=a.finance_id AND allp.status <> 'VOID'),0) AS remaining,
@@ -311,7 +361,7 @@ export function createSimpleFinanceRouter(db) {
         WHERE ${conditions.join(' AND ')}
         GROUP BY c.customer_id, a.finance_id
         ${havingClause}
-        ORDER BY c.customer_name
+        ORDER BY a.finance_date ASC, a.created_at ASC
       `;
 
       const result = await db.query(queryStr, params);
@@ -510,6 +560,7 @@ export function createSimpleFinanceRouter(db) {
       );
 
       await client.query('COMMIT');
+      invalidateCustomerCache();
       res.json({
         success: true,
         message: 'Loan successfully closed early',
@@ -527,30 +578,24 @@ export function createSimpleFinanceRouter(db) {
   });
 
   // ==========================================================================
-  // INCREASE LOAN AMOUNT (TOP-UP)
+  // INCREASE LOAN AMOUNT (TOP-UP / REFINANCE)
+  // Closes previous loan and starts a new loan with previous balance deducted from cash given
   // ==========================================================================
   router.post('/accounts/:financeId/increase-amount', async (req, res) => {
     const client = await db.connect();
     try {
       const { financeId } = req.params;
-      const { additionalAmount, interestType = 'AMOUNT', interestValue = 0, effectiveDate, notes } = req.body;
-      const addAmt = Number(additionalAmount || 0);
-
-      if (!addAmt || isNaN(addAmt) || addAmt <= 0) {
-        throw new Error('A valid additional loan amount greater than 0 is required');
-      }
+      const {
+        newLoanAmount,
+        additionalAmount,
+        interestType = 'PERCENT',
+        interestValue = 0,
+        dailyAgreedDue = 0,
+        effectiveDate,
+        notes
+      } = req.body;
 
       const effDate = datePattern.test(String(effectiveDate)) ? effectiveDate : new Date().toISOString().slice(0, 10);
-      const normalizedInterestType = interestType === 'PERCENT' ? 'PERCENT' : 'AMOUNT';
-      const addDeduction = normalizedInterestType === 'PERCENT'
-        ? (addAmt * Number(interestValue || 0)) / 100
-        : Number(interestValue || 0);
-
-      if (isNaN(addDeduction) || addDeduction < 0 || addDeduction > addAmt) {
-        throw new Error('Interest deduction cannot exceed additional amount');
-      }
-
-      const netAdditionalDisbursement = addAmt - addDeduction;
 
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock(1001);');
@@ -560,47 +605,128 @@ export function createSimpleFinanceRouter(db) {
       const account = accountRes.rows[0];
 
       if (account.status === 'CANCELLED') throw new Error('Cannot increase amount on a cancelled loan');
+      if (account.status === 'COMPLETED') throw new Error('This loan is already completed');
 
-      // Validate and disburse additional funds from Global Capital pool if net disbursement > 0
-      if (netAdditionalDisbursement > 0) {
+      // Calculate previous loan's total collected so far and remaining balance
+      const collectedRes = await client.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total_collected FROM daily_finance_payments WHERE finance_id = $1 AND status <> 'VOID'`,
+        [financeId]
+      );
+      const totalCollectedSoFar = Number(collectedRes.rows[0].total_collected || 0);
+      const previousRemaining = Math.max(0, Number(account.agreed_total_payable) - totalCollectedSoFar);
+
+      // Determine new gross loan amount (from newLoanAmount or additionalAmount)
+      let newGross = 0;
+      if (newLoanAmount !== undefined && newLoanAmount !== null && newLoanAmount !== '') {
+        newGross = Number(newLoanAmount);
+      } else if (additionalAmount !== undefined && additionalAmount !== null && additionalAmount !== '') {
+        newGross = previousRemaining + Number(additionalAmount);
+      }
+
+      if (!newGross || isNaN(newGross) || newGross <= 0) {
+        throw new Error('A valid new loan amount greater than 0 is required');
+      }
+
+      const normalizedInterestType = interestType === 'PERCENT' ? 'PERCENT' : 'AMOUNT';
+      const interestDeduction = normalizedInterestType === 'PERCENT'
+        ? Math.round((newGross * Number(interestValue || 0)) / 100)
+        : Number(interestValue || 0);
+
+      if (isNaN(interestDeduction) || interestDeduction < 0 || interestDeduction >= newGross) {
+        throw new Error('Interest deduction must be between 0 and the new loan amount');
+      }
+
+      // Customer receives: (New Loan Amount - Interest) - Previous Loan Balance
+      const standardDisbursement = newGross - interestDeduction;
+      const actualCashHandedOver = standardDisbursement - previousRemaining;
+
+      if (actualCashHandedOver < 0) {
+        throw new Error(`New loan payout (₹${standardDisbursement}) cannot be less than the previous loan balance (₹${previousRemaining})`);
+      }
+
+      // 1. Settle and close previous loan
+      let settlementPayment = null;
+      if (previousRemaining > 0) {
+        const payRes = await client.query(
+          `INSERT INTO daily_finance_payments(customer_id, finance_id, collection_date, amount, payment_method, notes)
+           VALUES($1, $2, $3, $4, 'TRANSFER', $5) RETURNING *`,
+          [
+            account.customer_id,
+            financeId,
+            effDate,
+            previousRemaining,
+            'Settled via Loan Refinance / Top-Up'
+          ]
+        );
+        settlementPayment = payRes.rows[0];
+      }
+
+      const closedNotes = account.notes
+        ? `${account.notes} | Closed via Top-Up Refinance`
+        : 'Closed via Top-Up Refinance';
+      await client.query(
+        `UPDATE daily_finance_accounts
+         SET status = 'COMPLETED', notes = $1, updated_at = NOW()
+         WHERE finance_id = $2`,
+        [closedNotes, financeId]
+      );
+
+      // 2. Create the new loan record
+      const newLoanNotes = notes || `Top-up Refinance (Previous balance ₹${previousRemaining} settled; Net cash given: ₹${actualCashHandedOver})`;
+      const insertAccountRes = await client.query(
+        `INSERT INTO daily_finance_accounts(
+           customer_id, finance_date, gross_finance_amount, initial_deduction,
+           interest_type, interest_value, agreed_total_payable, daily_agreed_due,
+           expected_collection_days, status, notes
+         ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, 0, 'ACTIVE', $9) RETURNING *`,
+        [
+          account.customer_id,
+          effDate,
+          newGross,
+          interestDeduction,
+          normalizedInterestType,
+          interestValue || 0,
+          newGross,
+          Number(dailyAgreedDue || 0),
+          newLoanNotes
+        ]
+      );
+      const newAccount = insertAccountRes.rows[0];
+
+      // 3. Disburse only the actual physical cash handed over from Global Cash
+      if (actualCashHandedOver > 0) {
         await validateAndDisburseFunds(client, {
           module: 'DAILY',
-          amount: netAdditionalDisbursement,
+          amount: actualCashHandedOver,
           effectiveDate: effDate,
           referenceType: 'DAILY_LOAN',
-          referenceId: account.finance_id,
-          notes: `Daily Finance Additional Loan Disbursement (Top-Up) for Customer ${account.customer_id}`
+          referenceId: newAccount.finance_id,
+          notes: `Daily Finance Top-Up Loan Disbursement for Customer ${account.customer_id} (Net Cash Given: ₹${actualCashHandedOver})`
         });
       }
 
-      const newGross = Number(account.gross_finance_amount) + addAmt;
-      const newDeduction = Number(account.initial_deduction) + addDeduction;
-      const newPayable = Number(account.agreed_total_payable) + addAmt;
-
-      // Note: net_disbursement is GENERATED ALWAYS AS (gross_finance_amount - initial_deduction) STORED
-      const updatedAccountRes = await client.query(
-        `UPDATE daily_finance_accounts
-         SET gross_finance_amount = $1,
-             initial_deduction = $2,
-             agreed_total_payable = $3,
-             status = 'ACTIVE',
-             updated_at = NOW()
-         WHERE finance_id = $4 RETURNING *`,
-        [newGross, newDeduction, newPayable, financeId]
-      );
-
+      // 4. Audit Logs
       await client.query(
         `INSERT INTO daily_finance_audit_logs(action, entity, entity_id, old_value, new_value, reason)
-         VALUES('INCREASE_LOAN_AMOUNT', 'ACCOUNT', $1, $2, $3, $4)`,
-        [financeId, JSON.stringify(account), JSON.stringify(updatedAccountRes.rows[0]), notes || 'Loan top-up increase']
+         VALUES('CLOSE_LOAN_VIA_TOPUP', 'ACCOUNT', $1, $2, $3, $4)`,
+        [financeId, JSON.stringify(account), JSON.stringify({ status: 'COMPLETED' }), `Closed via top-up into new loan ${newAccount.finance_id}`]
+      );
+      await client.query(
+        `INSERT INTO daily_finance_audit_logs(action, entity, entity_id, new_value, reason)
+         VALUES('CREATE_TOPUP_LOAN', 'ACCOUNT', $1, $2, $3)`,
+        [newAccount.finance_id, JSON.stringify(newAccount), `New top-up loan created from previous loan ${financeId}`]
       );
 
       await client.query('COMMIT');
+      invalidateCustomerCache();
       res.json({
         success: true,
-        message: 'Loan amount successfully increased',
-        account: updatedAccountRes.rows[0],
-        netDisbursement: netAdditionalDisbursement
+        message: 'Previous loan closed and new loan started successfully',
+        previousAccount: { ...account, status: 'COMPLETED' },
+        settlementPayment,
+        newAccount,
+        previousBalanceSettled: previousRemaining,
+        netCashDisbursed: actualCashHandedOver
       });
     } catch (error) {
       await client.query('ROLLBACK');

@@ -1,5 +1,6 @@
 import { pool } from "../config/db.js";
 import { validateAndDisburseFunds, createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
+import { listDocumentFiles } from "./storageService.js";
 import crypto from "crypto";
 
 export function addMonthsSafe(baseDate, months) {
@@ -356,8 +357,6 @@ export async function getLoanDetails(loanId) {
     LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
     WHERE l.id = $1;
   `;
-  const loanRes = await pool.query(loanQuery, [loanId]);
-  if (!loanRes.rows[0]) return null;
 
   const scheduleQuery = `
     SELECT 
@@ -394,19 +393,27 @@ export async function getLoanDetails(loanId) {
     WHERE loan_id = $1
     ORDER BY installment_number ASC;
   `;
-  const scheduleRes = await pool.query(scheduleQuery, [loanId]);
 
   const paymentsQuery = `
     SELECT * FROM autofinance_payments
     WHERE loan_id = $1
-    ORDER BY payment_date DESC;
+    ORDER BY payment_date ASC, created_at ASC;
   `;
-  const paymentsRes = await pool.query(paymentsQuery, [loanId]);
+
+  const [loanRes, scheduleRes, paymentsRes, documents] = await Promise.all([
+    pool.query(loanQuery, [loanId]),
+    pool.query(scheduleQuery, [loanId]),
+    pool.query(paymentsQuery, [loanId]),
+    listDocumentFiles(loanId).catch(() => []),
+  ]);
+
+  if (!loanRes.rows[0]) return null;
 
   return {
     loan: loanRes.rows[0],
     schedules: scheduleRes.rows,
-    payments: paymentsRes.rows
+    payments: paymentsRes.rows,
+    documents: documents || [],
   };
 }
 

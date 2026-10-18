@@ -298,6 +298,7 @@ export default function AutoDashboard({
         <table>
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
               <th
                 className="clickable"
                 onClick={() => handleSort("first_name")}
@@ -342,7 +343,7 @@ export default function AutoDashboard({
             </tr>
           </thead>
           <tbody>
-            {dashboardLoans.map((l) => {
+            {dashboardLoans.map((l, idx) => {
               const getLocalDateString = (d) => {
                 if (!d) return "";
                 const dt = new Date(d);
@@ -386,6 +387,7 @@ export default function AutoDashboard({
                   className="clickable"
                   onClick={() => openLoanDetails(l.id)}
                 >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>
                     <div className="customerNameCell">
                       <div>

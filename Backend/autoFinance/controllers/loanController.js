@@ -513,7 +513,7 @@ export async function recordEmiPayment(req, res) {
         JOIN autofinance_customers c ON l.customer_id = c.id
         LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
         WHERE date_trunc('month', p.created_at) = date_trunc('month', $1::timestamp)
-        ORDER BY p.created_at DESC;
+        ORDER BY p.payment_date ASC, p.created_at ASC;
       `;
       const result = await client.query(query, [targetDate]);
     res.status(200).json({ success: true, data: result.rows });

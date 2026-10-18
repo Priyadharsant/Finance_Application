@@ -68,6 +68,10 @@ export default function LedgerOverview({
       }
 
       return true;
+    }).sort((a, b) => {
+      const da = new Date(a.effective_date || a.transaction_date || a.created_at || 0).getTime();
+      const db = new Date(b.effective_date || b.transaction_date || b.created_at || 0).getTime();
+      return da - db;
     });
   }, [rawLedger, monthFilter, moduleFilter, directionFilter, searchQuery]);
 
@@ -373,6 +377,7 @@ export default function LedgerOverview({
           <table className="financeTable">
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Date</th>
                 <th>Description</th>
                 <th>Module</th>
@@ -382,13 +387,14 @@ export default function LedgerOverview({
               </tr>
             </thead>
             <tbody>
-              {filteredLedger.map((tx) => (
+              {filteredLedger.map((tx, idx) => (
                 <tr
                   className="clickable globalClickableRow"
                   key={tx.id}
                   title="Click to view full transaction details"
                   onClick={() => onSelectRecord({ type: "ledger", record: tx })}
                 >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>
                     <span style={{ fontWeight: "500" }}>
                       {formatDate(tx.effective_date)}
@@ -486,7 +492,7 @@ export default function LedgerOverview({
               {filteredLedger.length === 0 && (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     style={{ textAlign: "center", color: "#64748b", padding: "24px" }}
                   >
                     No transactions found for the selected filter.

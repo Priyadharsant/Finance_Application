@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import {
   dailyFinanceApi,
@@ -18,6 +18,7 @@ import CustomerDetailsModal from "./modals/CustomerDetailsModal.jsx";
 import PaymentEditorModal from "./modals/PaymentEditorModal.jsx";
 import CloseLoanModal from "./modals/CloseLoanModal.jsx";
 import IncreaseLoanModal from "./modals/IncreaseLoanModal.jsx";
+import { X, Loader2 } from "lucide-react";
 
 export default function DailyFinanceView({
   activeMenu = "Dashboard",
@@ -47,6 +48,8 @@ export default function DailyFinanceView({
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(null);
+  const customerCacheRef = useRef(new Map());
 
   // Dynamic document title
   const dynamicTitle = useMemo(() => {
@@ -107,6 +110,7 @@ export default function DailyFinanceView({
       setActionLoading(null);
       setPage?.("Customers");
       setNotice?.({ type: "success", text: "Finance saved successfully" });
+      customerCacheRef.current.clear();
       loadDashboard();
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
@@ -141,6 +145,7 @@ export default function DailyFinanceView({
           ? "Collection updated"
           : "Collection saved",
       });
+      customerCacheRef.current.delete(customer.customer_id);
       Promise.all([loadDashboard(), loadDaily()]);
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
@@ -164,6 +169,7 @@ export default function DailyFinanceView({
       setBusy(false);
       setActionLoading(null);
       setNotice?.({ type: "success", text: "Collection updated" });
+      customerCacheRef.current.clear();
       Promise.all([loadDashboard(), loadDaily()]);
       if (custId) openDetails(custId);
     } catch (error) {
@@ -184,6 +190,7 @@ export default function DailyFinanceView({
       setBusy(false);
       setActionLoading(null);
       setNotice?.({ type: "success", text: "Loan closed successfully" });
+      customerCacheRef.current.clear();
       Promise.all([loadDashboard(), loadDaily()]);
       if (custId) openDetails(custId);
     } catch (error) {
@@ -196,14 +203,18 @@ export default function DailyFinanceView({
   const handleIncreaseLoan = async (payload) => {
     if (busy || actionLoading) return;
     setBusy(true);
-    setActionLoading("Increasing Loan Amount...");
+    setActionLoading("Closing previous loan & starting new loan...");
     try {
-      await dailyFinanceApi.increaseLoanAmount(payload.financeId, payload);
-      const custId = details?.customer?.customer_id;
+      const res = await dailyFinanceApi.increaseLoanAmount(payload.financeId, payload);
+      const custId = details?.customer?.customer_id || payload.customerId;
       setIncreasingCustomer(null);
       setBusy(false);
       setActionLoading(null);
-      setNotice?.({ type: "success", text: "Loan amount increased successfully" });
+      setNotice?.({
+        type: "success",
+        text: res.message || "Previous loan closed and new loan started successfully",
+      });
+      customerCacheRef.current.clear();
       Promise.all([loadDashboard(), loadDaily()]);
       if (custId) openDetails(custId);
     } catch (error) {
@@ -213,27 +224,65 @@ export default function DailyFinanceView({
     }
   };
 
-  const openDetails = async (customerId) => {
+  const openDetails = async (customerId, preloaded = null) => {
+    // 1. Instant return if already cached
+    const cached = customerCacheRef.current.get(customerId);
+    if (cached) {
+      setDetails(cached);
+      // Revalidate in background silently
+      dailyFinanceApi.getCustomerDetails(customerId).then((fresh) => {
+        customerCacheRef.current.set(customerId, fresh);
+        setDetails(fresh);
+      }).catch(() => {});
+      return;
+    }
+
+    const preloadedCustomer = preloaded && typeof preloaded === "object" ? preloaded : null;
+    const customerName = preloadedCustomer?.customer_name || (typeof preloaded === "string" ? preloaded : "");
+
+    // 2. Optimistically open modal INSTANTLY if customer summary is available from table row!
+    if (preloadedCustomer && (preloadedCustomer.gross_finance_amount !== undefined || preloadedCustomer.finance_id)) {
+      setDetails({
+        customer: preloadedCustomer,
+        collections: [],
+        accounts: [preloadedCustomer],
+        isLoadingCollections: true,
+      });
+    } else {
+      setLoadingDetails({ id: customerId, name: customerName });
+    }
+
     try {
       const data = await dailyFinanceApi.getCustomerDetails(customerId);
-      setDetails(data);
+      customerCacheRef.current.set(customerId, data);
+      setDetails({ ...data, isLoadingCollections: false });
     } catch (error) {
       setNotice?.({ type: "error", text: error.message });
+      if (preloadedCustomer) setDetails(null);
+    } finally {
+      setLoadingDetails(null);
     }
   };
 
-
-
   const filteredCustomers = useMemo(
     () =>
-      dashboard.customers.filter(
-        (customer) =>
-          (!customerSearch ||
-            customer.customer_name
-              .toLowerCase()
-              .includes(customerSearch.toLowerCase())) &&
-          (!customerStatus || customer.status === customerStatus),
-      ),
+      dashboard.customers
+        .filter(
+          (customer) =>
+            (!customerSearch ||
+              customer.customer_name
+                .toLowerCase()
+                .includes(customerSearch.toLowerCase())) &&
+            (!customerStatus || customer.status === customerStatus),
+        )
+        .sort((a, b) => {
+          const da = new Date(a.finance_date || 0).getTime();
+          const db = new Date(b.finance_date || 0).getTime();
+          if (da !== db) return da - db;
+          const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+          const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+          return ca - cb;
+        }),
     [dashboard.customers, customerSearch, customerStatus],
   );
 
@@ -257,6 +306,7 @@ export default function DailyFinanceView({
               recent={dashboard.recentPayments}
               setPage={setPage}
               openDetails={openDetails}
+              loadingDetailsId={loadingDetails?.id}
             />
           )}
 
@@ -269,6 +319,7 @@ export default function DailyFinanceView({
               setStatus={setCustomerStatus}
               setShowAdd={setShowAdd}
               openDetails={openDetails}
+              loadingDetailsId={loadingDetails?.id}
               onOpenCloseLoan={setClosingCustomer}
               onOpenIncreaseLoan={setIncreasingCustomer}
             />
@@ -281,6 +332,7 @@ export default function DailyFinanceView({
               daily={daily.customers}
               savePayment={savePayment}
               openDetails={openDetails}
+              loadingDetailsId={loadingDetails?.id}
               onEditPayment={setEditingPayment}
               busy={busy}
             />
@@ -335,6 +387,108 @@ export default function DailyFinanceView({
           onSubmit={handleIncreaseLoan}
           busy={busy}
         />
+      )}
+
+      {/* Customer Details Fetching Loading Dialog */}
+      {loadingDetails && (
+        <div
+          className="modal"
+          onClick={() => setLoadingDetails(null)}
+          style={{
+            zIndex: 1100,
+            background: "rgba(15, 23, 42, 0.4)",
+            backdropFilter: "blur(3px)",
+            animation: "autoFadeIn 0.2s ease-out",
+          }}
+        >
+          <div
+            className="formCard modalForm"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(400px, 92vw)",
+              textAlign: "center",
+              padding: "36px 24px 28px",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              position: "relative",
+            }}
+          >
+            <button
+              type="button"
+              className="close"
+              onClick={() => setLoadingDetails(null)}
+              title="Cancel"
+            >
+              <X size={18} />
+            </button>
+
+            <div
+              className="inPageDataSpinner"
+              style={{
+                width: "46px",
+                height: "46px",
+                borderWidth: "4px",
+                borderTopColor: "#0d9488",
+                marginBottom: "16px",
+              }}
+            />
+
+            <span
+              className="overline"
+              style={{
+                color: "#0d9488",
+                fontWeight: "700",
+                letterSpacing: "0.08em",
+                marginBottom: "4px",
+              }}
+            >
+              FETCHING DETAILS
+            </span>
+
+            <h3
+              style={{
+                margin: "0 0 6px 0",
+                fontSize: "17px",
+                fontWeight: "800",
+                color: "#0f172a",
+              }}
+            >
+              {loadingDetails.name ? loadingDetails.name : "Customer Details"}
+            </h3>
+
+            <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+              Loading loan accounts, collections & statements...
+            </p>
+
+            <div
+              style={{
+                marginTop: "20px",
+                width: "100%",
+                height: "5px",
+                background: "#e2e8f0",
+                borderRadius: "999px",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "40%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, #0d9488, #0ea5e9)",
+                  borderRadius: "999px",
+                  animation: "shimmerProgress 1.4s infinite ease-in-out",
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

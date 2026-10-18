@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
 import { exportDailyCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
@@ -11,8 +11,20 @@ export default function DailyDashboard({
   recent = [],
   setPage,
   openDetails,
+  loadingDetailsId,
 }) {
   const [downloadingReport, setDownloadingReport] = useState(false);
+
+  const sortedCustomers = useMemo(() => {
+    return [...customers].sort((a, b) => {
+      const da = new Date(a.finance_date || 0).getTime();
+      const db = new Date(b.finance_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+      const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+      return ca - cb;
+    });
+  }, [customers]);
 
   const handleExportDailyReport = async () => {
     try {
@@ -50,21 +62,42 @@ export default function DailyDashboard({
       </div>
       <div className="metricGrid">
         <Metric
-          title="Total finance amount"
+          title="Total customers"
+          value={customers.length || position.total_accounts || position.active_accounts || 0}
+          tone="blue"
+          count
+        />
+        <Metric
+          title="Finance amount"
           value={position.total_finance_amount}
         />
-        <Metric title="Amount given" value={position.disbursed} />
         <Metric
-          title="Total collected"
+          title="Interest"
+          value={position.profit}
+        />
+        <Metric
+          title="Amount given"
+          value={position.disbursed}
+        />
+        <Metric
+          title="Total return"
+          value={position.total_agreed_return || position.total_finance_amount}
+        />
+        <Metric
+          title="Collected"
           value={position.collected}
           tone="green"
         />
         <Metric
-          title="Total remaining"
+          title="Remaining"
           value={position.receivable}
           tone="orange"
         />
-        <Metric title="Total profit" value={position.profit} tone="green" />
+        <Metric
+          title="Profit"
+          value={position.profit}
+          tone="green"
+        />
         <Metric
           title="Current In-Hand Amount"
           value={position.collected}
@@ -83,14 +116,18 @@ export default function DailyDashboard({
         <div className="card tableWrap">
           <div className="cardHead">
             <div>
-              <h3>Customer Accounts</h3>
+              <h3>Customer Accounts ({customers.length || position.total_accounts || position.active_accounts || 0})</h3>
               <p>Active and completed daily loans.</p>
             </div>
           </div>
           <table>
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
+                <th style={{ textAlign: "center" }}>Finance date</th>
                 <th>Customer</th>
+                <th>Finance amount</th>
+                <th>Interest</th>
                 <th>Amount given</th>
                 <th>Total return</th>
                 <th>Collected</th>
@@ -100,21 +137,43 @@ export default function DailyDashboard({
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer) => (
-                <tr
-                  key={customer.finance_id}
-                  onClick={() => openDetails(customer.customer_id)}
-                  className="clickable"
-                >
+              {sortedCustomers.map((customer, idx) => {
+                const isThisLoading = loadingDetailsId === customer.customer_id;
+                return (
+                  <tr
+                    key={customer.finance_id}
+                    onClick={() => openDetails(customer.customer_id, customer)}
+                    className={`clickable ${isThisLoading ? "rowLoading" : ""}`}
+                  >
+                    <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                    <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{dateLabel(customer.finance_date)}</td>
+                    <td>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <b>{customer.customer_name}</b>
+                        {isThisLoading && (
+                          <Loader2
+                            size={13}
+                            style={{
+                              color: "#0d9488",
+                              animation: "autoSpin 0.75s linear infinite",
+                            }}
+                          />
+                        )}
+                      </div>
+                      <small>
+                        {customer.mobile_number ? (
+                          <PhoneLink phone={customer.mobile_number} />
+                        ) : (
+                          customer.address || "No contact details"
+                        )}
+                      </small>
+                    </td>
+                  <td>{money(customer.gross_finance_amount)}</td>
                   <td>
-                    <b>{customer.customer_name}</b>
-                    <small>
-                      {customer.mobile_number ? (
-                        <PhoneLink phone={customer.mobile_number} />
-                      ) : (
-                        customer.address || "No contact details"
-                      )}
-                    </small>
+                    {money(customer.initial_deduction)}{" "}
+                    {customer.interest_type === "PERCENT" && (
+                      <small>({customer.interest_value}%)</small>
+                    )}
                   </td>
                   <td>{money(customer.net_disbursement)}</td>
                   <td>{money(customer.agreed_total_payable)}</td>
@@ -131,7 +190,8 @@ export default function DailyDashboard({
                     </span>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
           {!customers.length && <Empty text="No customers yet." />}

@@ -27,7 +27,7 @@ export default function DailyReports({
     try {
       setDownloadingDailyReport(true);
       const reportData = await globalCapitalApi.getMasterBusinessLedger();
-      exportDailyCategoryReport(reportData, { customers });
+      exportDailyCategoryReport(reportData, { customers: report?.customers?.length ? report.customers : customers });
     } catch (e) {
       console.error(e);
       alert("Failed to export Daily Category Report: " + e.message);
@@ -57,19 +57,28 @@ export default function DailyReports({
     runReport(nextRange, scope);
   };
 
-  // Real-time client-side filter over the fetched report
+  // Real-time client-side filter and sorting (older to newest) over the fetched report
   const displayedCustomers = useMemo(() => {
     if (!report?.customers) return [];
-    return report.customers.filter((row) => {
-      const q = (search || "").trim().toLowerCase();
-      const matchSearch =
-        !q ||
-        (row.customer_name && row.customer_name.toLowerCase().includes(q)) ||
-        (row.mobile_number && row.mobile_number.includes(q));
-      const matchCustomer = !customerId || row.customer_id === customerId;
-      const matchStatus = !status || row.status === status;
-      return matchSearch && matchCustomer && matchStatus;
-    });
+    return report.customers
+      .filter((row) => {
+        const q = (search || "").trim().toLowerCase();
+        const matchSearch =
+          !q ||
+          (row.customer_name && row.customer_name.toLowerCase().includes(q)) ||
+          (row.mobile_number && row.mobile_number.includes(q));
+        const matchCustomer = !customerId || row.customer_id === customerId;
+        const matchStatus = !status || row.status === status;
+        return matchSearch && matchCustomer && matchStatus;
+      })
+      .sort((a, b) => {
+        const da = new Date(a.finance_date || 0).getTime();
+        const db = new Date(b.finance_date || 0).getTime();
+        if (da !== db) return da - db;
+        const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+        const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+        return ca - cb;
+      });
   }, [report?.customers, search, customerId, status]);
 
   // Real-time dynamic totals for the currently displayed rows
@@ -261,37 +270,41 @@ export default function DailyReports({
         <>
           <div className="metricGrid">
             <Metric
-              title="Period collection"
-              value={displayedTotals.periodCollected}
-              tone="green"
+              title="Total customers"
+              value={displayedCustomers.length}
+              tone="blue"
+              count
             />
             <Metric
-              title="Period loans disbursed"
-              value={displayedTotals.periodDisbursed}
+              title="Finance amount"
+              value={displayedTotals.financeAmount}
             />
             <Metric
-              title="Period profit"
-              value={displayedTotals.periodProfit}
-              tone="green"
+              title="Interest"
+              value={displayedTotals.profit}
             />
             <Metric
-              title="Total return agreed"
+              title="Amount given"
+              value={displayedTotals.given}
+            />
+            <Metric
+              title="Total return"
               value={displayedTotals.totalReturn}
-              tone="orange"
             />
             <Metric
-              title="Total collected to-date"
+              title="Collected"
               value={displayedTotals.returned}
               tone="green"
             />
             <Metric
-              title="Remaining receivable"
+              title="Remaining"
               value={displayedTotals.remaining}
               tone="orange"
             />
             <Metric
-              title="Filtered accounts"
-              value={displayedCustomers.length}
+              title="Profit"
+              value={displayedTotals.profit}
+              tone="green"
             />
           </div>
 
@@ -315,7 +328,7 @@ export default function DailyReports({
           <div className="card tableWrap">
             <div className="cardHead">
               <div>
-                <h3>Finance report</h3>
+                <h3>Finance report ({displayedCustomers.length} Customers)</h3>
                 <p>
                   {report.from} to {report.to}
                   {customerId ? " · Individual customer" : ""}
@@ -341,36 +354,43 @@ export default function DailyReports({
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: "50px" }}>S.No</th>
+                    <th style={{ textAlign: "center" }}>Finance date</th>
                     <th>Customer</th>
-                    <th>Finance amount</th>
-                    <th>Interest</th>
-                    <th>Amount given</th>
-                    <th>Total return</th>
-                    <th>Period collected</th>
-                    <th>Total collected</th>
-                    <th>Remaining</th>
-                    <th>Profit</th>
-                    <th>Status</th>
+                    <th style={{ textAlign: "right" }}>Finance amount</th>
+                    <th style={{ textAlign: "right" }}>Interest</th>
+                    <th style={{ textAlign: "right" }}>Amount given</th>
+                    <th style={{ textAlign: "right" }}>Total return</th>
+                    <th style={{ textAlign: "right" }}>Collected</th>
+                    <th style={{ textAlign: "right" }}>Remaining</th>
+                    <th style={{ textAlign: "right" }}>Profit</th>
+                    <th style={{ textAlign: "center" }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayedCustomers.map((row) => (
+                  {displayedCustomers.map((row, idx) => (
                     <tr key={row.finance_id}>
+                      <td style={{ color: "#64748b", fontWeight: "600" }}>{idx + 1}</td>
+                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{dateLabel(row.finance_date)}</td>
                       <td>
                         <b>{row.customer_name}</b>
-                        <small>{dateLabel(row.finance_date)}</small>
+                        {row.mobile_number ? <small>{row.mobile_number}</small> : null}
                       </td>
-                      <td>{money(row.gross_finance_amount)}</td>
-                      <td>{money(row.initial_deduction)}</td>
-                      <td>{money(row.net_disbursement)}</td>
-                      <td>{money(row.agreed_total_payable)}</td>
-                      <td style={{ fontWeight: row.period_collected > 0 ? "700" : "normal", color: row.period_collected > 0 ? "#059669" : "inherit" }}>
-                        {money(row.period_collected)}
+                      <td style={{ textAlign: "right" }}>{money(row.gross_finance_amount)}</td>
+                      <td style={{ textAlign: "right" }}>{money(row.initial_deduction)}</td>
+                      <td style={{ textAlign: "right" }}>{money(row.net_disbursement)}</td>
+                      <td style={{ textAlign: "right" }}>{money(row.agreed_total_payable)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {money(row.total_collected)}
+                        {row.period_collected > 0 && row.period_collected !== row.total_collected && (
+                          <small style={{ display: "block", color: "#059669", fontWeight: "600" }}>
+                            Period: {money(row.period_collected)}
+                          </small>
+                        )}
                       </td>
-                      <td>{money(row.total_collected)}</td>
-                      <td className="redText">{money(row.remaining)}</td>
-                      <td className="greenText">{money(row.profit)}</td>
-                      <td>
+                      <td style={{ textAlign: "right" }} className="redText">{money(row.remaining)}</td>
+                      <td style={{ textAlign: "right" }} className="greenText">{money(row.profit)}</td>
+                      <td style={{ textAlign: "center" }}>
                         <span className={`tag ${String(row.status || "").toLowerCase()}`}>
                           {row.status}
                         </span>

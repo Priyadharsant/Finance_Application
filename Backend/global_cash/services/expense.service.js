@@ -108,7 +108,7 @@ export async function recordExpense(client = pool, data) {
     throw new Error('Expense reason (description) is required');
   }
 
-  const validCategory = ['AUTO', 'DAILY', 'GENERAL'].includes(String(category).toUpperCase())
+  const validCategory = ['AUTO', 'DAILY', 'GENERAL', 'INTEREST'].includes(String(category).toUpperCase())
     ? String(category).toUpperCase()
     : 'GENERAL';
 
@@ -163,8 +163,12 @@ export async function getExpenses(client = pool, filters = {}) {
   }
 
   if (category && category !== 'ALL') {
-    params.push(category.toUpperCase());
-    conditions.push(`e.category = $${params.length}`);
+    if (category.toUpperCase() === 'INTEREST') {
+      conditions.push(`(e.category = 'INTEREST' OR e.expense_type = 'INTEREST' OR LOWER(e.description) LIKE '%interest%' OR LOWER(e.description) LIKE '%vatti%')`);
+    } else {
+      params.push(category.toUpperCase());
+      conditions.push(`e.category = $${params.length}`);
+    }
   }
 
   if (from) {
@@ -286,6 +290,7 @@ export async function getTotalExpenses(client = pool) {
       COALESCE(SUM(CASE WHEN category = 'AUTO' THEN amount ELSE 0 END), 0) AS auto_expenses,
       COALESCE(SUM(CASE WHEN category = 'DAILY' THEN amount ELSE 0 END), 0) AS daily_expenses,
       COALESCE(SUM(CASE WHEN category = 'GENERAL' THEN amount ELSE 0 END), 0) AS general_expenses,
+      COALESCE(SUM(CASE WHEN category = 'INTEREST' OR expense_type = 'INTEREST' OR LOWER(description) LIKE '%interest%' OR LOWER(description) LIKE '%vatti%' THEN amount ELSE 0 END), 0) AS interest_expenses,
       COUNT(*) AS total_count
     FROM expenses;
   `);
@@ -294,6 +299,7 @@ export async function getTotalExpenses(client = pool) {
     autoExpenses: parseFloat(res.rows[0].auto_expenses),
     dailyExpenses: parseFloat(res.rows[0].daily_expenses),
     generalExpenses: parseFloat(res.rows[0].general_expenses),
+    interestExpenses: parseFloat(res.rows[0].interest_expenses),
     totalCount: parseInt(res.rows[0].total_count, 10),
   };
 }

@@ -123,6 +123,13 @@ export default function AutoReports({
       }
 
       return true;
+    }).sort((a, b) => {
+      const da = new Date(a.start_date || a.disbursement_date || 0).getTime();
+      const db = new Date(b.start_date || b.disbursement_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
     });
   }, [loans, appliedRange, scope, search, customerId, status]);
 
@@ -389,6 +396,7 @@ export default function AutoReports({
           <table>
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Customer</th>
                 <th>Vehicle & Reg No</th>
                 <th>Loan Principal</th>
@@ -402,7 +410,7 @@ export default function AutoReports({
               </tr>
             </thead>
             <tbody>
-              {displayedLoans.map((l) => {
+              {displayedLoans.map((l, idx) => {
                 let fees = {};
                 try {
                   fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
@@ -420,6 +428,7 @@ export default function AutoReports({
 
                 return (
                   <tr key={l.id}>
+                    <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                     <td>
                       <b>
                         {l.first_name} {l.last_name}

@@ -38,24 +38,31 @@ export const exportDailyFinancePeriodReport = (report) => {
     return;
   }
 
-  const rows = report.customers.map((row, idx) => {
+  const sortedCustomers = [...(report.customers || [])].sort((a, b) => {
+    const da = new Date(a.finance_date || 0).getTime();
+    const db = new Date(b.finance_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+    const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+    return ca - cb;
+  });
+
+  const rows = sortedCustomers.map((row, idx) => {
     const agreed = Number(row.agreed_total_payable || 0);
     const collected = Number(row.total_collected || 0);
     const progressPct = agreed > 0 ? ((collected / agreed) * 100).toFixed(1) + "%" : "0%";
 
     return {
       "S.No": idx + 1,
-      "Customer Name": row.customer_name || "—",
       "Finance Date": dateLabel(row.finance_date),
-      "Gross Finance (₹)": Number(row.gross_finance_amount || 0),
-      "Upfront Interest (₹)": Number(row.initial_deduction || 0),
-      "Amount Given / Disbursed (₹)": Number(row.net_disbursement || 0),
-      "Total Agreed Return (₹)": agreed,
-      "Period Collected (₹)": Number(row.period_collected || 0),
-      "Total Collected To-Date (₹)": collected,
-      "Remaining Receivable (₹)": Number(row.remaining || 0),
-      "Recovery %": progressPct,
-      "Profit Earned (₹)": Number(row.profit || 0),
+      "Customer Name": row.customer_name || "—",
+      "Finance Amount (₹)": Number(row.gross_finance_amount || 0),
+      "Interest (₹)": Number(row.initial_deduction || 0),
+      "Amount Given (₹)": Number(row.net_disbursement || 0),
+      "Total Return (₹)": agreed,
+      "Collected (₹)": collected,
+      "Remaining (₹)": Number(row.remaining || 0),
+      "Profit (₹)": Number(row.profit || row.initial_deduction || 0),
       "Status": row.status || "ACTIVE",
     };
   });
@@ -65,21 +72,18 @@ export const exportDailyFinancePeriodReport = (report) => {
     const t = report.totals;
     const totalAgreed = Number(t.totalReturn || 0);
     const totalReturned = Number(t.returned || 0);
-    const overallPct = totalAgreed > 0 ? ((totalReturned / totalAgreed) * 100).toFixed(1) + "%" : "0%";
 
     rows.push({
       "S.No": "TOTAL",
-      "Customer Name": "SUMMARY TOTALS",
       "Finance Date": `${dateLabel(report.from)} to ${dateLabel(report.to)}`,
-      "Gross Finance (₹)": Number(t.financeAmount || 0),
-      "Upfront Interest (₹)": Number(t.profit || 0),
-      "Amount Given / Disbursed (₹)": Number(t.given || 0),
-      "Total Agreed Return (₹)": totalAgreed,
-      "Period Collected (₹)": Number(t.periodCollected || 0),
-      "Total Collected To-Date (₹)": totalReturned,
-      "Remaining Receivable (₹)": Number(t.remaining || 0),
-      "Recovery %": overallPct,
-      "Profit Earned (₹)": Number(t.profit || 0),
+      "Customer Name": `SUMMARY TOTALS (${sortedCustomers.length} Customers)`,
+      "Finance Amount (₹)": Number(t.financeAmount || 0),
+      "Interest (₹)": Number(t.profit || 0),
+      "Amount Given (₹)": Number(t.given || 0),
+      "Total Return (₹)": totalAgreed,
+      "Collected (₹)": totalReturned,
+      "Remaining (₹)": Number(t.remaining || 0),
+      "Profit (₹)": Number(t.profit || 0),
       "Status": "SUMMARY",
     });
   }
@@ -97,14 +101,14 @@ export const exportTotalDailyPortfolio = (customers = []) => {
     return;
   }
 
-  // Sort by active, completed, then alphabet
+  // Sort by date older to newest, then created_at, then alphabet
   const sorted = [...customers].sort((a, b) => {
-    const statusA = String(a.status || "ACTIVE").toUpperCase();
-    const statusB = String(b.status || "ACTIVE").toUpperCase();
-    const getPrio = (st) => (st === "ACTIVE" ? 1 : (st === "COMPLETED" ? 2 : 3));
-    const pA = getPrio(statusA);
-    const pB = getPrio(statusB);
-    if (pA !== pB) return pA - pB;
+    const da = new Date(a.finance_date || 0).getTime();
+    const db = new Date(b.finance_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+    const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+    if (ca !== cb) return ca - cb;
     const nameA = String(a.customer_name || "").toLowerCase();
     const nameB = String(b.customer_name || "").toLowerCase();
     return nameA.localeCompare(nameB);
@@ -133,7 +137,8 @@ export const exportTotalDailyPortfolio = (customers = []) => {
     totalRemaining += remaining;
 
     return {
-      "Sl": idx + 1,
+      "S.No": idx + 1,
+      "Finance Date": dateLabel(c.finance_date),
       "Name": c.customer_name || "—",
       "Total Loan": gross,
       "Pitibu": deduction,
@@ -141,13 +146,15 @@ export const exportTotalDailyPortfolio = (customers = []) => {
       "Income": agreed,
       "Vasul": collected,
       "Balance": remaining,
+      "Profit": deduction,
       "Status": c.status || "ACTIVE",
     };
   });
 
   // Summary Row
   rows.push({
-    "Sl": "TOTAL",
+    "S.No": "TOTAL",
+    "Finance Date": "",
     "Name": `${sorted.length} Customers`,
     "Total Loan": totalGross,
     "Pitibu": totalDeduction,
@@ -155,6 +162,7 @@ export const exportTotalDailyPortfolio = (customers = []) => {
     "Income": totalAgreed,
     "Vasul": totalCollected,
     "Balance": totalRemaining,
+    "Profit": totalDeduction,
     "Status": "",
   });
 
@@ -195,7 +203,16 @@ export const exportCustomerStatement = (customer, collections = []) => {
   ];
 
   // Sheet 2: Collections History
-  const historyRows = collections.map((p, idx) => ({
+  const sortedCollections = [...(collections || [])].sort((a, b) => {
+    const da = new Date(a.collection_date || 0).getTime();
+    const db = new Date(b.collection_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || 0).getTime();
+    const cb = new Date(b.created_at || 0).getTime();
+    return ca - cb;
+  });
+
+  const historyRows = sortedCollections.map((p, idx) => ({
     "S.No": idx + 1,
     "Collection Date": dateLabel(p.collection_date),
     "Amount Collected (₹)": Number(p.amount || 0),
@@ -244,7 +261,17 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
   let totalCollectedToday = 0;
   let totalRemainingDue = 0;
 
-  const rows = dailyList.map((c, idx) => {
+  const sortedDailyList = [...dailyList].sort((a, b) => {
+    const da = new Date(a.finance_date || 0).getTime();
+    const db = new Date(b.finance_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+    const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+    if (ca !== cb) return ca - cb;
+    return String(a.customer_name || "").localeCompare(String(b.customer_name || ""));
+  });
+
+  const rows = sortedDailyList.map((c, idx) => {
     const todayAmt = Number(c.today_collection || 0);
     const rem = Number(c.remaining || 0);
     totalCollectedToday += todayAmt;

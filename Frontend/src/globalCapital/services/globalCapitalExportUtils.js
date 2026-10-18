@@ -460,6 +460,15 @@ export const exportCapitalTransactions = (transactions = [], filters = {}) => {
     );
   }
 
+  list.sort((a, b) => {
+    const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+    const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
+
   const rows = list.map((tx, idx) => ({
     "S.No": idx + 1,
     "Date": formatDate(tx.effective_date || tx.transaction_date || tx.created_at),
@@ -507,6 +516,15 @@ export const exportBusinessExpenses = (expenses = [], filters = {}) => {
     );
   }
 
+  list.sort((a, b) => {
+    const da = new Date(a.expense_date || a.date || 0).getTime();
+    const db = new Date(b.expense_date || b.date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
+
   const rows = list.map((exp, idx) => ({
     "S.No": idx + 1,
     "Date": formatDate(exp.expense_date),
@@ -539,9 +557,12 @@ export const exportGlobalLedger = (ledger = [], filters = {}) => {
 
   // Sort chronological ascending to calculate running balance
   list.sort((a, b) => {
-    const da = new Date(a.effective_date || a.transaction_date || a.created_at || 0).getTime();
-    const db = new Date(b.effective_date || b.transaction_date || b.created_at || 0).getTime();
-    return da - db;
+    const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+    const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
   });
 
   let runningBal = 0;
@@ -614,7 +635,7 @@ export const exportGlobalLedger = (ledger = [], filters = {}) => {
   }
 
   const rows = filtered.map((item, idx) => ({
-    "Entry #": item.id || idx + 1,
+    "S.No": idx + 1,
     "Date": formatDate(item.computedDate),
     "Category / Type": item.type || item.category || "GENERAL",
     "Direction": item.direction || (item.creditAmt > 0 ? "CREDIT" : "DEBIT"),
@@ -739,8 +760,16 @@ export const exportMasterFinancialReport = ({
 
   // 5. Capital Transactions
   if (transactions.length) {
-    const txRows = transactions.map((t, idx) => ({
-      "Tx ID": t.id || idx + 1,
+    const sortedTx = [...transactions].sort((a, b) => {
+      const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+      const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
+    const txRows = sortedTx.map((t, idx) => ({
+      "S.No": idx + 1,
       "Date": formatDate(t.effective_date || t.transaction_date || t.created_at),
       "Partner Name": t.partner_name || t.name || "—",
       "Type": t.transaction_type || t.type || "CONTRIBUTION",
@@ -756,9 +785,17 @@ export const exportMasterFinancialReport = ({
 
   // 6. Expenses
   if (expenses.length) {
-    const expRows = expenses.map((e, idx) => ({
+    const sortedExp = [...expenses].sort((a, b) => {
+      const da = new Date(a.expense_date || a.date || 0).getTime();
+      const db = new Date(b.expense_date || b.date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
+    const expRows = sortedExp.map((e, idx) => ({
       "S.No": idx + 1,
-      "Date": formatDate(e.expense_date),
+      "Date": formatDate(e.expense_date || e.date),
       "Description": e.title || e.description || "—",
       "Category": e.category || "GENERAL",
       "Module": e.source_module || "GENERAL",
@@ -774,9 +811,12 @@ export const exportMasterFinancialReport = ({
   if (ledger.length) {
     let runBal = 0;
     const sortedLedger = [...ledger].sort((a, b) => {
-      const da = new Date(a.effective_date || a.transaction_date || a.created_at || 0).getTime();
-      const db = new Date(b.effective_date || b.transaction_date || b.created_at || 0).getTime();
-      return da - db;
+      const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+      const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
     });
 
     const ledgerRows = sortedLedger.map((l, idx) => {
@@ -800,7 +840,7 @@ export const exportMasterFinancialReport = ({
       runBal += creditAmt - debitAmt;
 
       return {
-        "Entry #": l.id || idx + 1,
+        "S.No": idx + 1,
         "Date": formatDate(l.effective_date || l.transaction_date || l.created_at),
         "Category / Type": l.type || l.category || "GENERAL",
         "Direction": l.direction || (creditAmt > 0 ? "CREDIT" : "DEBIT"),
@@ -817,7 +857,15 @@ export const exportMasterFinancialReport = ({
 
   // 8. Auto Loans
   if (autoLoans.length) {
-    const loanRows = autoLoans.map((l, idx) => {
+    const sortedAuto = [...autoLoans].sort((a, b) => {
+      const da = new Date(a.date || a.start_date || a.disbursement_date || 0).getTime();
+      const db = new Date(b.date || b.start_date || b.disbursement_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
+    const loanRows = sortedAuto.map((l, idx) => {
       let fees = {};
       try {
         fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
@@ -861,7 +909,15 @@ export const exportMasterFinancialReport = ({
 
   // 9. Daily Finance Accounts
   if (dailyCustomers.length) {
-    const dailyCustRows = dailyCustomers.map((c, idx) => ({
+    const sortedDaily = [...dailyCustomers].sort((a, b) => {
+      const da = new Date(a.finance_date || 0).getTime();
+      const db = new Date(b.finance_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+      const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+      return ca - cb;
+    });
+    const dailyCustRows = sortedDaily.map((c, idx) => ({
       "S.No": idx + 1,
       "Customer": c.customer_name || "—",
       "Finance Date": formatDate(c.finance_date),
@@ -928,7 +984,15 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
 
   // 1. SHEET 1: Daily Finance & Master Reconciliation
   const distinctMonths = reportData.distinctMonths || [];
-  const dfLoans = reportData.dailyFinance?.loans || [];
+  const rawDfLoans = reportData.dailyFinance?.loans || [];
+  const dfLoans = [...rawDfLoans].sort((a, b) => {
+    const da = new Date(a.date || a.finance_date || 0).getTime();
+    const db = new Date(b.date || b.finance_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+    const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+    return ca - cb;
+  });
   const dfTotals = reportData.dailyFinance?.totals || {};
   const autoTotals = reportData.autoFinance?.totals || {};
   const recon = reportData.reconciliation || {};
@@ -1009,7 +1073,15 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
   XLSX.utils.book_append_sheet(workbook, wsSheet1, "Daily Finance & Reconciliation");
 
   // 2. SHEET 2: Auto Finance
-  const autoLoans = reportData.autoFinance?.loans || [];
+  const rawAutoLoans = reportData.autoFinance?.loans || [];
+  const autoLoans = [...rawAutoLoans].sort((a, b) => {
+    const da = new Date(a.date || a.start_date || a.disbursement_date || 0).getTime();
+    const db = new Date(b.date || b.start_date || b.disbursement_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
   const totalAutoLoan = autoLoans.reduce((s, r) => s + Number(r.loanAmount || 0), 0);
   const totalAutoRepayable = autoLoans.reduce((s, r) => s + Number(r.totalAmount || 0), 0);
   const totalAutoByHand = autoLoans.reduce((s, r) => s + Number(r.byHand || 0), 0);
@@ -1154,7 +1226,15 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
   XLSX.utils.book_append_sheet(workbook, wsSheet3, "Partner Capital");
 
   // 4. SHEET 4: Expenses (Selavu Matrix)
-  const expenses = reportData.expenses?.items || [];
+  const rawExpenses = reportData.expenses?.items || [];
+  const expenses = [...rawExpenses].sort((a, b) => {
+    const da = new Date(a.date || a.expense_date || 0).getTime();
+    const db = new Date(b.date || b.expense_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
   const catTotals = reportData.expenses?.categoryTotals || {};
   const sheet4Data = [];
   sheet4Data.push([
@@ -1223,13 +1303,17 @@ export const exportMasterBusinessLedgerReport = (reportData, customFileName) => 
 // ============================================================================
 export const sortLoansByStatusAndName = (loans = []) => {
   return [...loans].sort((a, b) => {
-    const statusA = String(a.status || a.loan_status || a.account_status || "ACTIVE").toUpperCase();
-    const statusB = String(b.status || b.loan_status || b.account_status || "ACTIVE").toUpperCase();
-    const getPrio = (st) => (st === "ACTIVE" ? 1 : (st === "COMPLETED" ? 2 : 3));
-    const pA = getPrio(statusA);
-    const pB = getPrio(statusB);
-    if (pA !== pB) return pA - pB;
+    // 1. Primary sort: Finance loan date (older to newest)
+    const da = new Date(a.finance_date || a.date || a.start_date || a.disbursement_date || 0).getTime();
+    const db = new Date(b.finance_date || b.date || b.start_date || b.disbursement_date || 0).getTime();
+    if (da !== db) return da - db;
 
+    // 2. Tie-breaker if multiple loans on the same date: DB creation date/time
+    const ca = new Date(a.created_at || a.account_created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.account_created_at || b.createdAt || 0).getTime();
+    if (ca !== cb) return ca - cb;
+
+    // 3. Fallback: Customer name alphabetical
     const nameA = String(
       a.customerName || a.customer_name || `${a.first_name || ""} ${a.last_name || ""}`.trim() || ""
     ).toLowerCase();
@@ -1471,7 +1555,14 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
       if (loanId && p.loan_id === loanId) return true;
       if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
       return false;
-    }).sort((a, b) => new Date(a.payment_date || 0) - new Date(b.payment_date || 0));
+    }).sort((a, b) => {
+      const da = new Date(a.payment_date || 0).getTime();
+      const db = new Date(b.payment_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
 
     if (custPayments.length > 0) {
       let runBal = loanTotal;
@@ -1579,7 +1670,14 @@ export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {
       if (loanId && p.loan_id === loanId) return true;
       if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
       return false;
-    }).sort((a, b) => new Date(a.payment_date || 0) - new Date(b.payment_date || 0));
+    }).sort((a, b) => {
+      const da = new Date(a.payment_date || 0).getTime();
+      const db = new Date(b.payment_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
 
     if (custPayments.length > 0) {
       let runBal = loanTotal;
@@ -1631,8 +1729,28 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   const dfCollections = dfData.collections || additionalData.collections || [];
   const allExpenses = reportData?.expenses?.items || additionalData.expenses || [];
 
+  const customerMetaMap = new Map();
+  (additionalData.customers || []).forEach((c) => {
+    const key = c.finance_id || c.financeId || c.customer_id;
+    if (key) customerMetaMap.set(String(key), c);
+    const nameKey = (c.customer_name || c.customerName || "").trim().toLowerCase();
+    if (nameKey) customerMetaMap.set(nameKey, c);
+  });
+
+  const enrichedLoans = dfLoans.map((l) => {
+    const meta =
+      customerMetaMap.get(String(l.financeId || l.finance_id)) ||
+      customerMetaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase());
+    return {
+      ...l,
+      finance_date: l.finance_date || l.date || meta?.finance_date,
+      created_at: l.created_at || l.account_created_at || meta?.created_at || meta?.account_created_at,
+      account_created_at: l.account_created_at || l.created_at || meta?.account_created_at || meta?.created_at,
+    };
+  });
+
   const workbook = XLSX.utils.book_new();
-  const sortedLoans = sortLoansByStatusAndName(dfLoans);
+  const sortedLoans = sortLoansByStatusAndName(enrichedLoans);
 
   // -------------------------------------------------------------
   // SHEET 1: Portfolio Table (Replacing Ledger, removing 2nd portfolio)
@@ -1664,6 +1782,7 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
 
     return {
       "Sl": idx + 1,
+      "Finance Date": formatDate(l.finance_date || l.date || l.start_date),
       "Name": custName,
       "Total Loan": gross,
       "Pitibu": pitibu,
@@ -1671,22 +1790,23 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
       "Income": income,
       "Vasul": vasul,
       "Balance": balance,
+      "Profit": pitibu,
       "Status": status,
     };
   });
 
   const sheet1Data = [];
-  sheet1Data.push(["Sl", "Name", "Total Loan", "Pitibu", "By hand", "Income", "Vasul", "Balance", "Status"]);
+  sheet1Data.push(["Sl", "Finance Date", "Name", "Total Loan", "Pitibu", "By hand", "Income", "Vasul", "Balance", "Profit", "Status"]);
 
   portfolioRows.forEach((r) => {
     sheet1Data.push([
-      r["Sl"], r["Name"], r["Total Loan"], r["Pitibu"], r["By hand"], r["Income"], r["Vasul"], r["Balance"], r["Status"]
+      r["Sl"], r["Finance Date"], r["Name"], r["Total Loan"], r["Pitibu"], r["By hand"], r["Income"], r["Vasul"], r["Balance"], r["Profit"], r["Status"]
     ]);
   });
 
   if (portfolioRows.length > 0) {
     sheet1Data.push([
-      "TOTAL", `${sortedLoans.length} Customers`, totLoanSum, totPitibuSum, totByHandSum, totIncomeSum, totVasulSum, totBalanceSum, ""
+      "TOTAL", "", `${sortedLoans.length} Customers`, totLoanSum, totPitibuSum, totByHandSum, totIncomeSum, totVasulSum, totBalanceSum, totPitibuSum, ""
     ]);
   }
 
@@ -1694,7 +1814,8 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   const dailyExpensesPre = allExpenses.filter(e => {
     const cat = (e.category || e.categoryLabel || "").toUpperCase();
     const desc = (e.description || e.title || "").toLowerCase();
-    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection");
+    const type = (e.expense_type || "").toUpperCase();
+    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection") || desc.includes("interest") || type === "INTEREST" || desc.includes("vatti");
   });
   const totDailyExpPre = dailyExpensesPre.reduce((s, e) => s + Number(e.amount || 0), 0);
   const dfSelavu = Number(dfData.totals?.selavu || totDailyExpPre);
@@ -1705,12 +1826,14 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   // -------------------------------------------------------------
   sheet1Data.push([]);
   sheet1Data.push(["DAILY SUMMARY", "AMOUNT (₹)"]);
-  sheet1Data.push(["Total Loan", totLoanSum]);
-  sheet1Data.push(["Pitibu", totPitibuSum]);
-  sheet1Data.push(["Income (Vasul)", totVasulSum]);
-  sheet1Data.push(["Balance", totBalanceSum]);
-  sheet1Data.push(["Distribut (By Hand)", totByHandSum]);
-  sheet1Data.push(["Balance + Income", totBalanceSum + totVasulSum]);
+  sheet1Data.push(["Total Customers", sortedLoans.length]);
+  sheet1Data.push(["Finance Amount", totLoanSum]);
+  sheet1Data.push(["Interest (Pitibu)", totPitibuSum]);
+  sheet1Data.push(["Amount Given", totByHandSum]);
+  sheet1Data.push(["Total Return", totIncomeSum]);
+  sheet1Data.push(["Collected (Vasul)", totVasulSum]);
+  sheet1Data.push(["Remaining (Balance)", totBalanceSum]);
+  sheet1Data.push(["Profit", totPitibuSum]);
   sheet1Data.push(["Selavu (Expenses)", dfSelavu]);
   sheet1Data.push(["Cash in Hand (Kaieruppu)", dfKaieruppu]);
 
@@ -1752,7 +1875,14 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
       if (fId && p.finance_id === fId) return true;
       if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
       return false;
-    }).sort((a, b) => new Date(a.collection_date || 0) - new Date(b.collection_date || 0));
+    }).sort((a, b) => {
+      const da = new Date(a.collection_date || 0).getTime();
+      const db = new Date(b.collection_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
 
     if (custPayments.length > 0) {
       let runBal = loanTotal;
@@ -1763,6 +1893,7 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
 
         collectionRows.push({
           "Sl": pIdx === 0 ? collSl++ : "",
+          "Finance Date": pIdx === 0 ? formatDate(l.finance_date || l.date || l.start_date) : "",
           "Name": pIdx === 0 ? custName : "", // Name only on first collection row
           "Date": formatDate(p.collection_date),
           "Collection Amount": amt,
@@ -1776,6 +1907,7 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   if (collectionRows.length > 0) {
     collectionRows.push({
       "Sl": "TOTAL",
+      "Finance Date": "",
       "Name": "",
       "Date": "",
       "Collection Amount": grandCollAmt,
@@ -1795,7 +1927,8 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   const dailyExpenses = allExpenses.filter(e => {
     const cat = (e.category || e.categoryLabel || "").toUpperCase();
     const desc = (e.description || e.title || "").toLowerCase();
-    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection");
+    const type = (e.expense_type || "").toUpperCase();
+    return cat === "DAILY" || cat.includes("DAILY") || desc.includes("daily") || desc.includes("tea") || desc.includes("vasul") || desc.includes("petrol") || desc.includes("collection") || desc.includes("interest") || type === "INTEREST" || desc.includes("vatti");
   });
 
   let totDailyExp = 0;
@@ -1837,9 +1970,29 @@ export const exportDailyMonthlyCollectionReport = (reportData, additionalData = 
   const dfLoans = dfData.loans || additionalData.customers || [];
   const dfCollections = dfData.collections || additionalData.collections || [];
 
+  const customerMetaMap = new Map();
+  (additionalData.customers || []).forEach((c) => {
+    const key = c.finance_id || c.financeId || c.customer_id;
+    if (key) customerMetaMap.set(String(key), c);
+    const nameKey = (c.customer_name || c.customerName || "").trim().toLowerCase();
+    if (nameKey) customerMetaMap.set(nameKey, c);
+  });
+
+  const enrichedLoans = dfLoans.map((l) => {
+    const meta =
+      customerMetaMap.get(String(l.financeId || l.finance_id)) ||
+      customerMetaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase());
+    return {
+      ...l,
+      finance_date: l.finance_date || l.date || meta?.finance_date,
+      created_at: l.created_at || l.account_created_at || meta?.created_at || meta?.account_created_at,
+      account_created_at: l.account_created_at || l.created_at || meta?.account_created_at || meta?.created_at,
+    };
+  });
+
   const targetMonth = selectedMonth || new Date().toISOString().slice(0, 7);
   const workbook = XLSX.utils.book_new();
-  const sortedLoans = sortLoansByStatusAndName(dfLoans);
+  const sortedLoans = sortLoansByStatusAndName(enrichedLoans);
 
   const collectionRows = [];
   let collSl = 1;
@@ -1859,7 +2012,14 @@ export const exportDailyMonthlyCollectionReport = (reportData, additionalData = 
       if (fId && p.finance_id === fId) return true;
       if (p.customer_name && custName && p.customer_name.trim().toLowerCase() === custName.trim().toLowerCase()) return true;
       return false;
-    }).sort((a, b) => new Date(a.collection_date || 0) - new Date(b.collection_date || 0));
+    }).sort((a, b) => {
+      const da = new Date(a.collection_date || 0).getTime();
+      const db = new Date(b.collection_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
 
     if (custPayments.length > 0) {
       let runBal = loanTotal;
@@ -1870,6 +2030,7 @@ export const exportDailyMonthlyCollectionReport = (reportData, additionalData = 
 
         collectionRows.push({
           "Sl": pIdx === 0 ? collSl++ : "",
+          "Finance Date": pIdx === 0 ? formatDate(l.finance_date || l.date || l.start_date) : "",
           "Name": pIdx === 0 ? custName : "", // Name only on first collection row
           "Date": formatDate(p.collection_date),
           "Collection Amount": amt,
@@ -1883,6 +2044,7 @@ export const exportDailyMonthlyCollectionReport = (reportData, additionalData = 
   if (collectionRows.length > 0) {
     collectionRows.push({
       "Sl": "TOTAL",
+      "Finance Date": "",
       "Name": "",
       "Date": "",
       "Collection Amount": grandCollAmt,
@@ -1985,7 +2147,16 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     "Allowances & Travel (₹)", "Rent & EB (₹)", "Salary & Wages (₹)", "Interest Paid (₹)", "Other Expenses (₹)", "Total Expense (₹)"
   ]);
 
-  allExpenses.forEach((e, idx) => {
+  const sortedExpenses = [...allExpenses].sort((a, b) => {
+    const da = new Date(a.date || a.expense_date || 0).getTime();
+    const db = new Date(b.date || b.expense_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
+
+  sortedExpenses.forEach((e, idx) => {
     const amt = Number(e.amount || 0);
     sheet2Data.push([
       idx + 1,
@@ -2033,6 +2204,13 @@ export const exportGlobalCategoryReport = (reportData, additionalData = {}, cust
     const type = (t.transaction_type || t.type || "").toUpperCase();
     if (type.includes("PROFIT") || type.includes("SHARE")) return false;
     return true;
+  }).sort((a, b) => {
+    const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+    const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
   });
   let totTxAmt = 0;
 

@@ -35,18 +35,42 @@ export default function ExpensesTab({
     ? expenses.expenses
     : [];
 
+  const sortedExpenseList = useMemo(() => {
+    let list = [...expenseList];
+    if (expenseFilterCategory === "INTEREST") {
+      list = list.filter((e) => {
+        const cat = (e.category || "").toUpperCase();
+        const type = (e.expense_type || "").toUpperCase();
+        const desc = (e.description || "").toLowerCase();
+        return cat === "INTEREST" || type === "INTEREST" || desc.includes("interest") || desc.includes("vatti");
+      });
+    }
+    return list.sort(
+      (a, b) =>
+        new Date(a.expense_date || a.created_at || 0).getTime() -
+        new Date(b.expense_date || b.created_at || 0).getTime()
+    );
+  }, [expenseList, expenseFilterCategory]);
+
   const filteredTotal = useMemo(() => {
-    return expenseList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }, [expenseList]);
+    return sortedExpenseList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  }, [sortedExpenseList]);
 
   const categoryBreakdown = useMemo(() => {
     const map = {
       AUTO: { total: 0, count: 0 },
       DAILY: { total: 0, count: 0 },
       GENERAL: { total: 0, count: 0 },
+      INTEREST: { total: 0, count: 0 },
     };
     expenseList.forEach((e) => {
       const cat = (e.category || "GENERAL").toUpperCase();
+      const type = (e.expense_type || "").toUpperCase();
+      const desc = (e.description || "").toLowerCase();
+      if (cat === "INTEREST" || type === "INTEREST" || desc.includes("interest") || desc.includes("vatti")) {
+        map.INTEREST.total += Number(e.amount || 0);
+        map.INTEREST.count += 1;
+      }
       if (!map[cat]) map[cat] = { total: 0, count: 0 };
       map[cat].total += Number(e.amount || 0);
       map[cat].count += 1;
@@ -66,13 +90,13 @@ export default function ExpensesTab({
           <button
             className="secondaryBtn"
             onClick={() =>
-              exportBusinessExpenses(expenseList, {
+              exportBusinessExpenses(sortedExpenseList, {
                 label: expenseFilterMonth ? `${expenseFilterYear}_${expenseFilterMonth}` : `${expenseFilterYear}_All`,
               })
             }
             title="Export Filtered Expenses Report to Excel"
           >
-            <Download size={16} /> Export Report (Excel) ({expenseList.length})
+            <Download size={16} /> Export Report (Excel) ({sortedExpenseList.length})
           </button>
           <button className="primaryBtn" onClick={onOpenAddExpense}>
             <Plus size={16} /> Record Expense
@@ -124,6 +148,13 @@ export default function ExpensesTab({
             onClick={() => setExpenseFilterCategory("GENERAL")}
           >
             <Building size={14} /> General
+          </button>
+          <button
+            type="button"
+            className={`expenseCategoryTab ${expenseFilterCategory === "INTEREST" ? "active tab-interest" : ""}`}
+            onClick={() => setExpenseFilterCategory("INTEREST")}
+          >
+            <Receipt size={14} /> Interest Paid
           </button>
         </div>
 
@@ -278,6 +309,7 @@ export default function ExpensesTab({
           <table className="financeTable">
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Date</th>
                 <th>Reason</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
@@ -285,8 +317,9 @@ export default function ExpensesTab({
               </tr>
             </thead>
             <tbody>
-              {expenseList.map((exp) => (
+              {sortedExpenseList.map((exp, idx) => (
                 <tr key={exp.id}>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>{formatDate(exp.expense_date)}</td>
                   <td>
                     {(() => {
@@ -338,9 +371,9 @@ export default function ExpensesTab({
                   </td>
                 </tr>
               ))}
-              {expenseList.length === 0 && (
+              {sortedExpenseList.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: "center", padding: "42px 20px" }}>
+                  <td colSpan="5" style={{ textAlign: "center", padding: "42px 20px" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
                       <Receipt size={32} color="#94a3b8" />
                       <strong style={{ color: "#334155" }}>No expenses found</strong>

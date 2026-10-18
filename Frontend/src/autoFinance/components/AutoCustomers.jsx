@@ -114,6 +114,7 @@ export default function AutoCustomers({
         <table>
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
               <th>Code</th>
               <th>Customer Name</th>
               <th>Phone Number</th>
@@ -123,12 +124,13 @@ export default function AutoCustomers({
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((c) => (
+            {filteredCustomers.map((c, idx) => (
               <tr
                 key={c.id}
                 className="clickable"
                 onClick={() => setSelectedCustomer(c)}
               >
+                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                 <td>
                   <span className="tag autoTag">{c.customer_code}</span>
                 </td>

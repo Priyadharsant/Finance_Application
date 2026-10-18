@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { TrendingUp, X, Sparkles } from "lucide-react";
+import { TrendingUp, X, Sparkles, AlertCircle, ArrowRight } from "lucide-react";
 import { money, today } from "../services/dailyFinanceApi.js";
 
 export default function IncreaseLoanModal({
@@ -24,35 +24,41 @@ export default function IncreaseLoanModal({
     )
   );
 
-  const [additionalAmount, setAdditionalAmount] = useState("");
+  const [newLoanAmount, setNewLoanAmount] = useState(
+    currentGross > 0 ? String(currentGross) : ""
+  );
   const [interestType, setInterestType] = useState("PERCENT");
   const [interestValue, setInterestValue] = useState("10");
+  const [dailyAgreedDue, setDailyAgreedDue] = useState(
+    customer.daily_agreed_due ? String(customer.daily_agreed_due) : ""
+  );
   const [effectiveDate, setEffectiveDate] = useState(today());
-  const [notes, setNotes] = useState("Additional loan amount top-up");
+  const [notes, setNotes] = useState("Top-up Refinance");
 
-  const addNum = Number(additionalAmount || 0);
+  const newLoanNum = Number(newLoanAmount || 0);
   const intValNum = Number(interestValue || 0);
 
-  const additionalDeduction =
+  // Interest calculated on full new loan amount as requested
+  const interestDeduction =
     interestType === "PERCENT"
-      ? Math.round((addNum * intValNum) / 100)
+      ? Math.round((newLoanNum * intValNum) / 100)
       : Math.round(intValNum);
 
-  const netDisbursement = Math.max(0, addNum - additionalDeduction);
-  const newTotalGross = currentGross + addNum;
-  const newTotalReturn = currentAgreed + addNum;
-  const newRemaining = currentRemaining + addNum;
+  const standardDisbursement = Math.max(0, newLoanNum - interestDeduction);
+  const cashHandedOver = standardDisbursement - currentRemaining;
+  const isInvalidPayout = newLoanNum > 0 && cashHandedOver < 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (addNum <= 0) return;
+    if (newLoanNum <= 0 || isInvalidPayout) return;
     onSubmit({
       financeId: customer.finance_id,
-      additionalAmount: addNum,
+      newLoanAmount: newLoanNum,
       interestType,
       interestValue: intValNum,
+      dailyAgreedDue: Number(dailyAgreedDue || 0),
       effectiveDate,
-      notes,
+      notes: notes || `Top-up Refinance (Previous balance ₹${currentRemaining} settled; Net cash given: ₹${cashHandedOver})`,
     });
   };
 
@@ -67,7 +73,7 @@ export default function IncreaseLoanModal({
         className="formCard modalForm"
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        style={{ width: "min(560px, 94vw)" }}
+        style={{ width: "min(580px, 94vw)" }}
       >
         <button type="button" className="close" onClick={onClose}>
           <X size={18} />
@@ -75,48 +81,54 @@ export default function IncreaseLoanModal({
 
         <div className="formTitle">
           <span className="overline" style={{ display: "flex", alignItems: "center", gap: "5px", color: "#0d9488" }}>
-            <TrendingUp size={14} /> LOAN EXPANSION & TOP-UP
+            <TrendingUp size={14} /> LOAN REFINANCE & TOP-UP
           </span>
-          <h2>Increase Loan Amount</h2>
-          <p>Add additional principal to customer's active daily finance account.</p>
+          <h2>Increase Loan / Start New Loan</h2>
+          <p>Closes previous active loan and starts a new loan with previous balance deducted.</p>
         </div>
 
+        {/* Previous Loan Status Card */}
         <div style={{ marginBottom: "16px", padding: "12px 14px", background: "#f8fafc", borderRadius: "12px", border: "1.5px solid #e2e8f0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a" }}>
-              {customer.customer_name}
-            </span>
+            <div>
+              <span style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a" }}>
+                {customer.customer_name}
+              </span>
+              <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "8px" }}>
+                (Current Loan)
+              </span>
+            </div>
             <span className={`tag ${String(customer.status || "ACTIVE").toLowerCase()}`}>
               {customer.status || "ACTIVE"}
             </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginTop: "8px", fontSize: "12px" }}>
             <div>
-              <span style={{ color: "#64748b", display: "block" }}>Current Gross:</span>
+              <span style={{ color: "#64748b", display: "block" }}>Previous Loan:</span>
               <strong style={{ color: "#0f172a" }}>{money(currentGross)}</strong>
             </div>
             <div>
-              <span style={{ color: "#64748b", display: "block" }}>Agreed Return:</span>
-              <strong style={{ color: "#0f172a" }}>{money(currentAgreed)}</strong>
+              <span style={{ color: "#64748b", display: "block" }}>Collected:</span>
+              <strong style={{ color: "#047857" }}>{money(currentCollected)}</strong>
             </div>
             <div>
-              <span style={{ color: "#64748b", display: "block" }}>Remaining Due:</span>
-              <strong style={{ color: "#b91c1c" }}>{money(currentRemaining)}</strong>
+              <span style={{ color: "#64748b", display: "block" }}>Remaining Balance:</span>
+              <strong style={{ color: "#b91c1c", fontSize: "13px" }}>{money(currentRemaining)}</strong>
             </div>
           </div>
         </div>
 
         <div className="formGrid">
           <label>
-            Additional Loan Amount (₹) *
+            New Total Loan Amount (₹) *
             <input
               type="number"
               min="1"
               step="0.01"
               required
-              placeholder="e.g. 5000"
-              value={additionalAmount}
-              onChange={(e) => setAdditionalAmount(e.target.value)}
+              placeholder="e.g. 50000"
+              value={newLoanAmount}
+              onChange={(e) => setNewLoanAmount(e.target.value)}
             />
           </label>
 
@@ -154,16 +166,36 @@ export default function IncreaseLoanModal({
             />
           </label>
 
-          <label className="wide">
-            Top-up Reason / Notes
+          <label>
+            Daily Agreed Due (₹)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 500 (optional)"
+              value={dailyAgreedDue}
+              onChange={(e) => setDailyAgreedDue(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Notes / Remarks
             <input
               type="text"
-              placeholder="e.g. Emergency top-up / festival business advance"
+              placeholder="e.g. Top-up Refinance"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
           </label>
         </div>
+
+        {/* Error notification if new payout cannot cover previous balance */}
+        {isInvalidPayout && (
+          <div style={{ marginTop: "12px", padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", color: "#b91c1c", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <AlertCircle size={16} />
+            <span>New loan payout ({money(standardDisbursement)}) is less than previous balance ({money(currentRemaining)}). Please increase loan amount.</span>
+          </div>
+        )}
 
         {/* Real-time Calculation Breakdown Box */}
         <div
@@ -171,27 +203,33 @@ export default function IncreaseLoanModal({
           style={{ marginTop: "16px", background: "linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%)", borderColor: "#99f6e4" }}
         >
           <span>
-            Upfront Interest<b>{money(additionalDeduction)}</b>
+            New Finance Amount<b>{money(newLoanNum)}</b>
           </span>
           <span>
-            Cash Disbursed Now<b style={{ color: "#0284c7" }}>{money(netDisbursement)}</b>
+            Interest ({interestType === "PERCENT" ? `${intValNum}%` : "Fixed"})<b>{money(interestDeduction)}</b>
           </span>
           <span>
-            New Total Return<b style={{ color: "#047857" }}>{money(newTotalReturn)}</b>
+            Prev. Balance Settled<b style={{ color: "#dc2626" }}>- {money(currentRemaining)}</b>
           </span>
           <span>
-            New Remaining<b style={{ color: "#b91c1c" }}>{money(newRemaining)}</b>
+            Actual Cash Given Now<b style={{ color: "#0284c7", fontSize: "15px" }}>{money(Math.max(0, cashHandedOver))}</b>
+          </span>
+          <span>
+            Total Return to Collect<b style={{ color: "#047857" }}>{money(newLoanNum)}</b>
+          </span>
+          <span>
+            Previous Loan Status<b style={{ color: "#059669" }}>Will be CLOSED</b>
           </span>
         </div>
 
         <button
           type="submit"
           className="primary full"
-          disabled={busy || addNum <= 0}
+          disabled={busy || newLoanNum <= 0 || isInvalidPayout}
           style={{ marginTop: "18px" }}
         >
           <Sparkles size={16} />
-          {busy ? "Updating..." : `Confirm & Disburse +${money(addNum)}`}
+          {busy ? "Processing..." : `Confirm & Start New Loan (Give ${money(Math.max(0, cashHandedOver))})`}
         </button>
       </form>
     </div>

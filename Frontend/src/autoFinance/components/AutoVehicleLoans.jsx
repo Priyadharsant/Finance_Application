@@ -264,6 +264,7 @@ export default function AutoVehicleLoans({
         <table>
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
               <th>Customer</th>
               <th>Vehicle &amp; Reg No</th>
               <th>Loan Details</th>
@@ -273,12 +274,13 @@ export default function AutoVehicleLoans({
             </tr>
           </thead>
           <tbody>
-            {vehiclePageLoans.map((l) => (
+            {vehiclePageLoans.map((l, idx) => (
               <tr
                 key={l.id}
                 className="clickable"
                 onClick={() => openLoanDetails(l.id)}
               >
+                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                 <td>
                   <div className="customerNameCell">
                     <div>

@@ -1,7 +1,7 @@
 import React from "react";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Empty, PhoneLink } from "./CommonComponents.jsx";
-import { money } from "../services/dailyFinanceApi.js";
+import { money, dateLabel } from "../services/dailyFinanceApi.js";
 
 export default function DailyCustomers({
   customers = [],
@@ -11,6 +11,7 @@ export default function DailyCustomers({
   setStatus,
   setShowAdd,
   openDetails,
+  loadingDetailsId,
   onOpenCloseLoan,
   onOpenIncreaseLoan,
 }) {
@@ -19,7 +20,7 @@ export default function DailyCustomers({
       <div className="intro">
         <div>
           <span className="overline">CUSTOMERS</span>
-          <h2>Customer Loans</h2>
+          <h2>Customer Loans ({customers.length})</h2>
           <p>
             Click a customer to open loan details and payment history.
           </p>
@@ -48,6 +49,8 @@ export default function DailyCustomers({
         <table>
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
+              <th style={{ textAlign: "center" }}>Finance date</th>
               <th>Customer</th>
               <th>Finance amount</th>
               <th>Interest</th>
@@ -61,16 +64,30 @@ export default function DailyCustomers({
             </tr>
           </thead>
           <tbody>
-            {customers.map((customer) => {
+            {customers.map((customer, idx) => {
               const isActive = customer.status !== "COMPLETED" && customer.status !== "CANCELLED";
+              const isThisLoading = loadingDetailsId === customer.customer_id;
               return (
                 <tr
                   key={customer.finance_id}
-                  onClick={() => openDetails(customer.customer_id)}
-                  className="clickable"
+                  onClick={() => openDetails(customer.customer_id, customer)}
+                  className={`clickable ${isThisLoading ? "rowLoading" : ""}`}
                 >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{dateLabel(customer.finance_date)}</td>
                   <td>
-                    <b>{customer.customer_name}</b>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <b>{customer.customer_name}</b>
+                      {isThisLoading && (
+                        <Loader2
+                          size={13}
+                          style={{
+                            color: "#0d9488",
+                            animation: "autoSpin 0.75s linear infinite",
+                          }}
+                        />
+                      )}
+                    </div>
                     <small>
                       {customer.mobile_number ? (
                         <PhoneLink phone={customer.mobile_number} />
@@ -102,7 +119,7 @@ export default function DailyCustomers({
                   </td>
                   <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "inline-flex", gap: "6px" }}>
-                      {onOpenIncreaseLoan && (
+                      {isActive && onOpenIncreaseLoan && (
                         <button
                           type="button"
                           className="partnerActionBtn add"

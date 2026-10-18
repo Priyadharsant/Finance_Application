@@ -413,6 +413,65 @@ header {
 .metric.red, .metric.teal, .metric.green, .metric.orange, .metric.purple, .metric.blue { border-left-color: var(--border-light); }
 
 /* Use color for meaning inside the metric, not as decoration around every card. */
+.detailMetricsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0 24px;
+}
+.detailGrid {
+  display: grid;
+  gap: 12px;
+}
+.detailGridTop {
+  grid-template-columns: repeat(4, 1fr);
+}
+.detailGridBottom {
+  grid-template-columns: repeat(3, 1fr);
+}
+.detailGrid .metric {
+  background: #f8fafc;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 80px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: all .2s ease;
+}
+.detailGrid .metric:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.08);
+}
+.detailGrid .metric span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 5px;
+  display: block;
+}
+.detailGrid .metric b {
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -.3px;
+  display: block;
+}
+.detailGrid .metric.green b {
+  color: #059669;
+}
+.detailGrid .metric.orange b {
+  color: #ea580c;
+}
+.detailGrid .metric.red b {
+  color: #dc2626;
+}
+
 .metricGrid .metric,
 .detailGrid .metric {
   border-left-color: var(--border-light);
@@ -492,7 +551,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 1100px) { 
   .metricGrid { grid-template-columns: repeat(2, 1fr); }
   .dashboardGrid { grid-template-columns: 1fr; }
-  .detailGrid { grid-template-columns: repeat(2, 1fr); }
+  .detailGrid, .detailGridTop, .detailGridBottom { grid-template-columns: repeat(2, 1fr); }
   .dashboardAnalyticsRow { grid-template-columns: 1fr !important; }
   .loanSummaryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -504,7 +563,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .financeApp aside button.menuItemBtn i { font-size: 18px; }
   .financeApp main { margin-left: 76px; width: calc(100% - 76px); }
   header, .content { padding-left: 20px; padding-right: 20px; }
-  .metricGrid, .formGrid, .detailGrid { grid-template-columns: 1fr; }
+  .metricGrid, .formGrid, .detailGrid, .detailGridTop, .detailGridBottom { grid-template-columns: 1fr; }
   .loanSummaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .customerProfileGrid { grid-template-columns: 1fr; }
   .customerLoanMeta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -539,3 +598,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .tableWrap { overflow: visible; }
   .tableWrap table { min-width: 0; font-size: 9px; }
 }
+
+/* === CUSTOMER ROW CLICK LOADING ANIMATION === */
+@keyframes shimmerProgress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.clickable.rowLoading {
+  background-color: #f0fdfa !important;
+  box-shadow: inset 3px 0 0 #0d9488;
+  cursor: wait !important;
+}
+

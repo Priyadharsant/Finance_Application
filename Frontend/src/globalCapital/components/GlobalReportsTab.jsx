@@ -145,15 +145,21 @@ export default function GlobalReportsTab({
 
   // Filtered closings
   const displayedClosings = useMemo(() => {
-    return closings.filter((c) => {
-      const pStr = `${c.year}-${String(c.month).padStart(2, "0")}`;
-      if (appliedRange.from && `${pStr}-31` < appliedRange.from) return false;
-      if (appliedRange.to && `${pStr}-01` > appliedRange.to) return false;
-      const q = (search || "").trim().toLowerCase();
-      if (q && !(c.monthName || pStr).toLowerCase().includes(q)) return false;
-      if (status && (c.isCurrentMonth ? "IN_PROGRESS" : "FINALIZED") !== status) return false;
-      return true;
-    });
+    return closings
+      .filter((c) => {
+        const pStr = `${c.year}-${String(c.month).padStart(2, "0")}`;
+        if (appliedRange.from && `${pStr}-31` < appliedRange.from) return false;
+        if (appliedRange.to && `${pStr}-01` > appliedRange.to) return false;
+        const q = (search || "").trim().toLowerCase();
+        if (q && !(c.monthName || pStr).toLowerCase().includes(q)) return false;
+        if (status && (c.isCurrentMonth ? "IN_PROGRESS" : "FINALIZED") !== status) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ya = Number(a.year || 0) * 12 + Number(a.month || 0);
+        const yb = Number(b.year || 0) * 12 + Number(b.month || 0);
+        return ya - yb;
+      });
   }, [closings, appliedRange, search, status]);
 
   // Filtered partners
@@ -171,18 +177,27 @@ export default function GlobalReportsTab({
 
   // Filtered expenses
   const displayedExpenses = useMemo(() => {
-    return expenses.filter((e) => {
-      const dateStr = (e.expense_date || e.date || "").slice(0, 10);
-      if (appliedRange.from && dateStr && dateStr < appliedRange.from) return false;
-      if (appliedRange.to && dateStr && dateStr > appliedRange.to) return false;
-      const q = (search || "").trim().toLowerCase();
-      if (q) {
-        const desc = (e.description || e.title || "").toLowerCase();
-        const cat = (e.category || e.categoryLabel || "").toLowerCase();
-        if (!desc.includes(q) && !cat.includes(q)) return false;
-      }
-      return true;
-    });
+    return expenses
+      .filter((e) => {
+        const dateStr = (e.expense_date || e.date || "").slice(0, 10);
+        if (appliedRange.from && dateStr && dateStr < appliedRange.from) return false;
+        if (appliedRange.to && dateStr && dateStr > appliedRange.to) return false;
+        const q = (search || "").trim().toLowerCase();
+        if (q) {
+          const desc = (e.description || e.title || "").toLowerCase();
+          const cat = (e.category || e.categoryLabel || "").toLowerCase();
+          if (!desc.includes(q) && !cat.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const da = new Date(a.expense_date || a.date || 0).getTime();
+        const db = new Date(b.expense_date || b.date || 0).getTime();
+        if (da !== db) return da - db;
+        const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+        const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+        return ca - cb;
+      });
   }, [expenses, appliedRange, search]);
 
   // Aggregated totals
@@ -462,6 +477,7 @@ export default function GlobalReportsTab({
           <table>
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Period</th>
                 <th>Auto Revenue</th>
                 <th>Daily Revenue</th>
@@ -478,6 +494,7 @@ export default function GlobalReportsTab({
                 const fin = c.financials || {};
                 return (
                   <tr key={idx}>
+                    <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                     <td>
                       <b>{c.monthName || `${c.year}-${String(c.month).padStart(2, "0")}`}</b>
                     </td>
@@ -515,6 +532,7 @@ export default function GlobalReportsTab({
           <table>
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Partner Name</th>
                 <th>Phone</th>
                 <th>Base Contribution</th>
@@ -526,8 +544,9 @@ export default function GlobalReportsTab({
               </tr>
             </thead>
             <tbody>
-              {displayedPartners.map((p) => (
+              {displayedPartners.map((p, idx) => (
                 <tr key={p.id}>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>
                     <b>{p.name || p.partner_name}</b>
                   </td>
@@ -565,6 +584,7 @@ export default function GlobalReportsTab({
           <table>
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Date</th>
                 <th>Description</th>
                 <th>Category</th>
@@ -574,6 +594,7 @@ export default function GlobalReportsTab({
             <tbody>
               {displayedExpenses.map((e, idx) => (
                 <tr key={idx}>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>{formatDate(e.expense_date || e.date)}</td>
                   <td><b>{e.description || e.title || "—"}</b></td>
                   <td>

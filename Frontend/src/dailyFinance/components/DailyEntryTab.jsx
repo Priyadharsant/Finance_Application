@@ -9,6 +9,7 @@ import {
   Clock,
   Edit3,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
@@ -16,7 +17,7 @@ import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 import MonthFilterModal from "../../components/MonthFilterModal.jsx";
 
-function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, busy }) {
+function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loadingDetailsId, busy, index }) {
   const isCollected = Number(customer.today_collection || 0) > 0;
   const remainingLoan = Number(customer.remaining || 0);
   const maxAllowed = Math.max(
@@ -69,14 +70,29 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, bus
         transition: "background-color 0.2s ease",
       }}
     >
+      <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{index}</td>
+      <td style={{ textAlign: "center", whiteSpace: "nowrap", fontSize: "12.5px", color: "#475569" }}>
+        {dateLabel(customer.finance_date)}
+      </td>
       <td>
         <button
           type="button"
           className="linkButton"
-          onClick={() => openDetails(customer.customer_id)}
+          onClick={() => openDetails(customer.customer_id, customer)}
           title="View customer loan details and payment history"
         >
-          <b>{customer.customer_name}</b>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <b>{customer.customer_name}</b>
+            {loadingDetailsId === customer.customer_id && (
+              <Loader2
+                size={13}
+                style={{
+                  color: "#0d9488",
+                  animation: "autoSpin 0.75s linear infinite",
+                }}
+              />
+            )}
+          </div>
           <small>
             {customer.mobile_number ? (
               <PhoneLink phone={customer.mobile_number} />
@@ -295,6 +311,7 @@ export default function DailyEntryTab({
   daily = [],
   savePayment,
   openDetails,
+  loadingDetailsId,
   onEditPayment,
   busy,
 }) {
@@ -367,6 +384,13 @@ export default function DailyEntryTab({
       if (filterTab === "COLLECTED") matchTab = isPaid;
 
       return matchSearch && matchTab;
+    }).sort((a, b) => {
+      const da = new Date(a.finance_date || 0).getTime();
+      const db = new Date(b.finance_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+      const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+      return ca - cb;
     });
   }, [daily, search, filterTab]);
 
@@ -618,6 +642,8 @@ export default function DailyEntryTab({
         <table>
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
+              <th style={{ textAlign: "center" }}>Finance date</th>
               <th>Customer</th>
               <th>Total return</th>
               <th>Remaining</th>
@@ -627,14 +653,16 @@ export default function DailyEntryTab({
             </tr>
           </thead>
           <tbody>
-            {filteredList.map((customer) => (
+            {filteredList.map((customer, idx) => (
               <EntryRow
                 key={customer.finance_id}
+                index={idx + 1}
                 customer={customer}
                 date={date}
                 savePayment={savePayment}
                 onEditPayment={onEditPayment}
                 openDetails={openDetails}
+                loadingDetailsId={loadingDetailsId}
                 busy={busy}
               />
             ))}

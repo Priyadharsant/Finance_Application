@@ -175,11 +175,13 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   useDocumentTitle(dynamicTitle);
 
+  const dataLoadedRef = React.useRef(false);
+
   // ----------------------------------------------------
   // Fetch Functions
   // ----------------------------------------------------
-  const fetchMonthlyStats = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchMonthlyStats = async (showLoading = false) => {
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const data = await globalCapitalApi.getMonthlyStats();
       setMonthlyStats(data);
@@ -190,8 +192,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     }
   };
 
-  const fetchLedger = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchLedger = async (showLoading = false) => {
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const data = await globalCapitalApi.getLedger();
       setLedgerData(data);
@@ -202,8 +204,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     }
   };
 
-  const fetchPartners = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchPartners = async (showLoading = false) => {
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const data = await globalCapitalApi.getPartners();
       setPartners(Array.isArray(data) ? data : []);
@@ -214,8 +216,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     }
   };
 
-  const fetchTransactions = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchTransactions = async (showLoading = false) => {
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const data = await globalCapitalApi.getPartnerTransactions();
       setTransactions(Array.isArray(data) ? data : []);
@@ -226,8 +228,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     }
   };
 
-  const fetchExpenses = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+  const fetchExpenses = async (showLoading = false) => {
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const data = await globalCapitalApi.getExpenses({
         year: expenseFilterYear,
@@ -318,19 +320,33 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   // Lifecycle
   // ----------------------------------------------------
   useEffect(() => {
-    if (activeMenu === "Ledger Overview") fetchLedger();
-    if (activeMenu === "Monthly Stats") fetchMonthlyStats();
-    if (activeMenu === "Partner Management") fetchPartners();
+    Promise.allSettled([
+      fetchLedger(true),
+      fetchPartners(false),
+      fetchTransactions(false),
+      fetchExpenses(false),
+      fetchMonthlyStats(false),
+    ]).finally(() => {
+      dataLoadedRef.current = true;
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!dataLoadedRef.current) return;
+    if (activeMenu === "Ledger Overview") fetchLedger(false);
+    if (activeMenu === "Monthly Stats") fetchMonthlyStats(false);
+    if (activeMenu === "Partner Management") fetchPartners(false);
     if (activeMenu === "Capital Transactions") {
-      fetchTransactions();
-      fetchPartners();
+      fetchTransactions(false);
+      fetchPartners(false);
     }
-    if (activeMenu === "Expenses") fetchExpenses();
+    if (activeMenu === "Expenses") fetchExpenses(false);
     if (activeMenu === "Reports") {
-      fetchPartners();
-      fetchTransactions();
-      fetchLedger();
-      fetchExpenses();
+      fetchPartners(false);
+      fetchTransactions(false);
+      fetchLedger(false);
+      fetchExpenses(false);
     }
   }, [activeMenu, expenseFilterYear, expenseFilterMonth, expenseFilterCategory, expenseSearch]);
 

@@ -324,6 +324,7 @@ export default function MonthlyClosingTab({
             <table className="financeTable">
               <thead>
                 <tr>
+                  <th style={{ width: "50px" }}>S.No</th>
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Opening Capital</th>
                   <th style={{ textAlign: "right" }}>Closing / Current Capital</th>
@@ -333,11 +334,14 @@ export default function MonthlyClosingTab({
                 </tr>
               </thead>
               <tbody>
-                {(displayData?.allocations || []).map((alloc) => {
+                {(displayData?.allocations || []).map((alloc, idx) => {
                   const profitVal = Number(alloc.allocatedProfit != null ? alloc.allocatedProfit : alloc.expectedProfit || 0);
 
                   return (
                     <tr key={alloc.partnerId}>
+                      <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>
+                        {idx + 1}
+                      </td>
                       <td>
                         <strong style={{ fontSize: "14px", color: "#0f172a" }}>
                           {alloc.partnerName}

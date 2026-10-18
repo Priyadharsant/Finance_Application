@@ -24,7 +24,16 @@ export const exportToExcel = (data, fileName) => {
 };
 
 export const exportTotalPortfolio = (loans = [], label = "") => {
-  const exportData = (loans || []).map(l => {
+  const sortedLoans = [...(loans || [])].sort((a, b) => {
+    const da = new Date(a.start_date || a.disbursement_date || 0).getTime();
+    const db = new Date(b.start_date || b.disbursement_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    return ca - cb;
+  });
+
+  const exportData = sortedLoans.map((l, idx) => {
     let fees = {};
     try {
       fees = typeof l.fees_details === "string" ? JSON.parse(l.fees_details || "{}") : (l.fees_details || {});
@@ -68,6 +77,7 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
     const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 1200);
 
     return {
+      "S.No": idx + 1,
       "Customer Name": `${l.first_name || ""} ${l.last_name || ""}`.trim(),
       "Customer Code": l.customer_code || "—",
       "Phone": l.phone || "",
@@ -123,7 +133,8 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
     const sumInHand = exportData.reduce((sum, r) => sum + Number(r["Amount Given to Customer (After All Deductions) (₹)"] || 0), 0);
 
     exportData.push({
-      "Customer Name": "TOTAL",
+      "S.No": "TOTAL",
+      "Customer Name": "SUMMARY TOTALS",
       "Customer Code": `${loans.length} Loans`,
       "Phone": "",
       "Vehicle": "",
@@ -166,7 +177,14 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
 };
 
 export const exportCustomersList = (customers = [], label = "") => {
-  const exportData = (customers || []).map(c => ({
+  const sortedCustomers = [...(customers || [])].sort((a, b) => {
+    const da = new Date(a.created_at || 0).getTime();
+    const db = new Date(b.created_at || 0).getTime();
+    return da - db;
+  });
+
+  const exportData = sortedCustomers.map((c, idx) => ({
+    "S.No": idx + 1,
     "Customer Code": c.customer_code,
     "First Name": c.first_name,
     "Last Name": c.last_name,
@@ -237,7 +255,18 @@ export const exportIndividualLoan = (loan) => {
     { "Category": "Total Collected", "Value": Number(totalCollected) },
   ];
 
-  const scheduleData = loan.schedules.map(s => ({
+  const sortedSchedules = [...(loan.schedules || [])].sort((a, b) => {
+    const da = new Date(a.due_date || 0).getTime();
+    const db = new Date(b.due_date || 0).getTime();
+    if (da !== db) return da - db;
+    const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+    const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+    if (ca !== cb) return ca - cb;
+    return Number(a.installment_number || 0) - Number(b.installment_number || 0);
+  });
+
+  const scheduleData = sortedSchedules.map((s, idx) => ({
+    "S.No": idx + 1,
     "Inst #": s.installment_number,
     "Due Date": dateLabel(s.due_date),
     "Principal": Number(s.principal_component),
@@ -251,7 +280,16 @@ export const exportIndividualLoan = (loan) => {
 
   let paymentsData = [];
   if (loan.payments && loan.payments.length > 0) {
-    paymentsData = loan.payments.map(p => ({
+    const sortedPayments = [...loan.payments].sort((a, b) => {
+      const da = new Date(a.payment_date || 0).getTime();
+      const db = new Date(b.payment_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
+    });
+    paymentsData = sortedPayments.map((p, idx) => ({
+      "S.No": idx + 1,
       "Payment ID": p.id,
       "Date": dateLabel(p.payment_date),
       "Amount": Number(p.amount_paid),

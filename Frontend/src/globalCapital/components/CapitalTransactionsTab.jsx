@@ -78,6 +78,13 @@ export default function CapitalTransactionsTab({
       }
 
       return true;
+    }).sort((a, b) => {
+      const da = new Date(a.effective_date || a.transaction_date || 0).getTime();
+      const db = new Date(b.effective_date || b.transaction_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || a.createdAt || 0).getTime();
+      const cb = new Date(b.created_at || b.createdAt || 0).getTime();
+      return ca - cb;
     });
   }, [transactions, txFilterType, monthFilter, partnerFilter, searchQuery]);
 
@@ -313,19 +320,21 @@ export default function CapitalTransactionsTab({
           <table className="financeTable">
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Date</th>
                 <th>Partner</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map((t) => {
+              {filteredTransactions.map((t, idx) => {
                 const isContrib =
                   t.transaction_type === "CONTRIBUTION" ||
                   t.transaction_type === "ADJUSTMENT_INCREASE" ||
                   t.transaction_type === "PROFIT_SHARE";
                 return (
                   <tr key={t.id}>
+                    <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                     <td>
                       {formatDate(t.effective_date)}
                     </td>
@@ -348,7 +357,7 @@ export default function CapitalTransactionsTab({
               })}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan="3" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+                  <td colSpan="4" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
                     No capital transactions found matching the applied filters.
                   </td>
                 </tr>

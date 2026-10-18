@@ -90,6 +90,7 @@ export default function AddExpenseModal({
               />
               <div className="quickTagsContainer">
                 {[
+                  "Interest Paid",
                   "Tea & Snacks",
                   "Office Rent",
                   "Electricity Bill",
@@ -109,7 +110,9 @@ export default function AddExpenseModal({
                         ...expenseFormData,
                         description: tag,
                         expenseType:
-                          tag === "Brokerage Cash Payout"
+                          tag === "Interest Paid"
+                            ? "INTEREST"
+                            : tag === "Brokerage Cash Payout"
                             ? "BROKERAGE_HAND"
                             : tag === "Tea & Snacks"
                               ? "TEA_SNACKS"
@@ -123,7 +126,9 @@ export default function AddExpenseModal({
                         category:
                           tag === "Brokerage Cash Payout"
                             ? "AUTO"
-                            : expenseFormData.category,
+                            : tag === "Interest Paid"
+                              ? (expenseFormData.category === "AUTO" ? "AUTO" : "GENERAL")
+                              : expenseFormData.category,
                       })
                     }
                   >
@@ -192,6 +197,7 @@ export default function AddExpenseModal({
                   }
                 >
                   <option value="OFFICE_EXPENSE">Office & Administrative</option>
+                  <option value="INTEREST">Interest Paid (Vatti)</option>
                   <option value="TEA_SNACKS">Tea, Snacks & Refreshments</option>
                   <option value="UTILITY">Utility & Internet Bills</option>
                   <option value="SALARY">Salary & Staff Dues</option>

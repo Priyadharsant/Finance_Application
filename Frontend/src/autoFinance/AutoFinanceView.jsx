@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
 import "./autoFinance.css";
 import { apiCall, API_BASE, dateLabel } from "./services/autoFinanceApi";
@@ -35,6 +35,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingLoanId, setLoadingLoanId] = useState(null);
+  const loanDetailsCacheRef = useRef(new Map());
+  const dataLoadedRef = useRef(false);
   const [reportMonth, setReportMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
@@ -159,7 +162,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   });
 
   const loadData = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+    if (showLoading && !dataLoadedRef.current) setLoading(true);
     try {
       const [dashRes, custRes, typesRes, loansRes, partnersRes] = await Promise.allSettled([
         apiCall("/loans/dashboard"),
@@ -179,15 +182,16 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         setLoans(loansRes.value.data || []);
       if (partnersRes.status === "fulfilled")
         setPartners(partnersRes.value || []);
+      dataLoadedRef.current = true;
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
   }, [activeMenu]);
 
   // Handlers
@@ -344,8 +348,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       });
       setActionLoading(null);
       if (selectedLoan) {
+        loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
         apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
-          if (details?.success) setSelectedLoan(details.data);
+          if (details?.success) {
+            loanDetailsCacheRef.current.set(selectedLoan.loan.id, details.data);
+            setSelectedLoan(details.data);
+          }
         });
       }
       loadData(false);
@@ -403,8 +411,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       setCloseLoanModal(null);
       setActionLoading(null);
       if (selectedLoan) {
+        loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
         apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
-          if (details?.success) setSelectedLoan(details.data);
+          if (details?.success) {
+            loanDetailsCacheRef.current.set(selectedLoan.loan.id, details.data);
+            setSelectedLoan(details.data);
+          }
         });
       }
       loadData(false);
@@ -414,15 +426,44 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     }
   };
 
-  const openLoanDetails = async (loanId) => {
+  const openLoanDetails = async (loanId, preloadedLoan = null) => {
+    // 1. Instant cache hit (0ms)
+    const cached = loanDetailsCacheRef.current.get(loanId);
+    if (cached) {
+      setSelectedLoan(cached);
+      return;
+    }
+
+    // 2. Instant optimistic preview if basic loan object passed from table row
+    if (preloadedLoan) {
+      setSelectedLoan({
+        loan: preloadedLoan,
+        schedules: [],
+        payments: [],
+        documents: [],
+        isLoadingDetails: true,
+      });
+    } else {
+      setLoadingLoanId(loanId);
+    }
+
     try {
       const res = await apiCall(`/loans/${loanId}`);
-      if (res.success) {
-        const docsRes = await apiCall(`/loans/${loanId}/documents`);
-        setSelectedLoan({ ...res.data, documents: docsRes.success ? docsRes.data : [] });
+      if (res.success && res.data) {
+        let docs = res.data.documents;
+        if (!docs || !Array.isArray(docs)) {
+          const docsRes = await apiCall(`/loans/${loanId}/documents`).catch(() => null);
+          docs = docsRes?.success ? docsRes.data : [];
+        }
+        const fullData = { ...res.data, documents: docs, isLoadingDetails: false };
+        loanDetailsCacheRef.current.set(loanId, fullData);
+        setSelectedLoan(fullData);
       }
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+      if (preloadedLoan) setSelectedLoan(null);
+    } finally {
+      setLoadingLoanId(null);
     }
   };
 
@@ -435,8 +476,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         body: JSON.stringify(vehicleData),
       });
       setNotice?.({ type: "success", text: "Vehicle details updated successfully!" });
+      loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
       openLoanDetails(selectedLoan.loan.id); // Refresh
-      loadData();
+      loadData(false);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
     }
@@ -460,6 +502,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       if (!res.ok) throw new Error(data.message || "Failed to upload document");
       
       setNotice?.({ type: "success", text: "Document uploaded successfully!" });
+      loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
       openLoanDetails(selectedLoan.loan.id); // Refresh
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
@@ -480,6 +523,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       if (!res.ok) throw new Error(data.message || "Failed to delete document");
 
       setNotice?.({ type: "success", text: "Document deleted successfully!" });
+      loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
       openLoanDetails(selectedLoan.loan.id);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
@@ -491,7 +535,13 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       setLoading(true);
       const res = await apiCall(`/loans/reports/monthly?month=${reportMonth}`);
       if (res.success && res.data) {
-        const exportData = res.data.map((p) => ({
+        const sortedPayments = [...res.data].sort((a, b) => {
+          const dateDiff = new Date(a.payment_date || 0).getTime() - new Date(b.payment_date || 0).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          return new Date(a.created_at || a.createdAt || 0).getTime() - new Date(b.created_at || b.createdAt || 0).getTime();
+        });
+        const exportData = sortedPayments.map((p, idx) => ({
+          "S.No": idx + 1,
           "Payment Date": dateLabel(p.payment_date),
           "Customer Name": `${p.first_name} ${p.last_name}`,
           "Customer Code": p.customer_code,
@@ -570,7 +620,11 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         if (!matches) return false;
       }
       return true;
-    });
+    }).sort(
+      (a, b) =>
+        new Date(a.created_at || 0).getTime() -
+        new Date(b.created_at || 0).getTime()
+    );
   }, [customers, search, customerMonthFilter]);
 
   // Dashboard strictly shows ACTIVE loans only (no completed/settled loans)
@@ -682,10 +736,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         return isActiveB - isActiveA;
       }
 
-      // 2. Within each group, sort newest first
+      // 2. Within each group, sort older to newest
       const dateA = new Date(a.created_at || a.start_date || 0).getTime();
       const dateB = new Date(b.created_at || b.start_date || 0).getTime();
-      return dateB - dateA;
+      return dateA - dateB;
     });
 
     return list;

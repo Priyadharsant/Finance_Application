@@ -13,6 +13,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       a.net_disbursement,
       a.agreed_total_payable,
       a.status,
+      a.created_at,
       c.customer_id,
       c.customer_name,
       c.mobile_number,
@@ -21,7 +22,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     FROM daily_finance_accounts a
     JOIN daily_finance_customers c ON a.customer_id = c.customer_id
     WHERE a.status <> 'CANCELLED'
-    ORDER BY a.finance_date ASC, c.customer_name ASC;
+    ORDER BY a.finance_date ASC, a.created_at ASC, c.customer_name ASC;
   `;
   const dfAccountsRes = await client.query(dfAccountsQuery);
   const dfAccounts = dfAccountsRes.rows;
@@ -95,6 +96,9 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       sNo: idx + 1,
       financeId: a.finance_id,
       date: a.finance_date ? String(a.finance_date).slice(0, 10) : '',
+      finance_date: a.finance_date ? String(a.finance_date).slice(0, 10) : '',
+      created_at: a.created_at,
+      account_created_at: a.created_at,
       customerName: a.customer_name || '—',
       mobileNumber: a.mobile_number || '',
       loanAmount: gross,
@@ -129,6 +133,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       l.tenure_months,
       l.fees_details,
       l.status,
+      l.created_at,
       c.first_name,
       c.last_name,
       c.phone,
@@ -213,6 +218,9 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       sNo: idx + 1,
       id: l.id,
       date: l.start_date ? String(l.start_date).slice(0, 10) : '',
+      start_date: l.start_date ? String(l.start_date).slice(0, 10) : '',
+      created_at: l.created_at,
+      createdAt: l.created_at,
       customerName: `${l.first_name || ''} ${l.last_name || ''}`.trim() || '—',
       vehicle: `${l.vehicle_type || ''} ${l.make || ''} ${l.model || ''}`.trim() || l.registration_number || '—',
       regNo: l.registration_number || '',

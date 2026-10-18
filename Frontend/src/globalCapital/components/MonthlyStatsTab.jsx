@@ -70,6 +70,7 @@ export default function MonthlyStatsTab({ stats = [] }) {
           <table className="dataTable">
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Month</th>
                 <th>Opening Balance</th>
                 <th>Partner Money IN / OUT</th>
@@ -84,6 +85,7 @@ export default function MonthlyStatsTab({ stats = [] }) {
             <tbody>
               {stats.map((s, idx) => (
                 <tr key={idx} style={idx === 0 ? { background: "#f0fdf4", fontWeight: 600 } : {}}>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td><strong>{s.month}</strong>{idx === 0 && <span style={{ marginLeft: 6, fontSize: 10, color: "#16a34a", background: "#dcfce7", borderRadius: 8, padding: "2px 7px" }}>Latest</span>}</td>
                   <td style={{ color: "#64748b" }}>{money(s.openingCash)}</td>
                   <td>

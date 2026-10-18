@@ -46,7 +46,7 @@ export default function DayToDayCalculationLog({
       }
 
       return true;
-    });
+    }).sort((a, b) => new Date(a.calcDate || 0).getTime() - new Date(b.calcDate || 0).getTime());
   }, [rawLogs, monthFilter, statusFilter, dateSearch]);
 
   const filteredAutoRev = useMemo(() => {
@@ -407,6 +407,7 @@ export default function DayToDayCalculationLog({
         <table className="financeTable">
           <thead>
             <tr>
+              <th style={{ width: "50px" }}>S.No</th>
               <th>Date</th>
               <th style={{ textAlign: "right" }}>Auto Rev</th>
               <th style={{ textAlign: "right" }}>Daily Rev</th>
@@ -416,7 +417,7 @@ export default function DayToDayCalculationLog({
             </tr>
           </thead>
           <tbody>
-            {filteredLogs.map((log) => {
+            {filteredLogs.map((log, idx) => {
               const isToday = log.calcDate === todayStr;
               const isProfit = log.netProfit >= 0;
 
@@ -425,6 +426,7 @@ export default function DayToDayCalculationLog({
                   key={log.id || log.calcDate}
                   style={isToday ? { background: "rgba(2, 132, 199, 0.04)" } : undefined}
                 >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <strong style={{ fontSize: "13px", color: "#0f172a" }}>

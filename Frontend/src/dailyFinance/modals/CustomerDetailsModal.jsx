@@ -15,6 +15,17 @@ export default function CustomerDetailsModal({
   const customer = data.customer;
   const isActive = customer.status !== "COMPLETED" && customer.status !== "CANCELLED";
 
+  const sortedCollections = React.useMemo(() => {
+    return [...(data.collections || [])].sort((a, b) => {
+      const da = new Date(a.collection_date || 0).getTime();
+      const db = new Date(b.collection_date || 0).getTime();
+      if (da !== db) return da - db;
+      const ca = new Date(a.created_at || 0).getTime();
+      const cb = new Date(b.created_at || 0).getTime();
+      return ca - cb;
+    });
+  }, [data.collections]);
+
   return (
     <div
       className="modal"
@@ -39,7 +50,7 @@ export default function CustomerDetailsModal({
               ) : (
                 "No phone"
               )}{" "}
-              · {customer.address || "No address"}
+              · {customer.address || "No address"} · Finance Date: {dateLabel(customer.finance_date)}
             </p>
           </div>
 
@@ -64,7 +75,7 @@ export default function CustomerDetailsModal({
               <FileSpreadsheet size={15} /> Statement (Excel)
             </button>
 
-            {onOpenIncreaseLoan && (
+            {isActive && onOpenIncreaseLoan && (
               <button
                 type="button"
                 className="iconTextButton"
@@ -105,66 +116,91 @@ export default function CustomerDetailsModal({
             )}
           </div>
         </div>
-        <div className="detailGrid">
-          <Metric
-            title="Finance amount"
-            value={customer.gross_finance_amount}
-          />
-          <Metric title="Interest" value={customer.initial_deduction} />
-          <Metric title="Amount given" value={customer.net_disbursement} />
-          <Metric title="Total return" value={customer.agreed_total_payable} />
-          <Metric
-            title="Collected"
-            value={customer.total_collected}
-            tone="green"
-          />
-          <Metric title="Remaining" value={customer.remaining} tone="orange" />
-          <Metric
-            title="Profit"
-            value={customer.initial_deduction}
-            tone="green"
-          />
+        <div className="detailMetricsContainer">
+          <div className="detailGrid detailGridTop">
+            <Metric
+              title="Finance amount"
+              value={customer.gross_finance_amount}
+            />
+            <Metric title="Interest" value={customer.initial_deduction} />
+            <Metric title="Amount given" value={customer.net_disbursement} />
+            <Metric title="Total return" value={customer.agreed_total_payable} />
+          </div>
+          <div className="detailGrid detailGridBottom">
+            <Metric
+              title="Collected"
+              value={customer.total_collected}
+              tone="green"
+            />
+            <Metric title="Remaining" value={customer.remaining} tone="orange" />
+            <Metric
+              title="Profit"
+              value={customer.initial_deduction}
+              tone="green"
+            />
+          </div>
         </div>
         <div className="card tableWrap">
           <div className="cardHead">
             <h3>Collection history</h3>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Amount collected</th>
-                <th>Total collected</th>
-                <th>Remaining</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.collections.map((payment) => (
-                <tr key={payment.payment_id}>
-                  <td>{dateLabel(payment.collection_date)}</td>
-                  <td>{money(payment.amount)}</td>
-                  <td>{money(payment.total_collected)}</td>
-                  <td>{money(payment.remaining)}</td>
-                  <td>
-                    <button
-                      className="payButton"
-                      onClick={() =>
-                        editPayment({
-                          ...payment,
-                          collectionDate: payment.collection_date,
-                          amount: payment.amount,
-                        })
-                      }
-                    >
-                      Edit
-                    </button>
-                  </td>
+          {data.isLoadingCollections ? (
+            <div style={{ padding: "32px 20px", textAlign: "center", color: "#64748b" }}>
+              <div
+                className="inPageDataSpinner"
+                style={{
+                  margin: "0 auto 10px auto",
+                  width: "32px",
+                  height: "32px",
+                  borderWidth: "3px",
+                  borderTopColor: "#0d9488",
+                }}
+              />
+              <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#475569" }}>
+                Loading payment history & transactions...
+              </p>
+            </div>
+          ) : sortedCollections.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "60px" }}>S.No</th>
+                  <th>Date</th>
+                  <th style={{ textAlign: "right" }}>Amount collected</th>
+                  <th style={{ textAlign: "right" }}>Total collected</th>
+                  <th style={{ textAlign: "right" }}>Remaining</th>
+                  <th style={{ textAlign: "center", width: "80px" }}>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {!data.collections.length && (
+              </thead>
+              <tbody>
+                {sortedCollections.map((payment, idx) => (
+                  <tr key={payment.payment_id}>
+                    <td style={{ color: "#64748b", fontWeight: "600" }}>{idx + 1}</td>
+                    <td>{dateLabel(payment.collection_date)}</td>
+                    <td style={{ textAlign: "right", fontWeight: "700", color: "#059669" }}>
+                      {money(payment.amount)}
+                    </td>
+                    <td style={{ textAlign: "right" }}>{money(payment.total_collected)}</td>
+                    <td style={{ textAlign: "right" }} className="redText">{money(payment.remaining)}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        className="payButton"
+                        onClick={() =>
+                          editPayment({
+                            ...payment,
+                            collectionDate: payment.collection_date,
+                            amount: payment.amount,
+                          })
+                        }
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
             <Empty text="No collections recorded." />
           )}
         </div>

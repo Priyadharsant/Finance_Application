@@ -117,40 +117,61 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
 
   const filteredDailyLoans = useMemo(() => {
     if (!data?.dailyFinance?.loans) return [];
-    if (!searchTerm.trim()) return data.dailyFinance.loans;
-    const q = searchTerm.toLowerCase();
-    return data.dailyFinance.loans.filter(
-      (l) =>
-        (l.customerName && l.customerName.toLowerCase().includes(q)) ||
-        (l.mobileNumber && l.mobileNumber.includes(q)) ||
-        (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
-    );
+    let list = data.dailyFinance.loans;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(
+        (l) =>
+          (l.customerName && l.customerName.toLowerCase().includes(q)) ||
+          (l.mobileNumber && l.mobileNumber.includes(q)) ||
+          (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const da = new Date(a.date || a.finance_date || 0).getTime();
+      const db = new Date(b.date || b.finance_date || 0).getTime();
+      return da - db;
+    });
   }, [data, searchTerm]);
 
   const filteredAutoLoans = useMemo(() => {
     if (!data?.autoFinance?.loans) return [];
-    if (!searchTerm.trim()) return data.autoFinance.loans;
-    const q = searchTerm.toLowerCase();
-    return data.autoFinance.loans.filter(
-      (l) =>
-        (l.customerName && l.customerName.toLowerCase().includes(q)) ||
-        (l.vehicle && l.vehicle.toLowerCase().includes(q)) ||
-        (l.regNo && l.regNo.toLowerCase().includes(q)) ||
-        (l.brokerName && l.brokerName.toLowerCase().includes(q)) ||
-        (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
-    );
+    let list = data.autoFinance.loans;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(
+        (l) =>
+          (l.customerName && l.customerName.toLowerCase().includes(q)) ||
+          (l.vehicle && l.vehicle.toLowerCase().includes(q)) ||
+          (l.regNo && l.regNo.toLowerCase().includes(q)) ||
+          (l.brokerName && l.brokerName.toLowerCase().includes(q)) ||
+          (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const da = new Date(a.date || a.start_date || a.disbursement_date || 0).getTime();
+      const db = new Date(b.date || b.start_date || b.disbursement_date || 0).getTime();
+      return da - db;
+    });
   }, [data, searchTerm]);
 
   const filteredExpenses = useMemo(() => {
     if (!data?.expenses?.items) return [];
-    if (!searchTerm.trim()) return data.expenses.items;
-    const q = searchTerm.toLowerCase();
-    return data.expenses.items.filter(
-      (e) =>
-        (e.description && e.description.toLowerCase().includes(q)) ||
-        (e.categoryLabel && e.categoryLabel.toLowerCase().includes(q)) ||
-        (e.date && (e.date.includes(q) || formatDate(e.date).includes(q)))
-    );
+    let list = data.expenses.items;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(
+        (e) =>
+          (e.description && e.description.toLowerCase().includes(q)) ||
+          (e.categoryLabel && e.categoryLabel.toLowerCase().includes(q)) ||
+          (e.date && (e.date.includes(q) || formatDate(e.date).includes(q)))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const da = new Date(a.date || a.expense_date || 0).getTime();
+      const db = new Date(b.date || b.expense_date || 0).getTime();
+      return da - db;
+    });
   }, [data, searchTerm]);
 
   if (!isOpen) return null;
@@ -394,9 +415,9 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono">
-                        {filteredDailyLoans.map((row) => (
+                        {filteredDailyLoans.map((row, idx) => (
                           <tr key={row.financeId} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-2.5 px-3 text-slate-500">{row.sNo}</td>
+                            <td className="py-2.5 px-3 text-slate-500">{idx + 1}</td>
                             <td className="py-2.5 px-3 text-slate-300">{formatDate(row.date)}</td>
                             <td className="py-2.5 px-3 text-white font-sans font-medium">{row.customerName}</td>
                             <td className="py-2.5 px-3 text-right text-white font-semibold">{money(row.loanAmount)}</td>
@@ -523,9 +544,9 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono">
-                        {filteredAutoLoans.map((row) => (
+                        {filteredAutoLoans.map((row, idx) => (
                           <tr key={row.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-2.5 px-3 text-slate-500">{row.sNo}</td>
+                            <td className="py-2.5 px-3 text-slate-500">{idx + 1}</td>
                             <td className="py-2.5 px-3 text-slate-300">{formatDate(row.date)}</td>
                             <td className="py-2.5 px-3 text-white font-sans font-medium whitespace-nowrap">{row.customerName}</td>
                             <td className="py-2.5 px-3 text-slate-300 font-sans whitespace-nowrap">{row.vehicle}</td>
@@ -617,9 +638,9 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono">
-                        {data.partners?.list?.map((p) => (
+                        {data.partners?.list?.map((p, idx) => (
                           <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-3 px-4 text-slate-500">{p.sNo}</td>
+                            <td className="py-3 px-4 text-slate-500">{idx + 1}</td>
                             <td className="py-3 px-4 font-sans font-semibold text-white">{p.name}</td>
                             <td className="py-3 px-4 text-right text-emerald-400 font-bold">{money(p.capital)}</td>
                             <td className="py-3 px-4 text-right text-cyan-300">{money(p.contributed)}</td>
@@ -692,9 +713,9 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono">
-                        {filteredExpenses.map((e) => (
+                        {filteredExpenses.map((e, idx) => (
                           <tr key={e.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-2.5 px-4 text-slate-500">{e.sNo}</td>
+                            <td className="py-2.5 px-4 text-slate-500">{idx + 1}</td>
                             <td className="py-2.5 px-4 text-slate-300">{formatDate(e.date)}</td>
                             <td className="py-2.5 px-4 text-white font-sans">{e.description}</td>
                             <td className="py-2.5 px-4">

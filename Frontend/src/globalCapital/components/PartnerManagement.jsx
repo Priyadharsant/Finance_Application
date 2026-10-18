@@ -43,6 +43,10 @@ export default function PartnerManagement({
         if (!matchName && !matchPhone && !matchEmail && !matchPan) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const da = new Date(a.created_at || a.effective_date || 0).getTime();
+      const db = new Date(b.created_at || b.effective_date || 0).getTime();
+      return da - db;
     });
   }, [partners, monthFilter, searchQuery]);
 
@@ -222,6 +226,7 @@ export default function PartnerManagement({
           <table className="financeTable">
             <thead>
               <tr>
+                <th style={{ width: "50px" }}>S.No</th>
                 <th>Partner &amp; Contact</th>
                 <th style={{ textAlign: "right" }}>Total Out</th>
                 <th style={{ textAlign: "right" }}>Current Balance</th>
@@ -229,7 +234,7 @@ export default function PartnerManagement({
               </tr>
             </thead>
             <tbody>
-              {filteredPartners.map((p) => (
+              {filteredPartners.map((p, idx) => (
                 <tr
                   className="clickable globalClickableRow"
                   key={p.id}
@@ -238,6 +243,9 @@ export default function PartnerManagement({
                     onSelectRecord({ type: "partner", record: p })
                   }
                 >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>
+                    {idx + 1}
+                  </td>
                   <td>
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -425,7 +433,7 @@ export default function PartnerManagement({
               ))}
               {filteredPartners.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
+                  <td colSpan="5" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
                     No partners match your selected filters or search query.
                   </td>
                 </tr>
