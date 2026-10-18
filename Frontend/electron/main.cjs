@@ -343,11 +343,13 @@ app.commandLine.appendSwitch("ignore-gpu-blocklist");
 let mainWindow;
 
 function createWindow() {
+  const appIconPath = path.join(__dirname, "icon.ico");
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 700,
+    icon: fs.existsSync(appIconPath) ? appIconPath : undefined,
     show: false, // Prevent flash and stutter while initial content loads
     backgroundColor: "#f8fafc",
     autoHideMenuBar: true,
