@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Lock, Eye, EyeOff, ShieldCheck, AlertCircle, ArrowRight } from "lucide-react";
 import { APP_VERSION } from "../version.js";
 import { getApiBaseUrl } from "../apiConfig.js";
+import AppLogo from "./AppLogo.jsx";
 
 export default function AppLoginScreen({ onLoginSuccess }) {
   const [password, setPassword] = useState("");
@@ -78,18 +79,13 @@ export default function AppLoginScreen({ onLoginSuccess }) {
         {/* Brand Icon & Heading */}
         <div
           style={{
-            width: "60px",
-            height: "60px",
-            margin: "0 auto 18px",
-            background: "linear-gradient(135deg, #0ea5e9, #0284c7)",
-            borderRadius: "16px",
+            margin: "0 auto 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 10px 25px -5px rgba(14, 165, 233, 0.4)",
           }}
         >
-          <Lock size={30} color="#ffffff" strokeWidth={2.2} />
+          <AppLogo size={68} />
         </div>
 
         <h2

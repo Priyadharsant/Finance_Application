@@ -339,6 +339,14 @@ header.topAppHeader,
 .headerBrandLogo:hover {
   transform: translateY(-1px);
 }
+.headerAppLogo {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), filter 0.25s ease;
+  flex-shrink: 0;
+}
+.headerBrandLogo:hover .headerAppLogo {
+  transform: scale(1.06);
+  filter: drop-shadow(0 6px 16px rgba(16, 185, 129, 0.45));
+}
 .headerBrandLogo > b {
   background: linear-gradient(135deg, #10b981, #06b6d4);
   color: #0b172a;

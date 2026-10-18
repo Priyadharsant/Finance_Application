@@ -1,0 +1,25 @@
+<svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kfBrandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="45%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="kfBevelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08" />
+    </linearGradient>
+    <filter id="kfEmblemShadow" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#022c22" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <rect x="2.5" y="2.5" width="43" height="43" rx="12" fill="url(#kfBrandGrad)" />
+  <rect x="3" y="3" width="42" height="42" rx="11.5" stroke="url(#kfBevelGrad)" stroke-width="1.2" />
+  <g stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#kfEmblemShadow)">
+    <path d="M14.5 13.5H31" />
+    <path d="M14.5 20H25.5" />
+    <path d="M20 13.5V20.5C26.5 20.5 26.5 28 20 28H17" />
+    <path d="M19.5 28L30.5 38.5" />
+  </g>
+  <path d="M34 8L35 10.5L37.5 11.5L35 12.5L34 15L33 12.5L30.5 11.5L33 10.5Z" fill="#fef08a" stroke="#f59e0b" stroke-width="0.6" />
+</svg>

@@ -31,6 +31,7 @@ import { dateLabel, today } from "./dailyFinance/services/dailyFinanceApi.js";
 import VersionUpdateModal from "./components/VersionUpdateModal.jsx";
 import { APP_VERSION, checkForAppUpdates } from "./version.js";
 import AppLoginScreen from "./components/AppLoginScreen.jsx";
+import AppLogo from "./components/AppLogo.jsx";
 import ExcelTableEditorView from "./components/ExcelTableEditorView.jsx";
 import { getApiBaseUrl } from "./apiConfig.js";
 
@@ -198,12 +199,15 @@ export default function AppFinance() {
           justifyContent: "center",
           background: "#0f172a",
           color: "#94a3b8",
-          gap: "12px",
+          gap: "16px",
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
         }}
       >
-        <RefreshCw size={24} style={{ animation: "spin 1s linear infinite" }} />
-        <span>Loading KAMBAM FINANCE...</span>
+        <AppLogo size={58} />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <RefreshCw size={18} style={{ animation: "spin 1s linear infinite" }} />
+          <span>Loading KAMBAM FINANCE...</span>
+        </div>
       </div>
     );
   }
@@ -229,11 +233,7 @@ export default function AppFinance() {
             onClick={() => setPage(appModule === "GLOBAL" ? "Ledger Overview" : "Dashboard")}
             title="KAMBAM FINANCE Home"
           >
-            <b>
-              {appModule === "DAILY" && <Activity size={20} strokeWidth={2.5} />}
-              {appModule === "AUTO" && <CarFront size={20} strokeWidth={2.5} />}
-              {appModule === "GLOBAL" && <Globe size={20} strokeWidth={2.5} />}
-            </b>
+            <AppLogo size={38} className="headerAppLogo" />
             <div className="headerBrandText">
               <span>KAMBAM FINANCE</span>
               <small>
