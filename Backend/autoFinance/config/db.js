@@ -32,7 +32,8 @@ export const pool = new Pool(
 );
 
 let hasLoggedConnection = false;
-pool.on('connect', () => {
+pool.on('connect', (client) => {
+  client.query('SET search_path TO public;').catch(() => {});
   if (!hasLoggedConnection) {
     const target = connectionString
       ? new URL(connectionString).host

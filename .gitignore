@@ -41,3 +41,4 @@ Backend/backups/
 Thumbs.db
 .vscode/
 .idea/
+.neon

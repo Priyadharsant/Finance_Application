@@ -17,5 +17,9 @@
     "release:patch": "node scripts/bump-version.js patch --release",
     "release:minor": "node scripts/bump-version.js minor --release",
     "release:major": "node scripts/bump-version.js major --release"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.2",
+    "@neon/env": "^1.6.3"
   }
 }
