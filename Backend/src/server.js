@@ -13,6 +13,8 @@ import versionRoutes from './routes/versionRoutes.js';
 import appAuthRoutes from './routes/appAuthRoutes.js';
 import tableEditorRoutes from './routes/tableEditorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
+import backupRoutes from './routes/backupRoutes.js';
+import { initHourlyBackupCron } from './services/backupService.js';
 
 const app = express();
 app.use(express.json({limit:'1mb'}));
@@ -76,9 +78,11 @@ app.use('/api/global-cash', globalCashRoutes);
 app.use('/api/version', versionRoutes);
 app.use('/api/app-auth', appAuthRoutes);
 app.use('/api/table-editor', tableEditorRoutes);
+app.use('/api/backup', backupRoutes);
 app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
 app.listen(Number(process.env.API_PORT||3000),()=>{
   console.log('Daily Finance API running');
   initMonthlyClosingCron();
+  initHourlyBackupCron();
 });
 
