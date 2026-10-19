@@ -25,6 +25,7 @@ export default function CloseLoanModal({
   const [collectionDate, setCollectionDate] = useState(today());
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [notes, setNotes] = useState("Early loan settlement");
+  const [modalError, setModalError] = useState("");
 
   useEffect(() => {
     setSettlementAmount(currentRemaining);
@@ -34,16 +35,21 @@ export default function CloseLoanModal({
   const isDiscounted = settleNum < currentRemaining;
   const discountAmount = Math.max(0, currentRemaining - settleNum);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit({
-      financeId: customer.finance_id,
-      settlementAmount: settleNum,
-      discountAmount,
-      collectionDate,
-      paymentMethod,
-      notes,
-    });
+    setModalError("");
+    try {
+      await onSubmit({
+        financeId: customer.finance_id,
+        settlementAmount: settleNum,
+        discountAmount,
+        collectionDate,
+        paymentMethod,
+        notes,
+      });
+    } catch (err) {
+      setModalError(err.message || "Failed to close loan");
+    }
   };
 
   return (
@@ -155,6 +161,26 @@ export default function CloseLoanModal({
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        {modalError && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "10px 12px",
+              background: "#fef2f2",
+              border: "1.5px solid #ef4444",
+              borderRadius: "10px",
+              color: "#b91c1c",
+              fontSize: "12.5px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <AlertCircle size={16} color="#dc2626" style={{ flexShrink: 0 }} />
+            <span>{modalError}</span>
+          </div>
+        )}
 
         <div className="closeLoanActions">
           <button

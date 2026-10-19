@@ -299,7 +299,7 @@ export async function validateAndDisburseFunds(client, data) {
   const availableCapital = await getAvailableCapital(client);
 
   if (amount > availableCapital) {
-    throw new Error(`Insufficient Funds. Available: ${availableCapital}, Requested: ${amount}`);
+    throw new Error(`Insufficient Funds in Global Cash. Available: ₹${Number(availableCapital).toLocaleString('en-IN')}, Requested: ₹${Number(amount).toLocaleString('en-IN')}`);
   }
 
   // Create Disbursement Ledger Entry

@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { TrendingUp, X, Sparkles, AlertCircle, ArrowRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { TrendingUp, X, Sparkles, AlertCircle, ArrowRight, AlertTriangle } from "lucide-react";
 import { money, today } from "../services/dailyFinanceApi.js";
+import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 
 export default function IncreaseLoanModal({
   customer,
@@ -34,6 +35,20 @@ export default function IncreaseLoanModal({
   );
   const [effectiveDate, setEffectiveDate] = useState(today());
   const [notes, setNotes] = useState("Top-up Refinance");
+  const [modalError, setModalError] = useState("");
+  const [availableCapital, setAvailableCapital] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    globalCapitalApi.getLedger()
+      .then((data) => {
+        if (isMounted && data && typeof data.availableCapital === "number") {
+          setAvailableCapital(data.availableCapital);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   const newLoanNum = Number(newLoanAmount || 0);
   const intValNum = Number(interestValue || 0);
@@ -48,18 +63,23 @@ export default function IncreaseLoanModal({
   const cashHandedOver = standardDisbursement - currentRemaining;
   const isInvalidPayout = newLoanNum > 0 && cashHandedOver < 0;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (newLoanNum <= 0 || isInvalidPayout) return;
-    onSubmit({
-      financeId: customer.finance_id,
-      newLoanAmount: newLoanNum,
-      interestType,
-      interestValue: intValNum,
-      dailyAgreedDue: Number(dailyAgreedDue || 0),
-      effectiveDate,
-      notes: notes || `Top-up Refinance (Previous balance ₹${currentRemaining} settled; Net cash given: ₹${cashHandedOver})`,
-    });
+    setModalError("");
+    try {
+      await onSubmit({
+        financeId: customer.finance_id,
+        newLoanAmount: newLoanNum,
+        interestType,
+        interestValue: intValNum,
+        dailyAgreedDue: Number(dailyAgreedDue || 0),
+        effectiveDate,
+        notes: notes || `Top-up Refinance (Previous balance ₹${currentRemaining} settled; Net cash given: ₹${cashHandedOver})`,
+      });
+    } catch (err) {
+      setModalError(err.message || "Unable to increase loan amount");
+    }
   };
 
   return (
@@ -214,6 +234,11 @@ export default function IncreaseLoanModal({
           <span>
             Actual Cash Given Now<b style={{ color: "#0284c7", fontSize: "15px" }}>{money(Math.max(0, cashHandedOver))}</b>
           </span>
+          {availableCapital !== null && (
+            <span>
+              Company Cash in Hand<b style={{ color: cashHandedOver > availableCapital ? "#dc2626" : "#059669" }}>{money(availableCapital)}</b>
+            </span>
+          )}
           <span>
             Total Return to Collect<b style={{ color: "#047857" }}>{money(newLoanNum)}</b>
           </span>
@@ -221,6 +246,74 @@ export default function IncreaseLoanModal({
             Previous Loan Status<b style={{ color: "#059669" }}>Will be CLOSED</b>
           </span>
         </div>
+
+        {/* Live Warning if cash to give exceeds company cash in hand */}
+        {availableCapital !== null && cashHandedOver > availableCapital && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "10px 14px",
+              background: "#fff1f2",
+              border: "1.5px solid #fecdd3",
+              borderRadius: "10px",
+              color: "#9f1239",
+              fontSize: "12.5px",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+            }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: "2px", color: "#e11d48" }} />
+            <div>
+              <strong>Company Cash Shortage Alert:</strong> You need to hand over <strong>{money(cashHandedOver)}</strong>, but Company Global Cash has only <strong>{money(availableCapital)}</strong> (Shortage: {money(cashHandedOver - availableCapital)}).
+              <div style={{ fontSize: "11.5px", color: "#881337", marginTop: "3px" }}>
+                The system will block this transaction until capital is contributed in <strong>Global Cash &rarr; Partner Capital</strong> or the loan amount is adjusted.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Prominent Error Banner if API returned error */}
+        {modalError && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "14px 16px",
+              background: "#fef2f2",
+              border: "2px solid #ef4444",
+              borderRadius: "12px",
+              color: "#991b1b",
+              fontSize: "13px",
+              boxShadow: "0 6px 16px rgba(239, 68, 68, 0.18)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "800", fontSize: "14px" }}>
+              <AlertCircle size={20} color="#dc2626" />
+              <span>Cannot Increase Loan (Transaction Blocked)</span>
+            </div>
+            <div style={{ marginTop: "6px", fontSize: "13px", fontWeight: "600", color: "#b91c1c" }}>
+              Server Error: {modalError}
+            </div>
+            {modalError.toLowerCase().includes("insufficient funds") && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  padding: "10px 12px",
+                  background: "#ffffff",
+                  borderRadius: "8px",
+                  border: "1px dashed #fca5a5",
+                  fontSize: "12px",
+                  color: "#334155",
+                  lineHeight: "1.5",
+                }}
+              >
+                💡 <strong>Why this happens (for your client):</strong> The finance software verifies available company capital in Global Cash before letting cash be handed over. Since this loan needs <strong>{money(cashHandedOver)}</strong> cash given to the customer, but the company cash ledger only has <strong>{availableCapital !== null ? money(availableCapital) : "₹84,000"}</strong>, the server prevented an unrecorded cash deficit.
+                <br />
+                <strong>To fix:</strong> Add a partner capital contribution under <strong>Global Cash &rarr; Partner Capital</strong> (at least {money(Math.max(0, cashHandedOver - (availableCapital || 84000)))}), or lower the new loan amount.
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           type="submit"

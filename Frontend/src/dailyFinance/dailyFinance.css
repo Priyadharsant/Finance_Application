@@ -302,7 +302,7 @@
   position: fixed; 
   bottom: 24px;
   right: 24px;
-  z-index: 30; 
+  z-index: 99999; 
   width: min(390px, calc(100vw - 32px));
 }
 .toast {

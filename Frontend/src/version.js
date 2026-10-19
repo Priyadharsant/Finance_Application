@@ -4,7 +4,7 @@ import pkg from "../package.json";
  * KAMBAM FINANCE Application Version Metadata
  */
 export const APP_VERSION = pkg.version;
-export const APP_BUILD_DATE = "2026-10-18";
+export const APP_BUILD_DATE = "2026-10-19";
 export const APP_NAME = "KAMBAM FINANCE";
 export const DEFAULT_RAW_GITHUB_DOWNLOAD_URL = `https://github.com/Priyadharsant/Finance_Application/releases/download/v${APP_VERSION}/KAMBAM.FINANCE-Setup-${APP_VERSION}.exe`;
 

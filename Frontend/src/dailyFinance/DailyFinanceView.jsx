@@ -197,6 +197,7 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
       setBusy(false);
       setActionLoading(null);
+      throw error;
     }
   };
 
@@ -221,6 +222,7 @@ export default function DailyFinanceView({
       setNotice?.({ type: "error", text: error.message });
       setBusy(false);
       setActionLoading(null);
+      throw error;
     }
   };
 

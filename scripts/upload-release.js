@@ -152,7 +152,7 @@ async function main() {
           tag_name: tag,
           target_commitish: "main",
           name: `KAMBAM FINANCE v${version}`,
-          body: `### KAMBAM FINANCE v${version}\n\n- Fully Automated Update: Downloads & installs silently in background with zero confirmation click needed\n- Fallback Manual Download Button: Instant browser download fallback if auto-download encounters any connection error\n- Multi-Stream Concurrent Downloader: 4 parallel HTTP Range chunk streams (~18-22 MB/s download speed)\n- Single Instance Lock & Silent Auto-Relaunch: Seamless upgrade with zero NSIS wizard prompts\n- In-Page Loading Animation: Embedded non-blocking loaders with instant modal closures`,
+          body: `### KAMBAM FINANCE v${version}\n\n- Detailed Inline Error Display: Real-time company cash shortage alerts and error messages inside loan top-up & closure modals\n- Global Cash Capital Protection: Transparent validation and currency formatted explanation when company funds are lower than requested disbursement\n- Notification Visibility: Fixed notification toast layer (z-index 99999) to always show on top of popups\n- Automated 3-Day Rolling Backups: Continuous hourly compressed database backups retained across 72 hours\n- Fast Auto-Updater: Silent background downloader with automatic single-instance relaunch`,
           draft: false,
           prerelease: false,
         }),
