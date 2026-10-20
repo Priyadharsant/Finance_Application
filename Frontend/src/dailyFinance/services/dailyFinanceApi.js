@@ -82,6 +82,7 @@ export const emptyFinance = {
 export const dailyFinanceApi = {
   getDashboard: (date) => call(`/dashboard?date=${date || today()}`),
   getDailyEntry: (date) => call(`/daily-entry?date=${date || today()}`),
+  getCollectionDates: () => call("/reports/collection-dates"),
   createFinance: (data) =>
     call("/customers-with-finance", {
       method: "POST",

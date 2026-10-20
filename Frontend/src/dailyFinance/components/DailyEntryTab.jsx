@@ -12,8 +12,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
-import { money, dateLabel } from "../services/dailyFinanceApi.js";
-import { exportDailyCollectionsSheet } from "../services/dailyExportUtils.js";
+import { dailyFinanceApi, money, dateLabel } from "../services/dailyFinanceApi.js";
+import {
+  exportMonthlyGroupedCollections,
+  exportDailyCollectionsSheet,
+} from "../services/dailyExportUtils.js";
 import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 import MonthFilterModal from "../../components/MonthFilterModal.jsx";
@@ -319,6 +322,7 @@ export default function DailyEntryTab({
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState("ALL"); // ALL | PENDING | COLLECTED
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const [exportingAllDates, setExportingAllDates] = useState(false);
   const [draftDate, setDraftDate] = useState(date);
 
   useEffect(() => {
@@ -332,6 +336,31 @@ export default function DailyEntryTab({
 
   const handleExportSelectedDate = () => {
     exportDailyCollectionsSheet(date, daily);
+  };
+
+  const loadAllDateCollections = async () => {
+    const { dates = [] } = await dailyFinanceApi.getCollectionDates();
+    return Promise.all(
+      dates.map(async (collectionDate) => {
+        const normalizedDate = String(collectionDate).slice(0, 10);
+        return {
+          date: normalizedDate,
+          dailyList: (await dailyFinanceApi.getDailyEntry(normalizedDate)).customers || [],
+        };
+      }),
+    );
+  };
+
+  const handleExportMonthlyGrouped = async () => {
+    try {
+      setExportingAllDates(true);
+      exportMonthlyGroupedCollections(await loadAllDateCollections());
+    } catch (error) {
+      console.error(error);
+      alert(`Failed to export monthly grouped report: ${error.message}`);
+    } finally {
+      setExportingAllDates(false);
+    }
   };
 
   // Quick Date Navigation
@@ -657,18 +686,28 @@ export default function DailyEntryTab({
               type="button"
               className="unifiedReportBtn"
               onClick={handleExportSelectedDate}
-              title={`Download collection report for ${dateLabel(date)} (.xlsx)`}
+              title={`Download selected-date collection for ${dateLabel(date)} (.xlsx)`}
             >
-              <FileSpreadsheet size={14} /> Selected Date Report
+              <FileSpreadsheet size={14} /> Selected Date Collection
+            </button>
+
+            <button
+              type="button"
+              className="unifiedReportBtn"
+              onClick={handleExportMonthlyGrouped}
+              disabled={exportingAllDates}
+              title="Download monthly sheets with separate date sections and right-side summaries"
+            >
+              <FileSpreadsheet size={14} /> Grouped Monthly Collections
             </button>
 
             <button
               type="button"
               className="unifiedReportBtn"
               onClick={() => setShowMonthModal(true)}
-              title="Download Monthly Collections Report (.xlsx)"
+              title="Download monthly collection summary (.xlsx)"
             >
-              <FileSpreadsheet size={14} /> Monthly Collection Report
+              <FileSpreadsheet size={14} /> Monthly Collection Summary
             </button>
           </div>
         </div>
@@ -723,7 +762,7 @@ export default function DailyEntryTab({
         isOpen={showMonthModal}
         onClose={() => setShowMonthModal(false)}
         onExport={handleExportMonthlyCollections}
-        title="Daily Monthly Collections Report"
+        title="Monthly Collection Summary"
         themeColor="#059669"
       />
     </section>

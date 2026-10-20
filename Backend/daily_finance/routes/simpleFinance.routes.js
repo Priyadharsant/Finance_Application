@@ -310,6 +310,18 @@ export function createSimpleFinanceRouter(db) {
     } catch (error) { next(error); }
   });
 
+  router.get('/reports/collection-dates', async (req, res, next) => {
+    try {
+      const result = await db.query(`
+        SELECT DISTINCT collection_date::date AS collection_date
+        FROM daily_finance_payments
+        WHERE status <> 'VOID'
+        ORDER BY collection_date::date ASC
+      `);
+      res.json({ dates: result.rows.map((row) => row.collection_date) });
+    } catch (error) { next(error); }
+  });
+
   router.get('/reports/customers', async (req, res, next) => {
     try {
       const from = datePattern.test(String(req.query.from)) ? req.query.from : '2000-01-01';
