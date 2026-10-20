@@ -259,7 +259,7 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
   }
 
   let totalCollectedToday = 0;
-  let totalRemainingDue = 0;
+  let paidCustomers = 0;
 
   const sortedDailyList = [...dailyList].sort((a, b) => {
     const da = new Date(a.finance_date || 0).getTime();
@@ -273,32 +273,46 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
 
   const rows = sortedDailyList.map((c, idx) => {
     const todayAmt = Number(c.today_collection || 0);
-    const rem = Number(c.remaining || 0);
     totalCollectedToday += todayAmt;
-    totalRemainingDue += rem;
+    if (todayAmt > 0) paidCustomers += 1;
 
     return {
       "S.No": idx + 1,
+      "Collection Date": dateLabel(date),
       "Customer Name": c.customer_name || "—",
       "Mobile Number": c.mobile_number || "—",
       "Total Agreed Return (₹)": Number(c.agreed_total_payable || 0),
       "Already Returned (₹)": Number(c.total_collected || 0),
-      "Remaining Balance (₹)": rem,
+      "Remaining Balance (₹)": Number(c.remaining || 0),
       "Today's Collection (₹)": todayAmt,
       "Payment Status": todayAmt > 0 ? "PAID TODAY" : "PENDING",
     };
   });
 
-  rows.push({
-    "S.No": "TOTAL",
-    "Customer Name": "DAY TOTALS",
-    "Mobile Number": `Customers: ${dailyList.length}`,
-    "Total Agreed Return (₹)": "",
-    "Already Returned (₹)": "",
-    "Remaining Balance (₹)": totalRemainingDue,
-    "Today's Collection (₹)": totalCollectedToday,
-    "Payment Status": "",
-  });
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  autoFitColumns(worksheet, rows);
 
-  exportToExcel(rows, `Daily_Collections_${date}`, `Collections ${date}`);
+  const summaryStartRow = rows.length + 2;
+  XLSX.utils.sheet_add_aoa(
+    worksheet,
+    [
+      ["Selected Date Summary", ""],
+      ["Collection Date", dateLabel(date)],
+      ["Total Customers", dailyList.length],
+      ["Paid Customers", paidCustomers],
+      ["Pending Customers", dailyList.length - paidCustomers],
+      ["Total Collection (₹)", totalCollectedToday],
+    ],
+    { origin: `A${summaryStartRow}` },
+  );
+
+  // Keep the appended summary readable as well as the detail table.
+  const columnWidths = worksheet["!cols"] || [];
+  columnWidths[0] = { wch: Math.max(columnWidths[0]?.wch || 12, 24) };
+  columnWidths[1] = { wch: Math.max(columnWidths[1]?.wch || 12, 18) };
+  worksheet["!cols"] = columnWidths;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, `Collections ${date}`);
+  XLSX.writeFile(workbook, `Daily_Collections_${date}.xlsx`);
 };

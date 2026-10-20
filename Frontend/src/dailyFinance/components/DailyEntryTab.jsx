@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
+import { exportDailyCollectionsSheet } from "../services/dailyExportUtils.js";
 import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 import MonthFilterModal from "../../components/MonthFilterModal.jsx";
@@ -318,10 +319,19 @@ export default function DailyEntryTab({
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState("ALL"); // ALL | PENDING | COLLECTED
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const [draftDate, setDraftDate] = useState(date);
+
+  useEffect(() => {
+    setDraftDate(date);
+  }, [date]);
 
   const handleExportMonthlyCollections = async (selectedMonth) => {
     const reportData = await globalCapitalApi.getMasterBusinessLedger();
     exportDailyMonthlyCollectionReport(reportData, {}, selectedMonth);
+  };
+
+  const handleExportSelectedDate = () => {
+    exportDailyCollectionsSheet(date, daily);
   };
 
   // Quick Date Navigation
@@ -343,6 +353,20 @@ export default function DailyEntryTab({
       .toISOString()
       .slice(0, 10);
     setDate(todayIso);
+  };
+
+  const handleDateChange = (event) => {
+    const nextDate = event.target.value;
+    // Do not update the controlled date until day, month, and year are complete.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
+      setDraftDate(nextDate);
+    }
+  };
+
+  const commitDate = () => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(draftDate) && draftDate !== date) {
+      setDate(draftDate);
+    }
   };
 
   // KPIs & Calculations
@@ -437,8 +461,9 @@ export default function DailyEntryTab({
 
             <input
               type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
+              value={draftDate}
+              onChange={handleDateChange}
+              onBlur={commitDate}
               style={{
                 border: 0,
                 outline: "none",
@@ -627,6 +652,15 @@ export default function DailyEntryTab({
                 }}
               />
             </div>
+
+            <button
+              type="button"
+              className="unifiedReportBtn"
+              onClick={handleExportSelectedDate}
+              title={`Download collection report for ${dateLabel(date)} (.xlsx)`}
+            >
+              <FileSpreadsheet size={14} /> Selected Date Report
+            </button>
 
             <button
               type="button"
