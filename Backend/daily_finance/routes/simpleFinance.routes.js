@@ -22,6 +22,7 @@ export function createSimpleFinanceRouter(db) {
           COALESCE((SELECT SUM(gross_finance_amount) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_finance_amount,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS collected,
           COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS disbursed,
+          GREATEST(0, COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0)) AS net_capital_invested,
           COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS receivable,
           COALESCE((SELECT SUM(initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS profit,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID'),0) AS today_collected,

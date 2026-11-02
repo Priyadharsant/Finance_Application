@@ -51,13 +51,17 @@ export async function ensureUnifiedExpensesTable(client = pool) {
 
     if (autoTableCheck.rows[0].exists) {
       await client.query(`
-        INSERT INTO expenses (id, loan_id, expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
+        INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
         SELECT 
-          ae.id, ae.loan_id, ae.expense_date, ae.amount, 'AUTO', 
+          ae.loan_id, ae.expense_date, ae.amount, 'AUTO', 
           COALESCE(ae.expense_type, 'BROKERAGE_HAND'), ae.description, ae.created_by, ae.created_at, ae.updated_at
         FROM autofinance_expenses ae
-        WHERE NOT EXISTS (SELECT 1 FROM expenses e WHERE e.id = ae.id)
-        ON CONFLICT (id) DO NOTHING;
+        WHERE NOT EXISTS (
+          SELECT 1 FROM expenses e 
+          WHERE e.description = ae.description 
+            AND e.amount = ae.amount 
+            AND e.expense_date = ae.expense_date
+        );
       `);
     }
 
@@ -71,13 +75,17 @@ export async function ensureUnifiedExpensesTable(client = pool) {
 
     if (dailyTableCheck.rows[0].exists) {
       await client.query(`
-        INSERT INTO expenses (id, expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
+        INSERT INTO expenses (expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
         SELECT 
-          dfe.expense_id, dfe.expense_date, dfe.amount, 'DAILY', 
+          dfe.expense_date, dfe.amount, 'DAILY', 
           'DAILY_OPERATIONAL', dfe.description, dfe.created_by, dfe.created_at, dfe.updated_at
         FROM daily_finance_expenses dfe
-        WHERE NOT EXISTS (SELECT 1 FROM expenses e WHERE e.id = dfe.expense_id)
-        ON CONFLICT (id) DO NOTHING;
+        WHERE NOT EXISTS (
+          SELECT 1 FROM expenses e 
+          WHERE e.description = dfe.description 
+            AND e.amount = dfe.amount 
+            AND e.expense_date = dfe.expense_date
+        );
       `);
     }
 

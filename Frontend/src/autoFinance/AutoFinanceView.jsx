@@ -153,9 +153,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [loanTabFilter, setLoanTabFilter] = useState("ALL");
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState("ALL");
   const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [loanMonthFilter, setLoanMonthFilter] = useState(currentMonthStr);
-  const [dashboardMonthFilter, setDashboardMonthFilter] = useState(currentMonthStr);
-  const [customerMonthFilter, setCustomerMonthFilter] = useState(currentMonthStr);
+  const [loanMonthFilter, setLoanMonthFilter] = useState("");
+  const [dashboardMonthFilter, setDashboardMonthFilter] = useState("");
+  const [customerMonthFilter, setCustomerMonthFilter] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "desc",

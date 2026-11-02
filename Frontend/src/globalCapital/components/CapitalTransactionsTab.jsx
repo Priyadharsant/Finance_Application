@@ -21,8 +21,7 @@ export default function CapitalTransactionsTab({
   onOpenCapitalAction,
   onSelectRecord,
 }) {
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  const [monthFilter, setMonthFilter] = useState("");
   const [partnerFilter, setPartnerFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -88,127 +87,100 @@ export default function CapitalTransactionsTab({
     });
   }, [transactions, txFilterType, monthFilter, partnerFilter, searchQuery]);
 
-  const totalDeposits = filteredTransactions
-    .filter(
-      (t) =>
-        t.transaction_type === "CONTRIBUTION" ||
-        t.transaction_type === "ADJUSTMENT_INCREASE" ||
-        t.transaction_type === "PROFIT_SHARE"
-    )
+  const totalIn = filteredTransactions
+    .filter((t) => t.transaction_type === "CONTRIBUTION" || t.transaction_type === "ADJUSTMENT_INCREASE" || t.transaction_type === "PROFIT_SHARE")
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
-  const totalWithdrawals = filteredTransactions
-    .filter(
-      (t) =>
-        t.transaction_type === "WITHDRAWAL" ||
-        t.transaction_type === "ADJUSTMENT_DECREASE" ||
-        t.transaction_type === "CAPITAL_EXIT"
-    )
+  const totalOut = filteredTransactions
+    .filter((t) => t.transaction_type === "WITHDRAWAL" || t.transaction_type === "ADJUSTMENT_DECREASE" || t.transaction_type === "CAPITAL_EXIT")
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-
-  const netMovement = totalDeposits - totalWithdrawals;
-
-  const isFiltered =
-    txFilterType !== "ALL" ||
-    monthFilter !== currentMonthStr ||
-    partnerFilter !== "ALL" ||
-    searchQuery.trim() !== "";
-
-  const handleResetFilters = () => {
-    setTxFilterType("ALL");
-    setMonthFilter(currentMonthStr);
-    setPartnerFilter("ALL");
-    setSearchQuery("");
-  };
 
   return (
     <div className="financeFadeIn globalCapitalView">
       <div className="financeHeader">
         <div>
-          <span className="overline autoBadgeTag">CAPITAL ACTIVITY</span>
+          <span className="overline autoBadgeTag">FINANCIAL FLOW</span>
           <h2>Capital Transactions</h2>
-          <p className="globalSectionDescription">Partner money added and withdrawn.</p>
+          <p className="globalSectionDescription">Audit trail of all money invested and withdrawn.</p>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             className="secondaryBtn"
-            style={{ color: "#dc2626", borderColor: "#fca5a5", fontWeight: "700" }}
+            style={{ color: "#dc2626", borderColor: "#fca5a5" }}
             onClick={() => onOpenCapitalAction(null, "WITHDRAWAL")}
           >
             <MinusCircle size={16} /> Withdraw Money
           </button>
           <button
             className="primaryBtn"
-            style={{ background: "#059669", borderColor: "#059669", fontWeight: "700" }}
+            style={{ background: "#059669", borderColor: "#059669" }}
             onClick={() => onOpenCapitalAction(null, "CONTRIBUTION")}
           >
-            <Plus size={16} /> Add Money (In)
+            <Plus size={16} /> Add Money (Deposit)
+          </button>
+          <button
+            className="secondaryBtn"
+            onClick={() => exportCapitalTransactions(filteredTransactions)}
+            title="Download transactions to Excel"
+          >
+            <Download size={16} /> Download Excel{filteredTransactions.length < (transactions?.length || 0) ? ` (${filteredTransactions.length})` : ""}
           </button>
         </div>
       </div>
 
-      {/* Simple summary */}
-      <div className="globalCapitalStats fourCol">
+      <div className="globalCapitalStats compact">
         <div>
-          <span>Capital In (Deposits)</span>
-          <strong style={{ color: "#059669" }}>
-            +{money(totalDeposits)}
-          </strong>
-          <small>Partner capital added</small>
+          <span>Total Transactions</span>
+          <strong>{filteredTransactions.length}</strong>
+          <small>Showing {filteredTransactions.length} of {transactions.length} records</small>
         </div>
         <div>
-          <span>Capital Out (Withdrawals)</span>
-          <strong style={{ color: "#e11d48" }}>
-            -{money(totalWithdrawals)}
+          <span>Capital Inflow (Deposits)</span>
+          <strong style={{ color: "#059669" }}>
+            +{money(totalIn)}
           </strong>
-          <small>Partner capital withdrawn</small>
+          <small>Total additions</small>
+        </div>
+        <div>
+          <span>Capital Outflow (Withdrawals)</span>
+          <strong style={{ color: "#dc2626" }}>
+            -{money(totalOut)}
+          </strong>
+          <small>Total withdrawals</small>
         </div>
       </div>
 
-      {/* Interactive In-Page Filters Bar with Month Calendar */}
-      <div
-        className="expenseFilterBar mt-20"
-        style={{
-          margin: "20px 0 16px",
-          padding: "12px 16px",
-          background: "#f8fafc",
-          borderRadius: "10px",
-          border: "1px solid #e2e8f0",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        {/* Left: Type Switcher */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          {[
-            { id: "ALL", label: "All Types" },
-            { id: "CONTRIBUTION", label: "Deposits (In)" },
-            { id: "WITHDRAWAL", label: "Withdrawals (Out)" },
-          ].map((f) => (
+      {/* Filter and Control Bar */}
+      <div className="expenseFilterBar mt-20" style={{ margin: "20px 0 14px", padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Segment Pills (Type) */}
+          <div className="segmentControls" style={{ display: "inline-flex", background: "#e2e8f0", padding: "2px", borderRadius: "8px" }}>
             <button
-              key={f.id}
               type="button"
-              className={`secondaryBtn ${txFilterType === f.id ? "active" : ""}`}
-              style={{
-                background: txFilterType === f.id ? "#0f766e" : "#ffffff",
-                color: txFilterType === f.id ? "#ffffff" : "#475569",
-                borderColor: txFilterType === f.id ? "#0f766e" : "#cbd5e1",
-                fontSize: "12px",
-                fontWeight: "600",
-                padding: "6px 12px",
-              }}
-              onClick={() => setTxFilterType(f.id)}
+              className={`segmentBtn ${txFilterType === "ALL" ? "active" : ""}`}
+              onClick={() => setTxFilterType("ALL")}
+              style={{ padding: "4px 10px", fontSize: "12px", border: "none", borderRadius: "6px", cursor: "pointer", background: txFilterType === "ALL" ? "#ffffff" : "transparent", fontWeight: txFilterType === "ALL" ? "700" : "500" }}
             >
-              {f.label}
+              All
             </button>
-          ))}
-        </div>
+            <button
+              type="button"
+              className={`segmentBtn ${txFilterType === "CONTRIBUTION" ? "active" : ""}`}
+              onClick={() => setTxFilterType("CONTRIBUTION")}
+              style={{ padding: "4px 10px", fontSize: "12px", border: "none", borderRadius: "6px", cursor: "pointer", background: txFilterType === "CONTRIBUTION" ? "#ffffff" : "transparent", fontWeight: txFilterType === "CONTRIBUTION" ? "700" : "500", color: txFilterType === "CONTRIBUTION" ? "#059669" : "inherit" }}
+            >
+              Inflow (Deposits)
+            </button>
+            <button
+              type="button"
+              className={`segmentBtn ${txFilterType === "WITHDRAWAL" ? "active" : ""}`}
+              onClick={() => setTxFilterType("WITHDRAWAL")}
+              style={{ padding: "4px 10px", fontSize: "12px", border: "none", borderRadius: "6px", cursor: "pointer", background: txFilterType === "WITHDRAWAL" ? "#ffffff" : "transparent", fontWeight: txFilterType === "WITHDRAWAL" ? "700" : "500", color: txFilterType === "WITHDRAWAL" ? "#dc2626" : "inherit" }}
+            >
+              Outflow (Withdrawals)
+            </button>
+          </div>
 
-        {/* Right: Month Calendar, Partner Selector & Search Box */}
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           {/* Month Calendar Picker */}
           <div
             style={{
@@ -220,7 +192,7 @@ export default function CapitalTransactionsTab({
               borderRadius: "8px",
               border: "1px solid #cbd5e1",
             }}
-            title="Filter by Month Calendar"
+            title="Filter by Transaction Month"
           >
             <Calendar size={15} color="#0f766e" />
             <input
@@ -236,7 +208,7 @@ export default function CapitalTransactionsTab({
                 background: "transparent",
                 cursor: "pointer",
               }}
-              title="Click calendar icon to select month"
+              title="Click calendar icon to filter by month"
             />
             {monthFilter && (
               <button
@@ -245,7 +217,7 @@ export default function CapitalTransactionsTab({
                 style={{
                   border: "none",
                   background: "transparent",
-                  color: "#94a3b8",
+                  color: "#64748b",
                   cursor: "pointer",
                   padding: "0 2px",
                 }}
@@ -256,19 +228,18 @@ export default function CapitalTransactionsTab({
             )}
           </div>
 
-          {/* Partner Selector */}
+          {/* Partner Dropdown */}
           <select
             value={partnerFilter}
             onChange={(e) => setPartnerFilter(e.target.value)}
             style={{
-              padding: "6px 12px",
+              padding: "5px 10px",
               borderRadius: "8px",
               border: "1px solid #cbd5e1",
               fontSize: "12px",
               background: "#ffffff",
-              color: "#334155",
-              fontWeight: "500",
               cursor: "pointer",
+              fontWeight: "500",
             }}
           >
             <option value="ALL">All Partners</option>
@@ -279,86 +250,143 @@ export default function CapitalTransactionsTab({
             ))}
           </select>
 
-          {/* Live Search */}
-          <div className="expenseSearchInput" style={{ minWidth: "200px" }}>
-            <Search size={14} color="#94a3b8" />
-            <input
-              type="text"
-              placeholder="Search partner, note, UTR..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ fontSize: "12px" }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }}
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Reset Filters */}
-          {isFiltered && (
+          {(monthFilter || partnerFilter !== "ALL" || txFilterType !== "ALL" || searchQuery) && (
             <button
               type="button"
               className="secondaryBtn"
-              style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-              onClick={handleResetFilters}
-              title="Reset all filters"
+              style={{ padding: "4px 8px", fontSize: "11.5px" }}
+              onClick={() => {
+                setMonthFilter("");
+                setPartnerFilter("ALL");
+                setTxFilterType("ALL");
+                setSearchQuery("");
+              }}
             >
-              <RotateCcw size={13} /> Reset
+              <RotateCcw size={12} /> Reset
+            </button>
+          )}
+        </div>
+
+        {/* Search */}
+        <div className="searchBox">
+          <Search size={14} />
+          <input
+            type="text"
+            placeholder="Search partner, notes, ref..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
+              }}
+            >
+              <X size={14} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="financeCard globalCapitalCard">
-        <div className="tableResponsive">
+      {/* Transactions Table */}
+      <div className="financeTableCard">
+        <div className="tableWrap">
           <table className="financeTable">
             <thead>
               <tr>
-                <th style={{ width: "50px" }}>S.No</th>
                 <th>Date</th>
                 <th>Partner</th>
+                <th>Type</th>
+                <th>Source</th>
+                <th>Notes / Narration</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
+                <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map((t, idx) => {
-                const isContrib =
-                  t.transaction_type === "CONTRIBUTION" ||
-                  t.transaction_type === "ADJUSTMENT_INCREASE" ||
-                  t.transaction_type === "PROFIT_SHARE";
+              {filteredTransactions.map((t) => {
+                const isDeposit = t.transaction_type === "CONTRIBUTION" || t.transaction_type === "ADJUSTMENT_INCREASE" || t.transaction_type === "PROFIT_SHARE";
                 return (
-                  <tr key={t.id}>
-                    <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                  <tr
+                    key={t.id}
+                    onClick={() => onSelectRecord({ type: "capital_transaction", record: t })}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {formatDate(t.effective_date || t.transaction_date || t.created_at)}
+                    </td>
                     <td>
-                      {formatDate(t.effective_date)}
+                      <div style={{ fontWeight: "700", color: "#0f172a" }}>
+                        {t.partner_name || "—"}
+                      </div>
+                      {t.reference_number && (
+                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                          Ref: {t.reference_number}
+                        </div>
+                      )}
                     </td>
-                    <td style={{ fontWeight: "600", color: "#0f172a" }}>
-                      {t.partner_name}
+                    <td>
+                      <span
+                        className="autoBadgeTag"
+                        style={{
+                          background: isDeposit ? "#ecfdf5" : "#fef2f2",
+                          color: isDeposit ? "#059669" : "#dc2626",
+                          border: `1px solid ${isDeposit ? "#a7f3d0" : "#fecaca"}`,
+                          fontWeight: "700",
+                          fontSize: "11px",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        {isDeposit ? "DEPOSIT" : "WITHDRAWAL"}
+                      </span>
                     </td>
-                    <td
-                      style={{
-                        textAlign: "right",
-                        fontWeight: "700",
-                        fontSize: "14px",
-                        color: isContrib ? "#059669" : "#e11d48",
-                      }}
-                    >
-                      {isContrib ? "+" : "-"}
-                      {money(t.amount)}
+                    <td>
+                      {t.fund_source_type === "LEND" ? (
+                        <span style={{ color: "#7c3aed", fontWeight: "600", fontSize: "12px" }}>
+                          Lend ({t.lender_name || "Borrower"})
+                        </span>
+                      ) : (
+                        <span style={{ color: "#0d9488", fontWeight: "600", fontSize: "12px" }}>
+                          Own
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ maxWidth: "250px" }}>
+                      <div style={{ fontSize: "12px", color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {formatTxNotes(t.notes) || "—"}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: "700" }}>
+                      <span style={{ color: isDeposit ? "#059669" : "#dc2626" }}>
+                        {isDeposit ? "+" : "-"}{money(t.amount)}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        type="button"
+                        className="secondaryBtn"
+                        style={{ padding: "3px 8px", fontSize: "11px" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectRecord({ type: "capital_transaction", record: t });
+                        }}
+                      >
+                        Details →
+                      </button>
                     </td>
                   </tr>
                 );
               })}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
-                    No capital transactions found matching the applied filters.
+                  <td colSpan="7" style={{ textAlign: "center", padding: "36px", color: "#64748b" }}>
+                    No capital transactions match your selected filters.
                   </td>
                 </tr>
               )}

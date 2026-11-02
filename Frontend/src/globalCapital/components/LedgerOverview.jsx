@@ -20,7 +20,7 @@ export default function LedgerOverview({
   onSelectRecord,
 }) {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  const [monthFilter, setMonthFilter] = useState("");
   const [moduleFilter, setModuleFilter] = useState("ALL");
   const [directionFilter, setDirectionFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");

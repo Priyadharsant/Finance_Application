@@ -15,9 +15,11 @@ export const pool = new Pool(
     ? {
         connectionString,
         ssl: isRemote ? { rejectUnauthorized: false } : undefined,
-        max: 15,
+        max: 20,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 30000, // 30s to allow Neon serverless compute wake-up
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       }
     : {
         host: process.env.POSTGRES_HOST || 'localhost',
@@ -25,9 +27,11 @@ export const pool = new Pool(
         database: process.env.POSTGRES_DB || 'finance',
         user: process.env.POSTGRES_USER || 'postgres',
         password: process.env.POSTGRES_PASSWORD || '1607',
-        max: 15,
+        max: 20,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 30000,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       }
 );
 
@@ -44,7 +48,7 @@ pool.on('connect', (client) => {
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle PostgreSQL client:', err.message);
+  console.error('PostgreSQL client error (auto-reconnecting):', err.message);
 });
 
 export const query = (text, params) => pool.query(text, params);

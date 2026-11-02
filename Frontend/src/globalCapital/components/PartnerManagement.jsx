@@ -23,8 +23,7 @@ export default function PartnerManagement({
   onOpenCapitalAction,
   onSelectRecord,
 }) {
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  const [monthFilter, setMonthFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPartnerId, setExpandedPartnerId] = useState(null);
 
@@ -46,7 +45,8 @@ export default function PartnerManagement({
     }).sort((a, b) => {
       const da = new Date(a.created_at || a.effective_date || 0).getTime();
       const db = new Date(b.created_at || b.effective_date || 0).getTime();
-      return da - db;
+      if (da !== db) return da - db;
+      return (a.name || a.partner_name || "").localeCompare(b.name || b.partner_name || "");
     });
   }, [partners, monthFilter, searchQuery]);
 
@@ -100,7 +100,7 @@ export default function PartnerManagement({
 
       <div className="globalCapitalStats compact">
         <div>
-          <span>Filtered partners</span>
+          <span>Partners</span>
           <strong>{filteredPartners.length}</strong>
           <small>Total registered: {partners.length}</small>
         </div>
@@ -159,7 +159,7 @@ export default function PartnerManagement({
                 style={{
                   border: "none",
                   background: "transparent",
-                  color: "#94a3b8",
+                  color: "#64748b",
                   cursor: "pointer",
                   padding: "0 2px",
                 }}
@@ -170,266 +170,202 @@ export default function PartnerManagement({
             )}
           </div>
 
-          <div className="expenseSearchInput" style={{ minWidth: "240px" }}>
-            <Search size={14} color="#94a3b8" />
-            <input
-              type="text"
-              placeholder="Search partner, phone, PAN..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }}
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          {(monthFilter !== currentMonthStr || searchQuery) && (
+          {monthFilter && (
             <button
               type="button"
               className="secondaryBtn"
-              style={{ padding: "5px 10px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-              onClick={() => {
-                setMonthFilter(currentMonthStr);
-                setSearchQuery("");
+              style={{ padding: "4px 8px", fontSize: "11.5px" }}
+              onClick={() => setMonthFilter("")}
+            >
+              Show All Partners
+            </button>
+          )}
+        </div>
+
+        {/* Search */}
+        <div className="searchBox">
+          <Search size={14} />
+          <input
+            type="text"
+            placeholder="Search partner / phone / PAN..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
               }}
             >
-              <RotateCcw size={12} /> Reset Filters
+              <X size={14} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="financeCard globalCapitalCard">
-        <div
-          className="cardHead"
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h3 style={{ margin: 0 }}>
-              <Users size={18} /> Partner Profiles &amp; Balances
-            </h3>
-            <span className="tag autoTag" style={{ fontSize: "11px" }}>
-              {filteredPartners.length} of {partners.length}
-            </span>
-          </div>
-          <span style={{ fontSize: "12px", color: "#64748b" }}>
-            💡 Click any partner to view details &amp; account history
-          </span>
-        </div>
-        <div className="tableResponsive">
+      {/* Partners List Table */}
+      <div className="financeTableCard">
+        <div className="tableWrap">
           <table className="financeTable">
             <thead>
               <tr>
-                <th style={{ width: "50px" }}>S.No</th>
-                <th>Partner &amp; Contact</th>
-                <th style={{ textAlign: "right" }}>Total Out</th>
-                <th style={{ textAlign: "right" }}>Current Balance</th>
-                <th style={{ textAlign: "center", width: "220px" }}>Actions</th>
+                <th style={{ width: "40px" }}></th>
+                <th>Partner</th>
+                <th>Contact</th>
+                <th style={{ textAlign: "right" }}>Current Capital</th>
+                <th style={{ textAlign: "center", width: "230px" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredPartners.map((p, idx) => (
-                <tr
-                  className="clickable globalClickableRow"
-                  key={p.id}
-                  title="Click to view partner details"
-                  onClick={() =>
-                    onSelectRecord({ type: "partner", record: p })
-                  }
-                >
-                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>
-                    {idx + 1}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <strong style={{ fontSize: "14px", color: "#0f172a" }}>
-                          {p.name}
-                        </strong>
-                        {p.borrowed_funds && p.borrowed_funds.length > 0 && (
-                          <button
-                            type="button"
-                            className="tag"
-                            style={{
-                              background: expandedPartnerId === p.id ? "#7c3aed" : "#f5f3ff",
-                              color: expandedPartnerId === p.id ? "#ffffff" : "#7c3aed",
-                              border: "1px solid #ddd6fe",
-                              borderRadius: "6px",
-                              padding: "2px 8px",
-                              fontSize: "11px",
-                              fontWeight: "700",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedPartnerId(expandedPartnerId === p.id ? null : p.id);
-                            }}
-                            title="Click to view borrowed money sources and interest"
-                          >
-                            <span>Lend Money ({p.borrowed_funds.length})</span>
-                            {expandedPartnerId === p.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                          </button>
-                        )}
+              {filteredPartners.map((p) => (
+                <React.Fragment key={p.id}>
+                  <tr
+                    onClick={() =>
+                      setExpandedPartnerId(expandedPartnerId === p.id ? null : p.id)
+                    }
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td style={{ textAlign: "center" }}>
+                      {expandedPartnerId === p.id ? (
+                        <ChevronUp size={16} color="#64748b" />
+                      ) : (
+                        <ChevronDown size={16} color="#64748b" />
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: "700", color: "#0f172a" }}>
+                        {p.name || p.partner_name}
                       </div>
-
-                      <div className="partnerContactPills">
-                        {p.phone && (
-                          <a
-                            href={`tel:${p.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Phone size={11} /> {p.phone}
-                          </a>
-                        )}
-                        {p.email && (
-                          <a
-                            href={`mailto:${p.email}`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Mail size={11} /> {p.email}
-                          </a>
-                        )}
+                      <div style={{ fontSize: "11px", color: "#64748b" }}>
+                        Joined: {formatDate(p.created_at || p.effective_date)}
                       </div>
-
-                      {/* COLLAPSIBLE BORROWED FUNDS DROPDOWN */}
-                      {expandedPartnerId === p.id && p.borrowed_funds && (
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            padding: "10px 12px",
-                            background: "#faf5ff",
-                            border: "1px solid #e9d5ff",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                          }}
-                          onClick={(e) => e.stopPropagation()}
+                    </td>
+                    <td>
+                      <div>{p.phone || "—"}</div>
+                      <div style={{ fontSize: "11px", color: "#64748b" }}>
+                        {p.email || p.pan_number || "—"}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: "700" }}>
+                      <div>{money(p.current_capital)}</div>
+                      <div style={{ fontSize: "11px", fontWeight: "600", marginTop: "3px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                        <span style={{ color: "#0d9488", background: "#f0fdfa", padding: "1px 5px", borderRadius: "4px" }}>
+                          Own: {money(p.available_own_capital ?? p.own_capital ?? 0)}
+                        </span>
+                        <span style={{ color: "#7c3aed", background: "#f5f3ff", padding: "1px 5px", borderRadius: "4px" }}>
+                          Lend: {money(p.available_lend_capital ?? p.lend_capital ?? p.borrowed_total ?? 0)}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          gap: "6px",
+                          alignItems: "center",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="partnerActionBtn add"
+                          title="Add Money / Capital Deposit"
+                          onClick={() => onOpenCapitalAction(p.id, "CONTRIBUTION")}
                         >
-                          <div style={{ fontWeight: "700", color: "#6b21a8", marginBottom: "6px", display: "flex", justifyContent: "space-between" }}>
-                            <span>Borrowed / Lend Money Breakdown:</span>
-                            <span>Total: ₹{Number(p.borrowed_total || 0).toLocaleString("en-IN")}</span>
+                          + Add
+                        </button>
+                        <button
+                          type="button"
+                          className="partnerActionBtn withdraw"
+                          title="Withdraw Money"
+                          onClick={() => onOpenCapitalAction(p.id, "WITHDRAWAL")}
+                        >
+                          - Withdraw
+                        </button>
+                        <button
+                          type="button"
+                          className="secondaryBtn"
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            borderRadius: "6px",
+                          }}
+                          title="View full details"
+                          onClick={() =>
+                            onSelectRecord({ type: "partner", record: p })
+                          }
+                        >
+                          Details →
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expanded Breakdown Accordion */}
+                  {expandedPartnerId === p.id && (
+                    <tr style={{ background: "#f8fafc" }}>
+                      <td colSpan="5" style={{ padding: "14px 20px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>BASE CAPITAL</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", marginTop: "2px" }}>
+                              {money(p.base_capital ?? p.initial_contribution ?? 0)}
+                            </div>
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            {p.borrowed_funds.map((bf) => (
-                              <div
-                                key={bf.id}
-                                style={{
-                                  background: "#ffffff",
-                                  padding: "6px 10px",
-                                  borderRadius: "6px",
-                                  border: "1px solid #f3e8ff",
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                    <strong style={{ color: "#0f172a" }}>{bf.lender_name || "Lender"}</strong>
-                                    {bf.transaction_type === "WITHDRAWAL" && (
-                                      <span style={{ fontSize: "10px", background: "#fee2e2", color: "#dc2626", padding: "1px 6px", borderRadius: "4px", fontWeight: "600" }}>
-                                        Repaid / Withdrawn
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ color: "#64748b", fontSize: "11px" }}>
-                                    Date: {formatDate(bf.effective_date)}
-                                    {bf.notes ? ` · ${bf.notes}` : ""}
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontWeight: "700", color: bf.transaction_type === "WITHDRAWAL" ? "#dc2626" : "#7c3aed" }}>
-                                    {bf.transaction_type === "WITHDRAWAL" ? "-" : "+"}₹{Number(bf.amount || 0).toLocaleString("en-IN")}
-                                  </div>
-                                  <span style={{ fontSize: "11px", color: "#b91c1c", fontWeight: "600" }}>
-                                    Interest: {bf.interest_rate || 0}%
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>TOTAL CONTRIBUTED</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#059669", marginTop: "2px" }}>
+                              {money(p.total_contributed ?? 0)}
+                            </div>
+                          </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>TOTAL WITHDRAWN</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#dc2626", marginTop: "2px" }}>
+                              {money(p.total_withdrawn ?? 0)}
+                            </div>
+                          </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>PROFIT EARNED</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#2563eb", marginTop: "2px" }}>
+                              {money(p.profit_earned ?? 0)}
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </td>
-                  <td
-                    style={{
-                      textAlign: "right",
-                      fontWeight: "600",
-                      color: "#e11d48",
-                    }}
-                  >
-                    -{money(p.total_withdrawn)}
-                  </td>
-                  <td
-                    style={{
-                      textAlign: "right",
-                      fontWeight: "700",
-                      fontSize: "14.5px",
-                      color: "#0f766e",
-                    }}
-                  >
-                    <div>{money(p.current_capital)}</div>
-                    <div style={{ fontSize: "11px", fontWeight: "600", marginTop: "3px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                      <span style={{ color: "#0d9488", background: "#f0fdfa", padding: "1px 5px", borderRadius: "4px" }}>
-                        Own: {money(p.available_own_capital ?? p.own_capital ?? 0)}
-                      </span>
-                      <span style={{ color: "#7c3aed", background: "#f5f3ff", padding: "1px 5px", borderRadius: "4px" }}>
-                        Lend: {money(p.available_lend_capital ?? p.lend_capital ?? p.borrowed_total ?? 0)}
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        gap: "6px",
-                        alignItems: "center",
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        className="partnerActionBtn add"
-                        title="Add Money / Capital Deposit"
-                        onClick={() => onOpenCapitalAction(p.id, "CONTRIBUTION")}
-                      >
-                        + Add
-                      </button>
-                      <button
-                        type="button"
-                        className="partnerActionBtn withdraw"
-                        title="Withdraw Money"
-                        onClick={() => onOpenCapitalAction(p.id, "WITHDRAWAL")}
-                      >
-                        - Withdraw
-                      </button>
-                      <button
-                        type="button"
-                        className="secondaryBtn"
-                        style={{
-                          padding: "4px 8px",
-                          fontSize: "11px",
-                          borderRadius: "6px",
-                        }}
-                        title="View full details"
-                        onClick={() =>
-                          onSelectRecord({ type: "partner", record: p })
-                        }
-                      >
-                        Details →
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+
+                        {p.lender_breakdown && p.lender_breakdown.length > 0 && (
+                          <div style={{ marginTop: "12px", padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: "11.5px", fontWeight: "700", color: "#7c3aed", marginBottom: "6px" }}>
+                              BORROWED / LEND CAPITAL DETAILS
+                            </div>
+                            <table style={{ width: "100%", fontSize: "12px" }}>
+                              <thead>
+                                <tr style={{ color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>
+                                  <th style={{ textAlign: "left", padding: "4px 0" }}>Lender</th>
+                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Amount</th>
+                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Interest %</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {p.lender_breakdown.map((l, lIdx) => (
+                                  <tr key={lIdx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                    <td style={{ padding: "4px 0", fontWeight: "600" }}>{l.lenderName || "—"}</td>
+                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{money(l.amount)}</td>
+                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{l.interestRate ? `${l.interestRate}%` : "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
               {filteredPartners.length === 0 && (
                 <tr>

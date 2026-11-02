@@ -39,6 +39,11 @@ export default function DailyDashboard({
     }
   };
 
+  const actualCapitalInvested =
+    position.net_capital_invested !== undefined
+      ? position.net_capital_invested
+      : Math.max(0, Number(position.disbursed || 0) - Number(position.collected || 0));
+
   return (
     <section className="content">
       <div className="intro">
@@ -68,7 +73,12 @@ export default function DailyDashboard({
           count
         />
         <Metric
-          title="Finance amount"
+          title="Capital Invested (Principal)"
+          value={actualCapitalInvested}
+          tone="blue"
+        />
+        <Metric
+          title="Total Finance Given (Rolled)"
           value={position.total_finance_amount}
         />
         <Metric
@@ -168,30 +178,30 @@ export default function DailyDashboard({
                         )}
                       </small>
                     </td>
-                  <td>{money(customer.gross_finance_amount)}</td>
-                  <td>
-                    {money(customer.initial_deduction)}{" "}
-                    {customer.interest_type === "PERCENT" && (
-                      <small>({customer.interest_value}%)</small>
-                    )}
-                  </td>
-                  <td>{money(customer.net_disbursement)}</td>
-                  <td>{money(customer.agreed_total_payable)}</td>
-                  <td>{money(customer.total_collected)}</td>
-                  <td className="redText">
-                    {money(customer.outstanding_receivable)}
-                  </td>
-                  <td className="greenText">
-                    {money(customer.initial_deduction)}
-                  </td>
-                  <td>
-                    <span className={`tag ${customer.status.toLowerCase()}`}>
-                      {customer.status}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
+                    <td>{money(customer.gross_finance_amount)}</td>
+                    <td>
+                      {money(customer.initial_deduction)}{" "}
+                      {customer.interest_type === "PERCENT" && (
+                        <small>({customer.interest_value}%)</small>
+                      )}
+                    </td>
+                    <td>{money(customer.net_disbursement)}</td>
+                    <td>{money(customer.agreed_total_payable)}</td>
+                    <td>{money(customer.total_collected)}</td>
+                    <td className="redText">
+                      {money(customer.outstanding_receivable)}
+                    </td>
+                    <td className="greenText">
+                      {money(customer.initial_deduction)}
+                    </td>
+                    <td>
+                      <span className={`tag ${customer.status.toLowerCase()}`}>
+                        {customer.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!customers.length && <Empty text="No customers yet." />}

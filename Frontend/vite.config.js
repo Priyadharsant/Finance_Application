@@ -5,6 +5,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-dom/client', 'lucide-react', 'xlsx'],
+  },
   server: {
     port: 5173,
     strictPort: true,

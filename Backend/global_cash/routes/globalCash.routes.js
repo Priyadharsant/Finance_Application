@@ -101,6 +101,64 @@ router.get('/period-financials', async (req, res) => {
 });
 
 // --- EXPENSES (UNIFIED: AUTO, DAILY, GENERAL) ---
+router.post('/expenses/sync-legacy', async (req, res) => {
+  try {
+    let migratedAuto = 0;
+    let migratedDaily = 0;
+
+    const autoCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'autofinance_expenses' AND table_type = 'BASE TABLE'
+      );
+    `);
+    if (autoCheck.rows[0].exists) {
+      const autoRes = await pool.query(`
+        INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
+        SELECT 
+          ae.loan_id, ae.expense_date, ae.amount, 'AUTO', 
+          COALESCE(ae.expense_type, 'BROKERAGE_HAND'), ae.description, ae.created_by, ae.created_at, ae.updated_at
+        FROM autofinance_expenses ae
+        WHERE NOT EXISTS (
+          SELECT 1 FROM expenses e 
+          WHERE e.description = ae.description 
+            AND e.amount = ae.amount 
+            AND e.expense_date = ae.expense_date
+        )
+        RETURNING id;
+      `);
+      migratedAuto = autoRes.rowCount;
+    }
+
+    const dailyCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'daily_finance_expenses' AND table_type = 'BASE TABLE'
+      );
+    `);
+    if (dailyCheck.rows[0].exists) {
+      const dailyRes = await pool.query(`
+        INSERT INTO expenses (expense_date, amount, category, expense_type, description, created_by, created_at, updated_at)
+        SELECT 
+          dfe.expense_date, dfe.amount, 'DAILY', 
+          'DAILY_OPERATIONAL', dfe.description, dfe.created_by, dfe.created_at, dfe.updated_at
+        FROM daily_finance_expenses dfe
+        WHERE NOT EXISTS (
+          SELECT 1 FROM expenses e 
+          WHERE e.description = dfe.description 
+            AND e.amount = dfe.amount 
+            AND e.expense_date = dfe.expense_date
+        )
+        RETURNING id;
+      `);
+      migratedDaily = dailyRes.rowCount;
+    }
+
+    res.json({ success: true, migratedAuto, migratedDaily });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 router.get('/expenses', async (req, res) => {
   try {
     const { year, month, category, from, to, search, limit, offset } = req.query;

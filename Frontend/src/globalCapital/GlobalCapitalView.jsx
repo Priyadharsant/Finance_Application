@@ -63,8 +63,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
   // 3. Filter States
   const [txFilterType, setTxFilterType] = useState("ALL");
-  const [expenseFilterYear, setExpenseFilterYear] = useState(now.getFullYear().toString());
-  const [expenseFilterMonth, setExpenseFilterMonth] = useState((now.getMonth() + 1).toString());
+  const [expenseFilterYear, setExpenseFilterYear] = useState("");
+  const [expenseFilterMonth, setExpenseFilterMonth] = useState("");
   const [expenseFilterCategory, setExpenseFilterCategory] = useState("ALL");
   const [expenseSearch, setExpenseSearch] = useState("");
 

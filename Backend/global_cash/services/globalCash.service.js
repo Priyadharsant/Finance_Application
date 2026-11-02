@@ -22,37 +22,86 @@ export async function getAvailableCapital(client) {
 export async function getMonthlyStats(client) {
   const query = `
     WITH months AS (
-      SELECT DISTINCT TO_CHAR(effective_date, 'YYYY-MM') as month_label
-      FROM global_cash_ledger
+      SELECT DISTINCT TO_CHAR(effective_date, 'YYYY-MM') as month_label FROM global_cash_ledger WHERE effective_date IS NOT NULL
+      UNION
+      SELECT DISTINCT TO_CHAR(collection_date, 'YYYY-MM') as month_label FROM daily_finance_payments WHERE collection_date IS NOT NULL
+      UNION
+      SELECT DISTINCT TO_CHAR(finance_date, 'YYYY-MM') as month_label FROM daily_finance_accounts WHERE finance_date IS NOT NULL
+      UNION
+      SELECT DISTINCT TO_CHAR(payment_date, 'YYYY-MM') as month_label FROM autofinance_payments WHERE payment_date IS NOT NULL
+      UNION
+      SELECT DISTINCT TO_CHAR(start_date, 'YYYY-MM') as month_label FROM autofinance_loans WHERE start_date IS NOT NULL
       UNION
       SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     ),
-    ledger_agg AS (
+    ledger_partner AS (
       SELECT 
         TO_CHAR(effective_date, 'YYYY-MM') as month_label,
         SUM(CASE WHEN source_module IN ('GLOBAL_CASH', 'GLOBAL') AND direction = 'CREDIT' THEN amount ELSE 0 END) as global_in,
-        SUM(CASE WHEN source_module IN ('GLOBAL_CASH', 'GLOBAL') AND direction = 'DEBIT' THEN amount ELSE 0 END) as global_out,
-        SUM(CASE WHEN source_module = 'AUTO_FINANCE' AND direction = 'CREDIT' THEN amount ELSE 0 END) as auto_in,
-        SUM(CASE WHEN source_module = 'AUTO_FINANCE' AND direction = 'DEBIT' THEN amount ELSE 0 END) as auto_out,
-        SUM(CASE WHEN source_module = 'DAILY_FINANCE' AND direction = 'CREDIT' THEN amount ELSE 0 END) as daily_in,
-        SUM(CASE WHEN source_module = 'DAILY_FINANCE' AND direction = 'DEBIT' THEN amount ELSE 0 END) as daily_out,
-        SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE 0 END) as total_in,
-        SUM(CASE WHEN direction = 'DEBIT' THEN amount ELSE 0 END) as total_out
+        SUM(CASE WHEN source_module IN ('GLOBAL_CASH', 'GLOBAL') AND direction = 'DEBIT' THEN amount ELSE 0 END) as global_out
       FROM global_cash_ledger
       GROUP BY TO_CHAR(effective_date, 'YYYY-MM')
+    ),
+    daily_stats AS (
+      SELECT
+        m.month_label,
+        COALESCE(dp.collected, 0) as daily_in,
+        COALESCE(da.disbursed, 0) as daily_out
+      FROM months m
+      LEFT JOIN (
+        SELECT 
+          TO_CHAR(collection_date, 'YYYY-MM') as month_label,
+          SUM(amount) as collected
+        FROM daily_finance_payments
+        WHERE status <> 'VOID'
+        GROUP BY TO_CHAR(collection_date, 'YYYY-MM')
+      ) dp ON m.month_label = dp.month_label
+      LEFT JOIN (
+        SELECT 
+          TO_CHAR(finance_date, 'YYYY-MM') as month_label,
+          SUM(COALESCE(net_disbursement, gross_finance_amount - initial_deduction)) as disbursed
+        FROM daily_finance_accounts
+        WHERE status <> 'CANCELLED'
+        GROUP BY TO_CHAR(finance_date, 'YYYY-MM')
+      ) da ON m.month_label = da.month_label
+    ),
+    auto_stats AS (
+      SELECT
+        m.month_label,
+        COALESCE(ap.collected, 0) as auto_in,
+        COALESCE(al.disbursed, 0) as auto_out
+      FROM months m
+      LEFT JOIN (
+        SELECT 
+          TO_CHAR(payment_date, 'YYYY-MM') as month_label,
+          SUM(amount_paid) as collected
+        FROM autofinance_payments
+        GROUP BY TO_CHAR(payment_date, 'YYYY-MM')
+      ) ap ON m.month_label = ap.month_label
+      LEFT JOIN (
+        SELECT 
+          TO_CHAR(start_date, 'YYYY-MM') as month_label,
+          SUM(loan_amount) as disbursed
+        FROM autofinance_loans
+        WHERE status <> 'REJECTED'
+        GROUP BY TO_CHAR(start_date, 'YYYY-MM')
+      ) al ON m.month_label = al.month_label
     )
     SELECT 
       m.month_label,
-      COALESCE(l.global_in, 0) as global_in,
-      COALESCE(l.global_out, 0) as global_out,
-      COALESCE(l.auto_in, 0) as auto_in,
-      COALESCE(l.auto_out, 0) as auto_out,
-      COALESCE(l.daily_in, 0) as daily_in,
-      COALESCE(l.daily_out, 0) as daily_out,
-      COALESCE(l.total_in, 0) as total_in,
-      COALESCE(l.total_out, 0) as total_out
+      COALESCE(lp.global_in, 0) as global_in,
+      COALESCE(lp.global_out, 0) as global_out,
+      COALESCE(ats.auto_in, 0) as auto_in,
+      COALESCE(ats.auto_out, 0) as auto_out,
+      COALESCE(ds.daily_in, 0) as daily_in,
+      COALESCE(ds.daily_out, 0) as daily_out,
+      (COALESCE(lp.global_in, 0) + COALESCE(ats.auto_in, 0) + COALESCE(ds.daily_in, 0)) as total_in,
+      (COALESCE(lp.global_out, 0) + COALESCE(ats.auto_out, 0) + COALESCE(ds.daily_out, 0)) as total_out
     FROM months m
-    LEFT JOIN ledger_agg l ON m.month_label = l.month_label
+    LEFT JOIN ledger_partner lp ON m.month_label = lp.month_label
+    LEFT JOIN daily_stats ds ON m.month_label = ds.month_label
+    LEFT JOIN auto_stats ats ON m.month_label = ats.month_label
+    WHERE m.month_label IS NOT NULL
     ORDER BY m.month_label ASC;
   `;
   const res = await client.query(query);
