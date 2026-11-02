@@ -33,9 +33,9 @@ const MAIN_TABLES_CONFIG = [
   {
     id: 'daily_finance_accounts',
     name: 'daily_finance_accounts',
-    label: 'Daily Loans (Change Name & Amount)',
+    label: 'Daily Loans (Borrower & Repayment Details)',
     module: 'Daily Finance',
-    description: 'Change borrower name, loan amount, daily due, and payable in one table',
+    description: 'Edit borrower and repayment details. Disbursement amount, deduction, and date changes require a verified correction.',
     icon: 'Users',
   },
   {
@@ -592,6 +592,13 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
     // 2. UPDATE: daily_finance_accounts (Unified Name + Amount)
     // =========================================================================
     if (tableName === 'daily_finance_accounts') {
+      const disbursementFields = ['gross_finance_amount', 'initial_deduction', 'net_disbursement', 'finance_date'];
+      if (disbursementFields.some((field) => Object.prototype.hasOwnProperty.call(updates, field))) {
+        return res.status(400).json({
+          error: 'Disbursement amount, deduction, and date cannot be edited in Table Studio because that can make the loan account disagree with its cash ledger. Correct the account with verified cash paid and any refinance settlement recorded separately.',
+        });
+      }
+
       const accRes = await db.query(
         `SELECT customer_id, gross_finance_amount, agreed_total_payable FROM daily_finance_accounts WHERE finance_id = $1`,
         [id]
