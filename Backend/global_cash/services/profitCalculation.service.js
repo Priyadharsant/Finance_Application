@@ -107,6 +107,33 @@ export function addDays(dateStr, numDays) {
   return `${year}-${month}-${day}`;
 }
 
+export async function hasPeriodInputsChangedAfter(client, periodStart, periodEnd, finalizedAt) {
+  const result = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM daily_finance_accounts
+      WHERE finance_date BETWEEN $1 AND $2
+        AND GREATEST(created_at, updated_at) > $3
+      UNION ALL
+      SELECT 1 FROM daily_finance_payments
+      WHERE collection_date BETWEEN $1 AND $2
+        AND GREATEST(created_at, updated_at) > $3
+      UNION ALL
+      SELECT 1 FROM expenses
+      WHERE expense_date BETWEEN $1 AND $2
+        AND GREATEST(created_at, updated_at) > $3
+      UNION ALL
+      SELECT 1 FROM autofinance_loans
+      WHERE start_date BETWEEN $1 AND $2
+        AND GREATEST(created_at, updated_at) > $3
+      UNION ALL
+      SELECT 1 FROM autofinance_payments
+      WHERE payment_date BETWEEN $1 AND $2
+        AND created_at > $3
+    ) AS changed_after_close;
+  `, [periodStart, periodEnd, finalizedAt]);
+  return Boolean(result.rows[0]?.changed_after_close);
+}
+
 /**
  * Identifies if a transaction type is an inflow (credit) or outflow (debit) to partner capital.
  */
@@ -481,7 +508,17 @@ export async function getProfitCalculations(client) {
     GROUP BY c.id
     ORDER BY c.period_end DESC, c.created_at DESC;
   `);
-  return res.rows;
+  return Promise.all(res.rows.map(async (calculation) => ({
+    ...calculation,
+    sourceDataChangedAfterFinalization: calculation.status === 'FINALIZED'
+      ? await hasPeriodInputsChangedAfter(
+          client,
+          calculation.period_start,
+          calculation.period_end,
+          calculation.finalized_at || calculation.created_at
+        )
+      : false,
+  })));
 }
 
 /**
@@ -496,6 +533,14 @@ export async function getProfitCalculationById(client, calculationId) {
     throw new Error('Profit calculation not found');
   }
   const calculation = calcRes.rows[0];
+  calculation.sourceDataChangedAfterFinalization = calculation.status === 'FINALIZED'
+    ? await hasPeriodInputsChangedAfter(
+        client,
+        calculation.period_start,
+        calculation.period_end,
+        calculation.finalized_at || calculation.created_at
+      )
+    : false;
 
   // Allocations with partner details
   const allocRes = await client.query(`

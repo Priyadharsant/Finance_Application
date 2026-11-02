@@ -800,8 +800,8 @@ router.get('/reports/master-business-ledger', async (req, res) => {
 // --- AUTOMATED DATE 1 CLOSING CRON ---
 router.post('/cron/run-monthly-closing', async (req, res) => {
   try {
-    const { year, month, force } = req.body || {};
-    const result = await executeAutomatedMonthlyClosing({ year, month, force, client: pool });
+    const { year, month } = req.body || {};
+    const result = await executeAutomatedMonthlyClosing({ year, month, client: pool });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

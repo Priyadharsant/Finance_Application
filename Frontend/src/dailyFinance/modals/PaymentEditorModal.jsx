@@ -16,6 +16,7 @@ export default function PaymentEditorModal({
 
   const maxAllowed = payment.maxAllowed !== undefined ? Number(payment.maxAllowed) : null;
   const isExceeded = maxAllowed !== null && Number(payment.amount || 0) > maxAllowed;
+  const isNonCashSettlement = String(payment.paymentMethod || payment.payment_method || "CASH").toUpperCase() === "TRANSFER";
 
   return (
     <div
@@ -47,7 +48,7 @@ export default function PaymentEditorModal({
         </label>
 
         <label>
-          Amount collected (₹)
+          {isNonCashSettlement ? "Loan balance settled (₹)" : "Amount collected (₹)"}
           <input
             type="number"
             min="0"
@@ -118,6 +119,7 @@ export default function PaymentEditorModal({
             <option value="CASH">Cash</option>
             <option value="UPI">UPI / GPay / PhonePe</option>
             <option value="BANK_TRANSFER">Bank Transfer / NEFT</option>
+            <option value="TRANSFER">Internal refinance settlement (non-cash)</option>
           </select>
         </label>
 

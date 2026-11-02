@@ -13,6 +13,7 @@ export function createSimpleFinanceRouter(db) {
     if (customerId) customerDetailsCache.delete(customerId);
     else customerDetailsCache.clear();
   };
+  const isCashPaymentMethod = (method) => String(method || 'CASH').toUpperCase() !== 'TRANSFER';
 
   router.get('/dashboard', async (req, res, next) => {
     try {
@@ -21,16 +22,18 @@ export function createSimpleFinanceRouter(db) {
         db.query(`SELECT
           COALESCE((SELECT SUM(gross_finance_amount) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_finance_amount,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS collected,
+          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS cash_collected,
+          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) = 'TRANSFER'),0) AS non_cash_settlements,
           COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS disbursed,
           GREATEST(0, COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0)) AS net_capital_invested,
           COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS receivable,
           COALESCE((SELECT SUM(initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS profit,
-          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID'),0) AS today_collected,
+          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS today_collected,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='ACTIVE') AS active_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='COMPLETED') AS completed_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status <> 'CANCELLED') AS total_accounts,
           COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS expenses,
-          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0)
+          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0)
           - COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0)
           - COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS in_hand`, [asOf]),
         db.query(`SELECT c.customer_id,c.customer_name,c.mobile_number,c.address,c.notes,a.finance_id,a.finance_date,a.gross_finance_amount,a.initial_deduction,a.interest_type,a.interest_value,a.net_disbursement,a.agreed_total_payable,a.daily_agreed_due,a.status,a.created_at,
@@ -81,7 +84,8 @@ export function createSimpleFinanceRouter(db) {
   router.post('/payments', async (req, res) => {
     const client = await db.connect();
     try {
-      const { customerId, financeId, collectionDate, amount, paymentMethod = 'CASH', notes } = req.body;
+      const { customerId, financeId, collectionDate, amount, notes } = req.body;
+      const paymentMethod = String(req.body.paymentMethod || 'CASH').toUpperCase();
       if (!customerId || !financeId || !datePattern.test(collectionDate) || !amountPattern.test(String(amount))) {
         throw new Error('Customer, date, and a valid amount are required');
       }
@@ -125,16 +129,18 @@ export function createSimpleFinanceRouter(db) {
         [payment.rows[0].payment_id, JSON.stringify(payment.rows[0])]
       );
 
-      await createLedgerEntry(client, {
-        effectiveDate: collectionDate,
-        type: 'DAILY_COLLECTION',
-        amount: Number(amount),
-        direction: 'CREDIT',
-        sourceModule: 'DAILY',
-        referenceType: 'DAILY_PAYMENT',
-        referenceId: payment.rows[0].payment_id,
-        notes: `Daily Finance Collection for Account ${financeId}`
-      });
+      if (isCashPaymentMethod(paymentMethod)) {
+        await createLedgerEntry(client, {
+          effectiveDate: collectionDate,
+          type: 'DAILY_COLLECTION',
+          amount: Number(amount),
+          direction: 'CREDIT',
+          sourceModule: 'DAILY',
+          referenceType: 'DAILY_PAYMENT',
+          referenceId: payment.rows[0].payment_id,
+          notes: `Daily Finance Cash Collection for Account ${financeId}`
+        });
+      }
 
       await client.query('COMMIT');
       invalidateCustomerCache(customerId);
@@ -150,7 +156,8 @@ export function createSimpleFinanceRouter(db) {
   router.put('/payments/:paymentId', async (req, res) => {
     const client = await db.connect();
     try {
-      const { collectionDate, amount, paymentMethod = 'CASH', notes } = req.body;
+      const { collectionDate, amount, notes } = req.body;
+      const paymentMethod = String(req.body.paymentMethod || 'CASH').toUpperCase();
       if (!datePattern.test(String(collectionDate)) || !amountPattern.test(String(amount))) {
         throw new Error('Date and a valid amount are required');
       }
@@ -200,20 +207,48 @@ export function createSimpleFinanceRouter(db) {
         [req.params.paymentId, JSON.stringify(previous.rows[0]), JSON.stringify(result.rows[0])]
       );
 
-      const oldAmount = Number(previous.rows[0].amount);
       const newAmount = Number(amount);
-      const delta = newAmount - oldAmount;
+      const desiredCashAmount = isCashPaymentMethod(paymentMethod) ? newAmount : 0;
+      const ledgerRes = await client.query(`
+        SELECT
+          effective_date::text AS effective_date,
+          COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0) AS net_cash,
+          (ARRAY_AGG(reference_type ORDER BY created_at ASC)
+            FILTER (WHERE type = 'DAILY_COLLECTION'))[1] AS base_reference_type
+        FROM global_cash_ledger
+        WHERE reference_id = $1
+          AND source_module = 'DAILY'
+          AND type IN ('DAILY_COLLECTION', 'ADJUSTMENT')
+        GROUP BY effective_date
+      `, [req.params.paymentId]);
 
-      if (delta !== 0) {
+      // Preserve the ledger as an audit trail while moving any amount recorded
+      // on an old date back to zero and putting the intended cash on the new date.
+      const ledgerByDate = new Map(ledgerRes.rows.map((row) => [
+        String(row.effective_date).slice(0, 10),
+        {
+          currentCash: Number(row.net_cash || 0),
+          referenceType: row.base_reference_type || 'DAILY_PAYMENT',
+        },
+      ]));
+      if (!ledgerByDate.has(collectionDate)) {
+        ledgerByDate.set(collectionDate, { currentCash: 0, referenceType: 'DAILY_PAYMENT' });
+      }
+
+      for (const [effectiveDate, ledgerDay] of ledgerByDate) {
+        const targetCash = effectiveDate === collectionDate ? desiredCashAmount : 0;
+        const delta = Number((targetCash - ledgerDay.currentCash).toFixed(2));
+        if (delta === 0) continue;
+
         await createLedgerEntry(client, {
-          effectiveDate: collectionDate,
+          effectiveDate,
           type: 'ADJUSTMENT',
           amount: Math.abs(delta),
           direction: delta > 0 ? 'CREDIT' : 'DEBIT',
           sourceModule: 'DAILY',
-          referenceType: 'DAILY_PAYMENT',
+          referenceType: ledgerDay.referenceType,
           referenceId: req.params.paymentId,
-          notes: `Daily Finance Collection Adjustment for Account ${financeId}`
+          notes: `Daily Finance Cash Collection Adjustment for Account ${financeId}`
         });
       }
 

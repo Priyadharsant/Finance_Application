@@ -49,20 +49,24 @@ export async function getMonthlyStats(client) {
         COALESCE(da.disbursed, 0) as daily_out
       FROM months m
       LEFT JOIN (
-        SELECT 
-          TO_CHAR(collection_date, 'YYYY-MM') as month_label,
-          SUM(amount) as collected
-        FROM daily_finance_payments
-        WHERE status <> 'VOID'
-        GROUP BY TO_CHAR(collection_date, 'YYYY-MM')
+        SELECT
+          TO_CHAR(effective_date, 'YYYY-MM') as month_label,
+          SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END) as collected
+        FROM global_cash_ledger
+        WHERE source_module = 'DAILY'
+          AND type IN ('DAILY_COLLECTION', 'ADJUSTMENT')
+          AND reference_type IN ('DAILY_PAYMENT', 'LOAN_CLOSURE')
+        GROUP BY TO_CHAR(effective_date, 'YYYY-MM')
       ) dp ON m.month_label = dp.month_label
       LEFT JOIN (
-        SELECT 
-          TO_CHAR(finance_date, 'YYYY-MM') as month_label,
-          SUM(COALESCE(net_disbursement, gross_finance_amount - initial_deduction)) as disbursed
-        FROM daily_finance_accounts
-        WHERE status <> 'CANCELLED'
-        GROUP BY TO_CHAR(finance_date, 'YYYY-MM')
+        SELECT
+          TO_CHAR(effective_date, 'YYYY-MM') as month_label,
+          SUM(amount) as disbursed
+        FROM global_cash_ledger
+        WHERE source_module = 'DAILY'
+          AND type = 'DAILY_LOAN_DISBURSEMENT'
+          AND direction = 'DEBIT'
+        GROUP BY TO_CHAR(effective_date, 'YYYY-MM')
       ) da ON m.month_label = da.month_label
     ),
     auto_stats AS (

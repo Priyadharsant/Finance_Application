@@ -94,7 +94,7 @@ export default function DailyDashboard({
           value={position.total_agreed_return || position.total_finance_amount}
         />
         <Metric
-          title="Collected"
+          title="Loan balance reductions"
           value={position.collected}
           tone="green"
         />
@@ -109,14 +109,14 @@ export default function DailyDashboard({
           tone="green"
         />
         <Metric
-          title="Current In-Hand Amount"
-          value={position.collected}
+          title="Cash received (excludes refinance)"
+          value={position.cash_collected}
           tone="green"
         />
         <Metric
           title="Next Month Projected Amount"
           value={
-            Number(position.collected || 0) +
+            Number(position.cash_collected || 0) +
             Math.round(Number(position.receivable || 0) * 0.5)
           }
           tone="orange"

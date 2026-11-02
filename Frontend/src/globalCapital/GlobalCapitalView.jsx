@@ -494,14 +494,14 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const handleTriggerCron = async () => {
     if (
       !window.confirm(
-        "Trigger automated Date 1 monthly closing now? This calculates operational revenue & expenses for the previous month, allocates net profit via Time-Weighted Capital, and credits partner accounts automatically."
+        "Run the company-level monthly calculation now? This records revenue, expenses, and net profit. It does not allocate or pay partner profit. Existing closes will not be overwritten."
       )
     ) {
       return;
     }
     setRunningCron(true);
     try {
-      const data = await globalCapitalApi.runMonthlyClosing({ force: true });
+      const data = await globalCapitalApi.runMonthlyClosing();
       if (data.success) {
         setNotice({ type: "success", text: data.message });
         fetchCurrentMonthEstimate();

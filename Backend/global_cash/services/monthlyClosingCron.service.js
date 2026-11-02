@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { pool } from '../../autoFinance/config/db.js';
 import { calculatePeriodFinancials } from './globalCash.service.js';
-import { ensureProfitCalculationTables } from './profitCalculation.service.js';
+import { ensureProfitCalculationTables, hasPeriodInputsChangedAfter } from './profitCalculation.service.js';
 
 let cronTask = null;
 let dailyCronTask = null;
@@ -37,7 +37,6 @@ export function getPreviousMonthPeriod(referenceDate = new Date()) {
 export async function executeAutomatedMonthlyClosing({
   year,
   month,
-  force = false,
   client = pool,
 } = {}) {
   await ensureProfitCalculationTables(client);
@@ -62,7 +61,7 @@ export async function executeAutomatedMonthlyClosing({
     periodEnd = prev.periodEnd;
   }
 
-  console.log(`[MonthlyClosingCron] Starting automated closing for period: ${periodStart} to ${periodEnd} (force=${force})`);
+  console.log(`[MonthlyClosingCron] Starting automated closing for period: ${periodStart} to ${periodEnd}.`);
 
   // 2. Check idempotency: has this period already been finalized?
   const existingRes = await client.query(
@@ -71,17 +70,44 @@ export async function executeAutomatedMonthlyClosing({
   );
 
   let existingCalc = existingRes.rows[0];
-  if (existingCalc && existingCalc.status === 'FINALIZED' && !force) {
-    console.log(`[MonthlyClosingCron] Period ${periodStart} to ${periodEnd} is already finalized (ID: ${existingCalc.id}). Skipping.`);
-    const result = {
-      success: true,
-      alreadyProcessed: true,
-      periodStart,
-      periodEnd,
-      calculationId: existingCalc.id,
-      distributableProfit: parseFloat(existingCalc.distributable_profit),
-      message: `Monthly closing for ${periodStart} to ${periodEnd} was already completed and finalized.`,
-    };
+  if (existingCalc) {
+    const inputsChanged = existingCalc.status === 'FINALIZED'
+      ? await hasPeriodInputsChangedAfter(
+          client,
+          periodStart,
+          periodEnd,
+          existingCalc.finalized_at || existingCalc.created_at
+        )
+      : false;
+    const financials = await calculatePeriodFinancials(client, periodStart, periodEnd);
+    const recalculatedProfit = Math.max(0, Number(financials.netProfit || 0));
+
+    const result = inputsChanged
+      ? {
+          success: true,
+          alreadyProcessed: true,
+          stale: true,
+          periodStart,
+          periodEnd,
+          calculationId: existingCalc.id,
+          storedDistributableProfit: Number(existingCalc.distributable_profit || 0),
+          recalculatedDistributableProfit: recalculatedProfit,
+          financials,
+          message: `The finalized close for ${periodStart} to ${periodEnd} has newer backdated or edited source records. It was not changed; review the recalculated figures before updating the close.`,
+        }
+      : {
+          success: true,
+          alreadyProcessed: true,
+          requiresReview: existingCalc.status !== 'FINALIZED',
+          periodStart,
+          periodEnd,
+          calculationId: existingCalc.id,
+          distributableProfit: Number(existingCalc.distributable_profit || 0),
+          message: existingCalc.status === 'FINALIZED'
+            ? `Monthly close ${periodStart} to ${periodEnd} is already finalized. It was not changed.`
+            : `A ${existingCalc.status} profit calculation already exists for ${periodStart} to ${periodEnd}. Review it before finalizing; it was not changed.`,
+        };
+
     lastExecutionResult = { timestamp: new Date().toISOString(), ...result };
     return result;
   }
@@ -99,51 +125,24 @@ export async function executeAutomatedMonthlyClosing({
   // for idempotency and reporting, but do not calculate weights or create credits.
   const distributionPreview = { allocations: [], totalCapitalWeight: 0 };
 
-  // 5. Persist or Update Partner Profit Calculation record as FINALIZED
-  let calculationId = existingCalc?.id;
-  if (existingCalc) {
-    const updateRes = await client.query(
-      `UPDATE partner_profit_calculations
-       SET distributable_profit = $1,
-           total_capital_weight = $2,
-           status = 'FINALIZED',
-           finalized_at = NOW(),
-           notes = $3,
-           updated_at = NOW()
-       WHERE id = $4
-       RETURNING *;`,
-      [
-        distributableProfit,
-        distributionPreview.totalCapitalWeight,
-        `Automated Date 1 Closing (Revenue: ₹${totalRevenue.toFixed(2)}, Expenses: ₹${expenses.toFixed(2)}, Net Profit: ₹${netProfit.toFixed(2)})`,
-        calculationId,
-      ]
-    );
-    // Remove previous payments and allocations if re-running with force
-    await client.query(`
-      DELETE FROM partner_profit_payments 
-      WHERE allocation_id IN (SELECT id FROM partner_profit_allocations WHERE calculation_id = $1);
-    `, [calculationId]);
-    await client.query(`DELETE FROM partner_profit_allocations WHERE calculation_id = $1;`, [calculationId]);
-  } else {
-    const insertRes = await client.query(
-      `INSERT INTO partner_profit_calculations (
-         period_start, period_end, distributable_profit, total_capital_weight,
-         status, finalized_at, created_by, notes
-       )
-       VALUES ($1, $2, $3, $4, 'FINALIZED', NOW(), 'CRON_AUTOMATION', $5)
-       RETURNING *;`,
-      [
-        periodStart,
-        periodEnd,
-        distributableProfit,
-        distributionPreview.totalCapitalWeight,
-        `Automated Date 1 Closing (Revenue: ₹${totalRevenue.toFixed(2)}, Expenses: ₹${expenses.toFixed(2)}, Net Profit: ₹${netProfit.toFixed(2)})`,
-      ]
-    );
-    existingCalc = insertRes.rows[0];
-    calculationId = existingCalc.id;
-  }
+  // 5. Insert a new company-level close only when no record exists for this period.
+  const insertRes = await client.query(
+    `INSERT INTO partner_profit_calculations (
+       period_start, period_end, distributable_profit, total_capital_weight,
+       status, finalized_at, created_by, notes
+     )
+     VALUES ($1, $2, $3, $4, 'FINALIZED', NOW(), 'CRON_AUTOMATION', $5)
+     RETURNING *;`,
+    [
+      periodStart,
+      periodEnd,
+      distributableProfit,
+      distributionPreview.totalCapitalWeight,
+      `Automated Date 1 Closing (Revenue: ₹${totalRevenue.toFixed(2)}, Expenses: ₹${expenses.toFixed(2)}, Net Profit: ₹${netProfit.toFixed(2)})`,
+    ]
+  );
+  existingCalc = insertRes.rows[0];
+  const calculationId = existingCalc.id;
 
   const result = {
     success: true,
@@ -162,7 +161,7 @@ export async function executeAutomatedMonthlyClosing({
     totalCapitalWeight: distributionPreview.totalCapitalWeight,
     partnersCount: 0,
     partnerAllocations: [],
-    message: `Successfully recorded company revenue (₹${totalRevenue.toLocaleString('en-IN')}) and net profit (₹${netProfit.toLocaleString('en-IN')}). No partner profit shares were created.`,
+    message: `Recorded company revenue (₹${totalRevenue.toLocaleString('en-IN')}) and net profit (₹${netProfit.toLocaleString('en-IN')}). No partner profit shares or payments were created.`,
   };
 
   lastExecutionResult = {

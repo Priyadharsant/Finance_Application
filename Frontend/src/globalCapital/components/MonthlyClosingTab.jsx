@@ -428,9 +428,9 @@ export default function MonthlyClosingTab({
               <strong>DAILY CALCULATION (11:59 PM) + MONTHLY FINAL CLOSING (DATE 1)</strong>
             </div>
             <p>
-              <strong>Daily:</strong> The system automatically calculates revenue, expenses, active capital days, and expected profit every night at 11:59 PM.
+              <strong>Daily:</strong> The system records daily revenue, expenses, and net profit every night at 11:59 PM. Partner allocations are not created by this calculation.
               <br />
-              <strong>Monthly:</strong> On the 1st of every month at 12:01 AM, the completed month is finalized and the profit is credited to each partner's capital balance.
+              <strong>Monthly:</strong> On the 1st of every month at 12:01 AM, the previous month's company result is finalized. Partner allocations and payments require a separate calculation and settlement.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
               {cronStatus?.lastDailyCalculation && (
@@ -452,15 +452,21 @@ export default function MonthlyClosingTab({
               )}
               {cronStatus?.lastExecution && (
                 <div className="cronLastRunInfo">
-                  <span>Last Final Closing:</span>
+                  <span>{cronStatus.lastExecution.stale ? "Finalized close needs review:" : "Last Final Closing:"}</span>
                   <strong>
                     {cronStatus.lastExecution.periodStart} to {cronStatus.lastExecution.periodEnd}
                   </strong>
-                  <span>• Net Profit Credited:</span>
+                  <span>• {cronStatus.lastExecution.stale ? "Stored / recalculated:" : "Net company profit:"}</span>
                   <strong style={{ color: "#059669" }}>
-                    {money(cronStatus.lastExecution.distributableProfit)}
+                    {cronStatus.lastExecution.stale
+                      ? `${money(cronStatus.lastExecution.storedDistributableProfit)} / ${money(cronStatus.lastExecution.recalculatedDistributableProfit)}`
+                      : money(cronStatus.lastExecution.distributableProfit)}
                   </strong>
-                  <span>• Credited to {cronStatus.lastExecution.partnersCount || 0} partners</span>
+                  <span>
+                    {cronStatus.lastExecution.stale
+                      ? "• Newer backdated or edited records found; no close was changed"
+                      : `• Partner allocations: ${cronStatus.lastExecution.partnersCount || 0}`}
+                  </span>
                 </div>
               )}
             </div>
