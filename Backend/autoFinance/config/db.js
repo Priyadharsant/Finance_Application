@@ -15,7 +15,6 @@ export const pool = new Pool(
     ? {
         connectionString,
         ssl: isRemote ? { rejectUnauthorized: false } : undefined,
-        options: '-c search_path=public',
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 30000, // 30s to allow Neon serverless compute wake-up
@@ -28,7 +27,6 @@ export const pool = new Pool(
         database: process.env.POSTGRES_DB || 'finance',
         user: process.env.POSTGRES_USER || 'postgres',
         password: process.env.POSTGRES_PASSWORD || '1607',
-        options: '-c search_path=public',
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 30000,
