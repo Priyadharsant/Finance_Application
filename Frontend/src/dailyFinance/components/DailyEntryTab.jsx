@@ -121,33 +121,6 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
         {money(customer.remaining)}
       </td>
 
-      <td>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontWeight: "700", color: "#0f766e" }}>
-            {money(customer.daily_agreed_due || 0)}
-          </span>
-          {!isCollected && Number(customer.daily_agreed_due) > 0 && amount !== customer.daily_agreed_due && (
-            <button
-              type="button"
-              onClick={() => setAmount(customer.daily_agreed_due)}
-              title="Reset input to predicted daily due"
-              style={{
-                fontSize: "10.5px",
-                padding: "2px 6px",
-                borderRadius: "4px",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                color: "#16a34a",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              Fill Due
-            </button>
-          )}
-        </div>
-      </td>
-
       {/* Collection Status & Inline Input */}
       <td>
         {isCollected ? (
@@ -410,9 +383,9 @@ export default function DailyEntryTab({
 
   const handleDateChange = (event) => {
     const nextDate = event.target.value;
-    // Do not update the controlled date until day, month, and year are complete.
-    if (/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
-      setDraftDate(nextDate);
+    setDraftDate(nextDate);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(nextDate) && nextDate !== date) {
+      setDate(nextDate);
     }
   };
 
@@ -740,7 +713,6 @@ export default function DailyEntryTab({
               <th>Customer</th>
               <th>Total return</th>
               <th>Remaining</th>
-              <th>Predicted daily due</th>
               <th>Today's collection</th>
               <th>Action</th>
             </tr>
