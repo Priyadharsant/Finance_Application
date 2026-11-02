@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
+import { matchesSearch } from "../utils/search.js";
 import "./autoFinance.css";
 import { apiCall, API_BASE, dateLabel } from "./services/autoFinanceApi";
 import {
@@ -609,16 +610,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         const cDate = String(c.created_at || "").slice(0, 7);
         if (cDate !== customerMonthFilter) return false;
       }
-      if (search) {
-        const matches =
-          `${c.first_name} ${c.last_name}`
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          (c.phone && c.phone.includes(search)) ||
-          (c.customer_code &&
-            c.customer_code.toLowerCase().includes(search.toLowerCase()));
-        if (!matches) return false;
-      }
+      if (!matchesSearch(search, c)) return false;
       return true;
     }).sort(
       (a, b) =>
@@ -639,17 +631,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         if (dueM !== dashboardMonthFilter && startM !== dashboardMonthFilter) return false;
       }
 
-      const matchesSearch =
-        !search ||
-        `${l.first_name} ${l.last_name}`
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
-        (l.registration_number &&
-          l.registration_number.toLowerCase().includes(search.toLowerCase())) ||
-        (l.make && l.make.toLowerCase().includes(search.toLowerCase())) ||
-        (l.model && l.model.toLowerCase().includes(search.toLowerCase()));
-
-      if (!matchesSearch) return false;
+      if (!matchesSearch(search, l)) return false;
 
       if (statusFilter === "ALL") return true;
 
@@ -699,19 +681,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   // Vehicle Loans directory: show ACTIVE loans first, then COMPLETED loans
   const vehiclePageLoans = useMemo(() => {
     let list = loans.filter((l) => {
-      const matchesSearch =
-        !search ||
-        `${l.first_name} ${l.last_name}`
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
-        (l.customer_code &&
-          l.customer_code.toLowerCase().includes(search.toLowerCase())) ||
-        (l.registration_number &&
-          l.registration_number.toLowerCase().includes(search.toLowerCase())) ||
-        (l.make && l.make.toLowerCase().includes(search.toLowerCase())) ||
-        (l.model && l.model.toLowerCase().includes(search.toLowerCase()));
-
-      if (!matchesSearch) return false;
+      if (!matchesSearch(search, l)) return false;
 
       if (loanTabFilter === "ACTIVE" && l.status !== "ACTIVE") return false;
       if (loanTabFilter === "COMPLETED" && l.status !== "COMPLETED")

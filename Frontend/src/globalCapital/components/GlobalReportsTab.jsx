@@ -10,6 +10,7 @@ import { money } from "../../autoFinance/services/autoFinanceApi.js";
 import { formatDate } from "../utils/formatters.js";
 import { exportGlobalCategoryReport } from "../services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../services/globalCapitalApi.js";
+import { matchesSearch } from "../../utils/search.js";
 
 export default function GlobalReportsTab({
   ledgerData,
@@ -150,8 +151,7 @@ export default function GlobalReportsTab({
         const pStr = `${c.year}-${String(c.month).padStart(2, "0")}`;
         if (appliedRange.from && `${pStr}-31` < appliedRange.from) return false;
         if (appliedRange.to && `${pStr}-01` > appliedRange.to) return false;
-        const q = (search || "").trim().toLowerCase();
-        if (q && !(c.monthName || pStr).toLowerCase().includes(q)) return false;
+        if (!matchesSearch(search, c, { period: pStr })) return false;
         if (status && (c.isCurrentMonth ? "IN_PROGRESS" : "FINALIZED") !== status) return false;
         return true;
       })
@@ -165,10 +165,7 @@ export default function GlobalReportsTab({
   // Filtered partners
   const displayedPartners = useMemo(() => {
     return internalPartners.filter((p) => {
-      const q = (search || "").trim().toLowerCase();
-      if (q && !(p.name || p.partner_name || "").toLowerCase().includes(q) && !(p.phone || "").includes(q)) {
-        return false;
-      }
+      if (!matchesSearch(search, p)) return false;
       if (partnerId && String(p.id) !== String(partnerId)) return false;
       if (status && (p.status || "ACTIVE") !== status) return false;
       return true;
@@ -182,12 +179,7 @@ export default function GlobalReportsTab({
         const dateStr = (e.expense_date || e.date || "").slice(0, 10);
         if (appliedRange.from && dateStr && dateStr < appliedRange.from) return false;
         if (appliedRange.to && dateStr && dateStr > appliedRange.to) return false;
-        const q = (search || "").trim().toLowerCase();
-        if (q) {
-          const desc = (e.description || e.title || "").toLowerCase();
-          const cat = (e.category || e.categoryLabel || "").toLowerCase();
-          if (!desc.includes(q) && !cat.includes(q)) return false;
-        }
+        if (!matchesSearch(search, e, { formatted_date: formatDate(dateStr) })) return false;
         return true;
       })
       .sort((a, b) => {
@@ -314,7 +306,7 @@ export default function GlobalReportsTab({
 
         {/* Search Input */}
         <input
-          placeholder="Search partner / description..."
+          placeholder="Search partner, phone, ID, expense, category, amount, date, notes..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ minWidth: "200px" }}

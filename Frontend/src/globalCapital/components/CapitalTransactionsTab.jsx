@@ -11,6 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { money, formatTxNotes, formatDate } from "../utils/formatters.js";
+import { matchesSearch } from "../../utils/search.js";
 import { exportCapitalTransactions } from "../services/globalCapitalExportUtils.js";
 
 export default function CapitalTransactionsTab({
@@ -67,14 +68,7 @@ export default function CapitalTransactionsTab({
       }
 
       // 4. Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchPartner = (t.partner_name || "").toLowerCase().includes(q);
-        const matchNotes = (t.notes || "").toLowerCase().includes(q);
-        const matchRef = (t.reference_number || t.reference_id || "").toLowerCase().includes(q);
-        const matchType = (t.transaction_type || "").toLowerCase().includes(q);
-        if (!matchPartner && !matchNotes && !matchRef && !matchType) return false;
-      }
+      if (!matchesSearch(searchQuery, t)) return false;
 
       return true;
     }).sort((a, b) => {
@@ -272,7 +266,7 @@ export default function CapitalTransactionsTab({
           <Search size={14} />
           <input
             type="text"
-            placeholder="Search partner, notes, ref..."
+            placeholder="Search partner/lender, phone, ID, type, amount, date, notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

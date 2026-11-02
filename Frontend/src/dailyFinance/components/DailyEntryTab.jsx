@@ -19,10 +19,12 @@ import {
 } from "../services/dailyExportUtils.js";
 import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
+import { matchesSearch } from "../../utils/search.js";
 import MonthFilterModal from "../../components/MonthFilterModal.jsx";
 
 function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loadingDetailsId, busy, index }) {
   const isCollected = Number(customer.today_collection || 0) > 0;
+  const isLoanClosed = customer.status === "COMPLETED" || customer.status === "CLOSED";
   const remainingLoan = Number(customer.remaining || 0);
   const maxAllowed = Math.max(
     0,
@@ -31,22 +33,25 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
 
   const defaultAmount = isCollected
     ? customer.today_collection
-    : (customer.daily_agreed_due > 0 ? Math.min(Number(customer.daily_agreed_due), maxAllowed) : "");
+    : (!isLoanClosed && customer.daily_agreed_due > 0 ? Math.min(Number(customer.daily_agreed_due), maxAllowed) : "");
 
   const [amount, setAmount] = useState(defaultAmount);
 
   useEffect(() => {
     if (isCollected) {
       setAmount(customer.today_collection || "");
+    } else if (isLoanClosed) {
+      setAmount("");
     } else {
       setAmount(customer.daily_agreed_due > 0 ? Math.min(Number(customer.daily_agreed_due), maxAllowed) : "");
     }
-  }, [customer.today_collection, customer.daily_agreed_due, isCollected, maxAllowed]);
+  }, [customer.today_collection, customer.daily_agreed_due, isCollected, isLoanClosed, maxAllowed]);
 
   const isExceeded = Number(amount || 0) > maxAllowed;
 
   const handleCollect = (event) => {
     if (event) event.preventDefault();
+    if (isLoanClosed && !isCollected) return;
     const finalAmount = amount !== "" ? amount : customer.daily_agreed_due;
     if (!finalAmount || Number(finalAmount) <= 0 || isExceeded) return;
     savePayment(customer, finalAmount);
@@ -171,6 +176,23 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
               ({customer.today_payment_method || "CASH"})
             </small>
           </div>
+        ) : isLoanClosed ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              background: "#f1f5f9",
+              color: "#64748b",
+              padding: "5px 10px",
+              borderRadius: "6px",
+              fontWeight: "700",
+              fontSize: "12px",
+              border: "1px solid #cbd5e1",
+            }}
+          >
+            Loan Closed
+          </span>
         ) : (
           <form onSubmit={handleCollect} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -277,6 +299,8 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
           >
             <Edit3 size={13} /> Edit
           </button>
+        ) : isLoanClosed ? (
+          <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>—</span>
         ) : (
           <button
             type="button"
@@ -425,11 +449,7 @@ export default function DailyEntryTab({
   // Filtered list
   const filteredList = useMemo(() => {
     return daily.filter((c) => {
-      const q = (search || "").trim().toLowerCase();
-      const matchSearch =
-        !q ||
-        (c.customer_name && c.customer_name.toLowerCase().includes(q)) ||
-        (c.mobile_number && c.mobile_number.includes(q));
+      const matchSearch = matchesSearch(search, c);
 
       const isPaid = Number(c.today_collection || 0) > 0;
       let matchTab = true;
@@ -669,7 +689,7 @@ export default function DailyEntryTab({
                 }}
               />
               <input
-                placeholder="Search customer / phone..."
+                placeholder="Search name, phone, account ID, date, amount, notes..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{

@@ -11,6 +11,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { money, formatDate } from "../utils/formatters.js";
+import { matchesSearch } from "../../utils/search.js";
+import MetricTooltipCard from "../../components/MetricTooltipCard.jsx";
 import { exportGlobalLedger } from "../services/globalCapitalExportUtils.js";
 
 export default function LedgerOverview({
@@ -20,7 +22,7 @@ export default function LedgerOverview({
   onSelectRecord,
 }) {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [monthFilter, setMonthFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
   const [moduleFilter, setModuleFilter] = useState("ALL");
   const [directionFilter, setDirectionFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,15 +59,7 @@ export default function LedgerOverview({
       }
 
       // 4. Live Search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchNotes = (tx.notes || "").toLowerCase().includes(q);
-        const matchType = (tx.type || "").toLowerCase().includes(q);
-        const matchRef = (String(tx.reference_id || "") + " " + String(tx.reference_type || "")).toLowerCase().includes(q);
-        const matchDesc = (tx.description || "").toLowerCase().includes(q);
-        const matchMod = (tx.source_module || "").toLowerCase().includes(q);
-        if (!matchNotes && !matchType && !matchRef && !matchDesc && !matchMod) return false;
-      }
+      if (!matchesSearch(searchQuery, tx)) return false;
 
       return true;
     }).sort((a, b) => {
@@ -125,65 +119,80 @@ export default function LedgerOverview({
   return (
     <div className="financeFadeIn globalCapitalView">
       {/* Top Hero Banner */}
-      <div className="globalCapitalHero">
-        <div className="analyticsBannerHead">
-          <h4>
-            <Globe size={18} /> Available Company Balance
-          </h4>
-        </div>
-        <strong>
-          {money(ledgerData.availableCapital)}
-        </strong>
-        <p>
-          Current cash balance available after all business expenses.
-        </p>
-      </div>
+      <MetricTooltipCard
+        title="Available Company Balance"
+        leadingIcon={<Globe size={18} />}
+        value={money(ledgerData.availableCapital)}
+        detail="Current cash balance after recorded expenses"
+        className="globalCapitalBalanceMetric"
+        definition="Ledger capital after subtracting recorded expenses."
+        formula="(total ledger credits − total ledger debits) − total expenses."
+        period="Lifetime totals currently returned by the Global Capital summary."
+        source="global_cash_ledger and expenses table."
+      />
 
       {/* KPI Stats (Dynamic based on Active Filters) */}
       <div className="globalCapitalStats fiveCol">
-        <div>
-          <span>{isFiltered ? "Total Money In" : "Total Collections / Income"}</span>
-          <strong style={{ color: "#059669" }}>
-            {money(isFiltered ? filteredInflow : ledgerData.revenue?.totalRevenue)}
-          </strong>
-          <small>
-            {isFiltered ? "Collections in selected filter" : `Auto: ${money(ledgerData.revenue?.autoRevenue)} • Daily: ${money(ledgerData.revenue?.dailyRevenue)}`}
-          </small>
-        </div>
-        <div>
-          <span>{isFiltered ? "Total Money Out" : "Total Expenses"}</span>
-          <strong style={{ color: "#e11d48" }}>
-            {money(isFiltered ? filteredOutflow : ledgerData.expenses?.totalExpenses)}
-          </strong>
-          <small>
-            {isFiltered ? "Expenses in selected filter" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
-          </small>
-        </div>
-        <div>
-          <span>{isFiltered ? "Net Balance" : "Net Profit"}</span>
-          <strong
-            style={{
-              color: (isFiltered ? filteredNetFlow : Number(ledgerData.netProfit || 0)) >= 0 ? "#0d9488" : "#e11d48",
-            }}
-          >
-            {isFiltered ? (filteredNetFlow >= 0 ? "+" : "") + money(filteredNetFlow) : money(ledgerData.netProfit)}
-          </strong>
-          <small>{isFiltered ? "Money In minus Money Out" : "Income minus Expenses"}</small>
-        </div>
-        <div>
-          <span>{isFiltered ? "Auto Collections" : "Partner Capital"}</span>
-          <strong style={{ color: isFiltered ? "#2563eb" : undefined }}>
-            {isFiltered ? `+${money(filteredAutoInflow)}` : money(ledgerData.totalCredits || totalCredits)}
-          </strong>
-          <small>{isFiltered ? "Auto finance collections" : "Total money invested by partners"}</small>
-        </div>
-        <div>
-          <span>{isFiltered ? "Daily Collections" : "Loans Given Out"}</span>
-          <strong style={{ color: isFiltered ? "#059669" : undefined }}>
-            {isFiltered ? `+${money(filteredDailyInflow)}` : money(ledgerData.totalDebits || totalDebits)}
-          </strong>
-          <small>{isFiltered ? "Daily finance collections" : "Total loans given to customers"}</small>
-        </div>
+        <MetricTooltipCard
+          title={isFiltered ? "Total Money In" : "Interest & Deduction Income"}
+          value={money(isFiltered ? filteredInflow : ledgerData.revenue?.totalRevenue)}
+          detail={isFiltered ? "Credits in selected ledger rows" : `Auto interest: ${money(ledgerData.revenue?.autoRevenue)} • Daily deductions: ${money(ledgerData.revenue?.dailyRevenue)}`}
+          valueStyle={{ color: "#059669", fontSize: 22, marginTop: 7 }}
+          definition={isFiltered
+            ? "Total credit entries in the selected ledger rows."
+            : "Recorded Auto Finance interest paid plus Daily Finance upfront deductions. This is income recorded by the dashboard, not all cash collections."}
+          formula={isFiltered ? "Sum of ledger amounts classified as credits." : "Auto interest paid + Daily Finance initial deductions."}
+          period={isFiltered ? "Selected month/module/direction/search filters; based on the latest 100 ledger rows returned by the API." : "Lifetime totals currently returned by the Global Capital summary."}
+          source={isFiltered ? "global_cash_ledger." : "autofinance_payments.interest_paid and daily_finance_accounts.initial_deduction, with ledger fallbacks."}
+        />
+        <MetricTooltipCard
+          title={isFiltered ? "Total Money Out" : "Total Expenses"}
+          value={money(isFiltered ? filteredOutflow : ledgerData.expenses?.totalExpenses)}
+          detail={isFiltered ? "Debits in selected ledger rows" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
+          valueStyle={{ color: "#e11d48", fontSize: 22, marginTop: 7 }}
+          definition={isFiltered
+            ? "Total debit entries in the selected ledger rows, which can include loan disbursements, withdrawals, expenses, or profit payments."
+            : "Recorded expenses across Auto, Daily, and General categories."}
+          formula={isFiltered ? "Sum of ledger amounts classified as debits." : "Sum of expenses.amount."}
+          period={isFiltered ? "Selected month/module/direction/search filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
+          source={isFiltered ? "global_cash_ledger." : "expenses table, grouped by category."}
+        />
+        <MetricTooltipCard
+          title={isFiltered ? "Net Ledger Movement" : "Net Profit"}
+          value={isFiltered ? `${filteredNetFlow >= 0 ? "+" : ""}${money(filteredNetFlow)}` : money(ledgerData.netProfit)}
+          detail={isFiltered ? "Money in minus money out" : "Recorded income minus expenses"}
+          valueStyle={{ color: (isFiltered ? filteredNetFlow : Number(ledgerData.netProfit || 0)) >= 0 ? "#0d9488" : "#e11d48", fontSize: 22, marginTop: 7 }}
+          definition={isFiltered
+            ? "Net movement of the ledger rows matching the selected filters."
+            : "Recorded Auto interest and Daily Finance deductions after subtracting recorded expenses."}
+          formula={isFiltered ? "Filtered ledger credits − filtered ledger debits." : "Auto interest paid + Daily Finance initial deductions − total expenses."}
+          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime totals currently returned by the Global Capital summary."}
+          source={isFiltered ? "global_cash_ledger." : "Auto payment interest, Daily Finance accounts, and expenses."}
+        />
+        <MetricTooltipCard
+          title={isFiltered ? "Auto Collections" : "Total Ledger Credits"}
+          value={isFiltered ? `+${money(filteredAutoInflow)}` : money(ledgerData.totalCredits || totalCredits)}
+          detail={isFiltered ? "Auto credits in selected rows" : "All credit entries; includes recorded collections"}
+          valueStyle={{ color: "#2563eb", fontSize: 22, marginTop: 7 }}
+          definition={isFiltered
+            ? "Auto Finance credit entries in the selected ledger rows."
+            : "Total amount of every credit entry in the global cash ledger; this includes partner contributions and recorded collections."}
+          formula={isFiltered ? "Sum of credit amounts with source module AUTO." : "Sum of global_cash_ledger amounts where direction is CREDIT."}
+          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
+          source="global_cash_ledger."
+        />
+        <MetricTooltipCard
+          title={isFiltered ? "Daily Collections" : "Total Ledger Debits"}
+          value={isFiltered ? `+${money(filteredDailyInflow)}` : money(ledgerData.totalDebits || totalDebits)}
+          detail={isFiltered ? "Daily credits in selected rows" : "All debit entries; not only loans"}
+          valueStyle={{ color: isFiltered ? "#059669" : "#e11d48", fontSize: 22, marginTop: 7 }}
+          definition={isFiltered
+            ? "Daily Finance credit entries in the selected ledger rows."
+            : "Total amount of every debit entry in the global cash ledger; this can include disbursements, withdrawals, expenses, and profit payments."}
+          formula={isFiltered ? "Sum of credit amounts with source module DAILY." : "Sum of global_cash_ledger amounts where direction is DEBIT."}
+          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
+          source="global_cash_ledger."
+        />
       </div>
 
       {/* In-Page Filters Bar with Month Calendar */}
@@ -303,7 +312,7 @@ export default function LedgerOverview({
             <Search size={14} color="#94a3b8" />
             <input
               type="text"
-              placeholder="Search notes, bill no, type..."
+              placeholder="Search date, amount, type, source, reference ID, description, notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ fontSize: "12px" }}

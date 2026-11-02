@@ -228,7 +228,7 @@ export default function AutoVehicleLoans({
 
           <div style={{ minWidth: "220px", maxWidth: "340px", flex: 1 }}>
             <input
-              placeholder="Search customer, phone, vehicle, reg no..."
+              placeholder="Search name, phone, customer/loan ID, vehicle, reg no, date..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "100%", padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", outline: "none" }}
@@ -312,6 +312,9 @@ export default function AutoVehicleLoans({
                   <b>{money(l.loan_amount)}</b>
                   <small style={{ display: "block", color: "#64748b", marginTop: "2px" }}>
                     {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
+                  </small>
+                  <small style={{ display: "block", color: "#64748b", marginTop: "3px" }}>
+                    Interest amount: {money(l.total_interest)}
                   </small>
                 </td>
                 <td>

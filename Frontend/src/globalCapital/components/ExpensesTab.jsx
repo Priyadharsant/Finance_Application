@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { money, formatDate } from "../utils/formatters.js";
 import { exportBusinessExpenses } from "../services/globalCapitalExportUtils.js";
+import { matchesSearch } from "../../utils/search.js";
 
 export default function ExpensesTab({
   expenses,
@@ -45,12 +46,15 @@ export default function ExpensesTab({
         return cat === "INTEREST" || type === "INTEREST" || desc.includes("interest") || desc.includes("vatti");
       });
     }
+    if (expenseSearch?.trim()) {
+      list = list.filter((expense) => matchesSearch(expenseSearch, expense));
+    }
     return list.sort(
       (a, b) =>
         new Date(a.expense_date || a.created_at || 0).getTime() -
         new Date(b.expense_date || b.created_at || 0).getTime()
     );
-  }, [expenseList, expenseFilterCategory]);
+  }, [expenseList, expenseFilterCategory, expenseSearch]);
 
   const filteredTotal = useMemo(() => {
     return sortedExpenseList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -114,7 +118,7 @@ export default function ExpensesTab({
           <strong style={{ color: "#e11d48" }}>
             {money(filteredTotal)}
           </strong>
-          <small>{expenseList.length} filtered entries in view</small>
+            <small>{sortedExpenseList.length} matching entries in view</small>
         </div>
       </div>
 
@@ -255,7 +259,7 @@ export default function ExpensesTab({
             <Search size={14} color="#94a3b8" />
             <input
               type="text"
-              placeholder="Search reason or type..."
+              placeholder="Search customer/phone, reason, category, amount, date, loan/account ID..."
               value={expenseSearch}
               onChange={(e) => setExpenseSearch(e.target.value)}
             />
@@ -301,7 +305,7 @@ export default function ExpensesTab({
             <Receipt size={18} /> Expenses Ledger
           </h3>
           <span className="tag autoTag">
-            {expenseList.length} {expenseList.length === 1 ? "Record" : "Records"}
+            {sortedExpenseList.length} {sortedExpenseList.length === 1 ? "Record" : "Records"}
           </span>
         </div>
 

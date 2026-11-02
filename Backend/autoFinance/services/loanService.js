@@ -288,6 +288,7 @@ export async function getAllLoans() {
       c.first_name, c.last_name, c.phone, c.customer_code,
       lt.name as loan_type_name,
       v.vehicle_type, v.make, v.model, v.registration_number,
+      COALESCE(s.total_interest, 0) AS total_interest,
       COALESCE(p.total_paid, s.schedule_total_paid, 0) as total_paid,
       COALESCE(CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE s.pending_dues_count END, 0) as pending_dues_count,
       COALESCE(s.paid_dues_count, 0) as paid_dues_count,
@@ -316,6 +317,7 @@ export async function getAllLoans() {
         COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_dues_count,
         COUNT(id) as total_dues_count,
         COUNT(CASE WHEN status IN ('PENDING', 'PARTIAL') AND due_date < CURRENT_DATE THEN 1 END) as overdue_dues_count,
+        COALESCE(SUM(CASE WHEN status <> 'CANCELLED' THEN interest_component ELSE 0 END), 0) as total_interest,
         COALESCE(SUM(
           LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
           LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0)) +

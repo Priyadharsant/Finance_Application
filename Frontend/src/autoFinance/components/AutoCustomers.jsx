@@ -89,7 +89,7 @@ export default function AutoCustomers({
           <div style={{ flex: 1, minWidth: "200px" }}>
             <input
               style={{ width: "100%", padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", outline: "none" }}
-              placeholder="Search by customer name, phone, code..."
+              placeholder="Search name, phone, customer code or ID, address, notes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

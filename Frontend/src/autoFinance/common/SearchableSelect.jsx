@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { matchesSearch } from "../../utils/search.js";
 
 export default function SearchableSelect({
   label,
@@ -27,11 +28,7 @@ export default function SearchableSelect({
 
   const filteredOptions = useMemo(() => {
     if (!searchTerm) return options;
-    return options.filter(
-      (o) =>
-        (o.label && o.label.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (o.subtext && o.subtext.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    return options.filter((option) => matchesSearch(searchTerm, option));
   }, [options, searchTerm]);
 
   return (
@@ -54,7 +51,7 @@ export default function SearchableSelect({
           <div className="searchableSearchBox">
             <input
               autoFocus
-              placeholder="🔍 Search option..."
+              placeholder="Search name, phone, code, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onClick={(e) => e.stopPropagation()}

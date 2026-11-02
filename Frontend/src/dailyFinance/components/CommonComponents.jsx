@@ -1,8 +1,23 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { money } from "../services/dailyFinanceApi.js";
+import MetricTooltipCard from "../../components/MetricTooltipCard.jsx";
 
-export function Metric({ title, value, tone = "", count = false }) {
+export function Metric({ title, value, tone = "", count = false, explanation, formula, period, source }) {
+  if (explanation) {
+    return (
+      <MetricTooltipCard
+        title={title}
+        value={count ? Number(value || 0) : money(value)}
+        tone={tone}
+        definition={explanation}
+        formula={formula}
+        period={period}
+        source={source}
+      />
+    );
+  }
+
   return (
     <div className={`metric ${tone}`}>
       <span>{title}</span>

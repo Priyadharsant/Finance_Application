@@ -671,7 +671,7 @@ export default function ExcelTableEditorView({ onClose }) {
             <div style={{ position: "relative" }}>
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search table values, IDs, names, phones, and linked details..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{

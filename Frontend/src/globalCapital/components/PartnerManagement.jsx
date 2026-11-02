@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { money, formatDate } from "../utils/formatters.js";
+import { matchesSearch } from "../../utils/search.js";
 import { exportPartnerBalances } from "../services/globalCapitalExportUtils.js";
 
 export default function PartnerManagement({
@@ -33,14 +34,7 @@ export default function PartnerManagement({
         const joinDate = String(p.created_at || p.effective_date || "").slice(0, 7);
         if (joinDate !== monthFilter) return false;
       }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = (p.name || p.partner_name || "").toLowerCase().includes(q);
-        const matchPhone = (p.phone || "").toLowerCase().includes(q);
-        const matchEmail = (p.email || "").toLowerCase().includes(q);
-        const matchPan = (p.pan_number || p.pan || "").toLowerCase().includes(q);
-        if (!matchName && !matchPhone && !matchEmail && !matchPan) return false;
-      }
+      if (!matchesSearch(searchQuery, p)) return false;
       return true;
     }).sort((a, b) => {
       const da = new Date(a.created_at || a.effective_date || 0).getTime();
@@ -187,7 +181,7 @@ export default function PartnerManagement({
           <Search size={14} />
           <input
             type="text"
-            placeholder="Search partner / phone / PAN..."
+            placeholder="Search name, phone, email, PAN, partner ID, capital, notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

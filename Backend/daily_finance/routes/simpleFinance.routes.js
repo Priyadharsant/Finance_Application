@@ -21,6 +21,7 @@ export function createSimpleFinanceRouter(db) {
       const [position, customers, recent] = await Promise.all([
         db.query(`SELECT
           COALESCE((SELECT SUM(gross_finance_amount) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_finance_amount,
+          COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_agreed_return,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS collected,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS cash_collected,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) = 'TRANSFER'),0) AS non_cash_settlements,
@@ -98,6 +99,10 @@ export function createSimpleFinanceRouter(db) {
       if (!accountRes.rowCount) throw new Error('Finance account not found');
       const account = accountRes.rows[0];
 
+      if (account.status === 'COMPLETED' || account.status === 'CLOSED') {
+        throw new Error('This loan is closed. No new collections can be recorded.');
+      }
+
       const collectedRes = await client.query(
         `SELECT COALESCE(SUM(amount), 0) AS total_collected FROM daily_finance_payments WHERE finance_id=$1 AND status <> 'VOID'`,
         [financeId]
@@ -120,8 +125,12 @@ export function createSimpleFinanceRouter(db) {
       const newTotal = currentCollected + Number(amount);
       const newStatus = newTotal >= agreedPayable ? 'COMPLETED' : 'ACTIVE';
       await client.query(
-        `UPDATE daily_finance_accounts SET status=$1, updated_at=NOW() WHERE finance_id=$2`,
-        [newStatus, financeId]
+        `UPDATE daily_finance_accounts
+         SET status=$1,
+             closed_date = CASE WHEN $1 = 'COMPLETED' THEN $3::date ELSE NULL END,
+             updated_at=NOW()
+         WHERE finance_id=$2`,
+        [newStatus, financeId, collectionDate]
       );
 
       await client.query(
@@ -198,8 +207,12 @@ export function createSimpleFinanceRouter(db) {
       const newTotal = otherCollected + Number(amount);
       const newStatus = newTotal >= agreedPayable ? 'COMPLETED' : 'ACTIVE';
       await client.query(
-        `UPDATE daily_finance_accounts SET status=$1, updated_at=NOW() WHERE finance_id=$2`,
-        [newStatus, financeId]
+        `UPDATE daily_finance_accounts
+         SET status=$1,
+             closed_date = CASE WHEN $1 = 'COMPLETED' THEN $3::date ELSE NULL END,
+             updated_at=NOW()
+         WHERE finance_id=$2`,
+        [newStatus, financeId, collectionDate]
       );
 
       await client.query(
@@ -276,7 +289,16 @@ export function createSimpleFinanceRouter(db) {
         (SELECT x.payment_method FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_payment_method,
         GREATEST(a.agreed_total_payable - COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0), 0) AS remaining
         FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id
-        WHERE c.status='ACTIVE' AND a.status='ACTIVE' ORDER BY a.finance_date ASC, a.created_at ASC`, [entryDate]);
+        WHERE c.status <> 'ARCHIVED'
+          AND (
+            a.status = 'ACTIVE'
+            OR (
+              a.status IN ('COMPLETED', 'CLOSED')
+              AND COALESCE(a.closed_date, (SELECT MAX(p.collection_date) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), a.finance_date) >= $1::date
+            )
+          )
+          AND (a.finance_date IS NULL OR a.finance_date <= $1::date)
+        ORDER BY a.finance_date ASC, a.created_at ASC`, [entryDate]);
       res.json({ date: entryDate, customers: result.rows });
     } catch (error) { next(error); }
   });
@@ -379,8 +401,31 @@ export function createSimpleFinanceRouter(db) {
         params.push(statusFilter);
       }
       if (search) {
-        conditions.push(`(c.customer_name ILIKE $${params.length + 1} OR c.mobile_number ILIKE $${params.length + 1})`);
+        const searchParam = `$${params.length + 1}`;
+        const phoneDigits = search.replace(/\D/g, '');
+        const hasPhoneDigits = phoneDigits.length >= 4 && /^[+\d\s().-]+$/.test(search);
+        conditions.push(`(
+          c.customer_name ILIKE ${searchParam}
+          OR c.mobile_number ILIKE ${searchParam}
+          OR COALESCE(c.address, '') ILIKE ${searchParam}
+          OR COALESCE(c.notes, '') ILIKE ${searchParam}
+          OR a.customer_id::text ILIKE ${searchParam}
+          OR a.finance_id::text ILIKE ${searchParam}
+          OR a.finance_date::text ILIKE ${searchParam}
+          OR a.gross_finance_amount::text ILIKE ${searchParam}
+          OR a.initial_deduction::text ILIKE ${searchParam}
+          OR a.interest_type ILIKE ${searchParam}
+          OR a.interest_value::text ILIKE ${searchParam}
+          OR a.net_disbursement::text ILIKE ${searchParam}
+          OR a.agreed_total_payable::text ILIKE ${searchParam}
+          OR a.daily_agreed_due::text ILIKE ${searchParam}
+          OR a.status ILIKE ${searchParam}
+          OR a.expected_collection_days::text ILIKE ${searchParam}
+          OR a.expected_completion_date::text ILIKE ${searchParam}
+          ${hasPhoneDigits ? `OR REGEXP_REPLACE(COALESCE(c.mobile_number, ''), '[^0-9]', '', 'g') LIKE $${params.length + 2}` : ''}
+        )`);
         params.push(`%${search}%`);
+        if (hasPhoneDigits) params.push(`%${phoneDigits}%`);
       }
 
       let havingClause = '';
@@ -561,9 +606,9 @@ export function createSimpleFinanceRouter(db) {
       const finalTotalPayable = totalCollectedSoFar + settleAmt;
       const updatedAccountRes = await client.query(
         `UPDATE daily_finance_accounts
-         SET agreed_total_payable = $1, status = 'COMPLETED', updated_at = NOW()
+         SET agreed_total_payable = $1, status = 'COMPLETED', closed_date = $3, updated_at = NOW()
          WHERE finance_id = $2 RETURNING *`,
-        [finalTotalPayable, financeId]
+        [finalTotalPayable, financeId, effDate]
       );
 
       // Record early closure discount in expenses if discountAmt > 0
@@ -714,9 +759,9 @@ export function createSimpleFinanceRouter(db) {
         : 'Closed via Top-Up Refinance';
       await client.query(
         `UPDATE daily_finance_accounts
-         SET status = 'COMPLETED', notes = $1, updated_at = NOW()
-         WHERE finance_id = $2`,
-        [closedNotes, financeId]
+         SET status = 'COMPLETED', closed_date = $1, notes = $2, updated_at = NOW()
+         WHERE finance_id = $3`,
+        [effDate, closedNotes, financeId]
       );
 
       // 2. Create the new loan record

@@ -142,7 +142,8 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       v.model,
       v.registration_number,
       COALESCE((SELECT SUM(amount_paid) FROM autofinance_payments WHERE loan_id = l.id), 0) as total_collected,
-      COALESCE((SELECT SUM(total_emi) FROM autofinance_emi_schedules WHERE loan_id = l.id), 0) as total_scheduled
+      COALESCE((SELECT SUM(total_emi) FROM autofinance_emi_schedules WHERE loan_id = l.id), 0) as total_scheduled,
+      COALESCE((SELECT SUM(interest_component) FROM autofinance_emi_schedules WHERE loan_id = l.id AND status <> 'CANCELLED'), 0) as total_scheduled_interest
     FROM autofinance_loans l
     JOIN autofinance_customers c ON l.customer_id = c.id
     LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
@@ -226,6 +227,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       regNo: l.registration_number || '',
       loanAmount: loanAmt,
       interestRate: rate,
+      totalInterest: Number(l.total_scheduled_interest || 0),
       totalAmount: totalAmount,
       byHand: byHand,
       broker: brokerCustomer || brokerHand,

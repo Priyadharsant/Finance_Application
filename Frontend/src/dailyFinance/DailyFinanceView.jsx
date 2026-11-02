@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import useDocumentTitle from "../hooks/useDocumentTitle.js";
+import { matchesSearch } from "../utils/search.js";
 import {
   dailyFinanceApi,
   today,
@@ -271,10 +272,7 @@ export default function DailyFinanceView({
       dashboard.customers
         .filter(
           (customer) =>
-            (!customerSearch ||
-              customer.customer_name
-                .toLowerCase()
-                .includes(customerSearch.toLowerCase())) &&
+            matchesSearch(customerSearch, customer) &&
             (!customerStatus || customer.status === customerStatus),
         )
         .sort((a, b) => {

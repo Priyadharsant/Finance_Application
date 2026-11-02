@@ -167,7 +167,6 @@ export default function CustomerDetailsModal({
                   <th style={{ width: "60px" }}>S.No</th>
                   <th>Date</th>
                   <th style={{ textAlign: "right" }}>Amount collected</th>
-                  <th style={{ textAlign: "right" }}>Total collected</th>
                   <th style={{ textAlign: "right" }}>Remaining</th>
                   <th style={{ textAlign: "center", width: "80px" }}>Action</th>
                 </tr>
@@ -180,7 +179,6 @@ export default function CustomerDetailsModal({
                     <td style={{ textAlign: "right", fontWeight: "700", color: "#059669" }}>
                       {money(payment.amount)}
                     </td>
-                    <td style={{ textAlign: "right" }}>{money(payment.total_collected)}</td>
                     <td style={{ textAlign: "right" }} className="redText">{money(payment.remaining)}</td>
                     <td style={{ textAlign: "center" }}>
                       <button

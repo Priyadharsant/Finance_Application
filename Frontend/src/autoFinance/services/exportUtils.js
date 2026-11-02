@@ -75,6 +75,7 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
     
     // Total interest from customer (approx flat)
     const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 1200);
+    const scheduledInterest = Number(l.total_interest ?? 0);
 
     return {
       "S.No": idx + 1,
@@ -84,6 +85,7 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
       "Vehicle": `${l.make || ""} ${l.model || ""}`.trim(),
       "Reg No": l.registration_number || "PENDING",
       "Expected Company Net Profit (₹)": totalCustomerInterest,
+      "Interest Amount (₹)": scheduledInterest,
       "Broker Name": fees.brokerName || "—",
       "Broker Phone": fees.brokerPhone || "—",
       "Guarantor (Jamin) Name": fees.jaminName || "—",
@@ -210,6 +212,12 @@ export const exportIndividualLoan = (loan) => {
     (acc, s) => acc + parseFloat(s.total_cash_collected || s.collected_amount || 0),
     0
   );
+  const scheduledInterest = loan.schedules
+    .filter((schedule) => schedule.status !== "CANCELLED")
+    .reduce(
+      (total, schedule) => total + Number(schedule.scheduled_interest ?? schedule.interest_component ?? 0),
+      0,
+    );
 
   const fees = loan.loan.fees_details || {};
   const totalDeductions =
@@ -249,6 +257,7 @@ export const exportIndividualLoan = (loan) => {
     { "Category": "Brokerage (By Hand)", "Value": Number(fees.brokerageHand || 0) },
     { "Category": "In-Hand Amount", "Value": Number(loan.loan.loan_amount) - totalDeductions },
     { "Category": "Interest Rate (%)", "Value": Number(loan.loan.interest_rate) },
+    { "Category": "Interest Amount", "Value": scheduledInterest },
     { "Category": "Tenure (Months)", "Value": Number(loan.loan.tenure_months) },
     { "Category": "Start Date", "Value": dateLabel(loan.loan.start_date) },
     { "Category": "End Date", "Value": dateLabel(loan.loan.end_date) },

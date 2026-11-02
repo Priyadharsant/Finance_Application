@@ -191,7 +191,47 @@ export async function getExpenses(client = pool, filters = {}) {
 
   if (search && search.trim()) {
     params.push(`%${search.trim().toLowerCase()}%`);
-    conditions.push(`(LOWER(e.description) LIKE $${params.length} OR LOWER(e.expense_type) LIKE $${params.length})`);
+    const searchParam = `$${params.length}`;
+    const phoneDigits = search.trim().replace(/\D/g, '');
+    const hasPhoneDigits = phoneDigits.length >= 4 && /^[+\d\s().-]+$/.test(search.trim());
+    const phoneSearchParam = hasPhoneDigits ? `$${params.length + 1}` : null;
+    conditions.push(`(
+      LOWER(COALESCE(e.description, '')) LIKE ${searchParam}
+      OR LOWER(COALESCE(e.expense_type, '')) LIKE ${searchParam}
+      OR LOWER(COALESCE(e.category, '')) LIKE ${searchParam}
+      OR e.id::text ILIKE ${searchParam}
+      OR COALESCE(e.loan_id::text, '') ILIKE ${searchParam}
+      OR COALESCE(e.finance_id::text, '') ILIKE ${searchParam}
+      OR e.expense_date::text ILIKE ${searchParam}
+      OR e.amount::text ILIKE ${searchParam}
+      OR e.created_at::text ILIKE ${searchParam}
+      OR EXISTS (
+        SELECT 1
+        FROM autofinance_loans al
+        JOIN autofinance_customers ac ON ac.id = al.customer_id
+        LEFT JOIN autofinance_vehicles av ON av.loan_id = al.id
+        WHERE al.id = e.loan_id
+          AND (
+            LOWER(COALESCE(ac.first_name, '') || ' ' || COALESCE(ac.last_name, '')) LIKE ${searchParam}
+            OR LOWER(COALESCE(ac.phone, '')) LIKE ${searchParam}
+            OR LOWER(COALESCE(ac.customer_code, '')) LIKE ${searchParam}
+            OR LOWER(COALESCE(av.registration_number, '')) LIKE ${searchParam}
+            ${hasPhoneDigits ? `OR REGEXP_REPLACE(COALESCE(ac.phone, ''), '[^0-9]', '', 'g') LIKE ${phoneSearchParam}` : ''}
+          )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM daily_finance_accounts da
+        JOIN daily_finance_customers dc ON dc.customer_id = da.customer_id
+        WHERE da.finance_id = e.finance_id
+          AND (
+            LOWER(COALESCE(dc.customer_name, '')) LIKE ${searchParam}
+            OR LOWER(COALESCE(dc.mobile_number, '')) LIKE ${searchParam}
+            ${hasPhoneDigits ? `OR REGEXP_REPLACE(COALESCE(dc.mobile_number, ''), '[^0-9]', '', 'g') LIKE ${phoneSearchParam}` : ''}
+          )
+      )
+    )`);
+    if (hasPhoneDigits) params.push(`%${phoneDigits}%`);
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

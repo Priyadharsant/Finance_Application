@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
+import MetricTooltipCard from "../../components/MetricTooltipCard.jsx";
 import { money, dateLabel } from "../services/autoFinanceApi";
 import { exportAutoCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi";
@@ -64,6 +65,18 @@ export default function AutoDashboard({
     return dueStr === todayStr;
   }).length;
   const dashRecoveryRate = dashDisbursed > 0 ? Math.round((dashCollected / dashDisbursed) * 100) : 0;
+  const dashExpectedReturn = dashboardLoans.reduce(
+    (sum, loan) => sum + Number(
+      loan.agreed_total_payable ?? loan.total_payable ??
+      (Number(loan.loan_amount || 0) + Number(loan.total_interest || 0)),
+    ),
+    0,
+  );
+  const dashProjectedAmount = dashCollected + dashboardLoans
+    .filter((loan) => loan.status === "ACTIVE")
+    .reduce((sum, loan) => sum + Number(
+      loan.monthly_installment || loan.emi_amount || (Number(loan.loan_amount || 0) * 0.1),
+    ), 0);
 
   return (
     <section className="content">
@@ -91,112 +104,81 @@ export default function AutoDashboard({
         </div>
       </div>
 
-      {/* EXECUTIVE KPI METRIC CARDS (DYNAMIC BASED ON FILTERS) */}
-      <div
-        className="metricGrid"
-        style={{
-          gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-        }}
-      >
-        <div className="metric autoMetric blue">
-          <span>Principal Disbursed</span>
-          <b>{money(dashDisbursed)}</b>
-          <small
-            style={{
-              color: "#64748b",
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            {dashboardLoans.length} Loans in view
-          </small>
-        </div>
-
-        <div className="metric autoMetric orange">
-          <span>Expected Return</span>
-          <b>{money(dashboardLoans.reduce((sum, l) => sum + Number(l.agreed_total_payable || l.total_payable || (Number(l.loan_amount || 0) + Number(l.total_interest || 0))), 0))}</b>
-          <small
-            style={{
-              color: "#64748b",
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            Principal + Scheduled Interest
-          </small>
-        </div>
-
-        <div className="metric autoMetric green">
-          <span>EMI Collected</span>
-          <b>{money(dashCollected)}</b>
-          <small
-            style={{
-              color: "#059669",
-              fontWeight: 600,
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            {dashRecoveryRate}% Recovered
-          </small>
-        </div>
-
-        <div className="metric autoMetric red">
-          <span>Balance Pending</span>
-          <b>{money(dashRemaining)}</b>
-          <small
-            style={{
-              color: "#dc2626",
-              fontWeight: 600,
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            Outstanding balance in filter
-          </small>
-        </div>
-
-        <div className="metric autoMetric indigo" style={{ background: "#f8fafc", borderLeft: "4px solid #6366f1" }}>
-          <span>Current In-Hand Cash</span>
-          <b style={{ color: "#4338ca" }}>{money(dashCollected)}</b>
-          <small
-            style={{
-              color: "#64748b",
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            Opening balance for next month
-          </small>
-        </div>
-
-        <div className="metric autoMetric purple" style={{ background: "#f8fafc", borderLeft: "4px solid #a855f7" }}>
-          <span>Next Month Projected Amount</span>
-          <b style={{ color: "#7e22ce" }}>
-            {money(
-              dashCollected +
-              dashboardLoans
-                .filter(l => l.status === "ACTIVE")
-                .reduce((sum, l) => sum + (Number(l.monthly_installment || l.emi_amount || (Number(l.loan_amount || 0) * 0.1))), 0)
-            )}
-          </b>
-          <small
-            style={{
-              color: "#7e22ce",
-              fontWeight: 600,
-              fontSize: "11.5px",
-              marginTop: "4px",
-              display: "block",
-            }}
-          >
-            In-Hand + Next Month EMIs
-          </small>
-        </div>
+      <div className="metricGroupHeading">
+        <h3>Loan book &amp; scheduled return</h3>
+        <p>Current active loans with pending installments, using the selected filters.</p>
+      </div>
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
+        <MetricTooltipCard
+          title="Principal Disbursed"
+          value={money(dashDisbursed)}
+          tone="autoMetric blue"
+          detail={`${dashboardLoans.length} loans in view`}
+          definition="Principal amount issued for the loans currently shown in the dashboard table."
+          formula="Sum of loan_amount."
+          period="Loans with pending installments after the current dashboard filters."
+          source="autofinance_loans."
+        />
+        <MetricTooltipCard
+          title="Expected Return"
+          value={money(dashExpectedReturn)}
+          tone="autoMetric orange"
+          detail="Principal + scheduled interest"
+          definition="Contractual total expected from the loans currently shown."
+          formula="Sum of agreed_total_payable; otherwise principal + scheduled interest."
+          period="Loans in the current dashboard view."
+          source="Loan records and their non-cancelled EMI schedule interest."
+        />
+      </div>
+      <div className="metricGroupHeading">
+        <h3>Collections &amp; cash outlook</h3>
+        <p>Lifetime payments and pending principal for loans in view.</p>
+      </div>
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
+        <MetricTooltipCard
+          title="EMI Collected"
+          value={money(dashCollected)}
+          tone="autoMetric green"
+          detail={`${dashRecoveryRate}% of principal disbursed`}
+          definition="Total payments recorded for the loans currently shown."
+          formula="Sum of total_paid. Recovery rate shown below the value is collections ÷ principal disbursed."
+          period="Lifetime to date for loans in the current dashboard view."
+          source="autofinance_payments, summarized per loan."
+        />
+        <MetricTooltipCard
+          title="Principal Yet to Recover"
+          value={money(dashRemaining)}
+          tone="autoMetric red"
+          detail="Principal only; excludes scheduled interest"
+          definition="Principal amount remaining after subtracting collections from the loans in view."
+          formula="max(0, principal disbursed - total collected)."
+          period="Lifetime to date for loans in the current dashboard view."
+          source="autofinance_loans.loan_amount and total_paid."
+        />
+        <MetricTooltipCard
+          title="Collections Carried"
+          value={money(dashCollected)}
+          tone="autoMetric indigo"
+          detail="Same collection total shown above"
+          valueStyle={{ color: "#4338ca" }}
+          style={{ background: "#f8fafc", borderLeft: "4px solid #6366f1" }}
+          definition="This retained card repeats the lifetime collection total for loans in view; it is not the full business cash balance."
+          formula="Same sum of total_paid as EMI Collected."
+          period="Lifetime to date for loans in the current dashboard view."
+          source="autofinance_payments, summarized per loan."
+        />
+        <MetricTooltipCard
+          title="Next Month Projected Amount"
+          value={money(dashProjectedAmount)}
+          tone="autoMetric purple"
+          detail="Collections carried + estimated active-loan installments"
+          valueStyle={{ color: "#7e22ce" }}
+          style={{ background: "#f8fafc", borderLeft: "4px solid #a855f7" }}
+          definition="A rough projection that adds the current collection total to one estimated installment for each active loan in view."
+          formula="Total collected + sum(monthly_installment or emi_amount or 10% of principal)."
+          period="Next-month estimate based on current loan fields."
+          source="autofinance_loans; 10% of principal is used when an installment amount is missing."
+        />
       </div>
 
       {/* COMPREHENSIVE VEHICLE LOANS PORTFOLIO TABLE */}
@@ -426,6 +408,9 @@ export default function AutoDashboard({
                     >
                       {l.interest_rate}% ({l.interest_type || "FLAT"}) •{" "}
                       {l.tenure_months} Mo
+                    </small>
+                    <small style={{ display: "block", color: "#64748b", marginTop: "3px" }}>
+                      Interest amount: {money(l.total_interest)}
                     </small>
                   </td>
                   <td>

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { FileSpreadsheet, Printer, Calendar, Search, X } from "lucide-react";
+import { matchesSearch } from "../../utils/search.js";
 import { money } from "../services/autoFinanceApi.js";
 import { exportAutoCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
@@ -100,16 +101,7 @@ export default function AutoReports({
       if (scope === "completed" && l.status !== "COMPLETED") return false;
 
       // Search query
-      const q = (search || "").trim().toLowerCase();
-      if (q) {
-        const cName = `${l.first_name || ""} ${l.last_name || ""}`.toLowerCase();
-        const phone = (l.phone || l.mobile_number || "").toLowerCase();
-        const vehicle = `${l.make || ""} ${l.model || ""}`.toLowerCase();
-        const regNo = (l.registration_number || "").toLowerCase();
-        if (!cName.includes(q) && !phone.includes(q) && !vehicle.includes(q) && !regNo.includes(q)) {
-          return false;
-        }
-      }
+      if (!matchesSearch(search, l)) return false;
 
       // Customer filter
       if (customerId) {
@@ -243,7 +235,7 @@ export default function AutoReports({
 
         {/* Search Input */}
         <input
-          placeholder="Search customer / phone / vehicle..."
+          placeholder="Search name, phone, code, loan ID, vehicle, reg no, date..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ minWidth: "200px" }}
@@ -403,6 +395,7 @@ export default function AutoReports({
                 <th>Deductions</th>
                 <th>In-Hand Disbursed</th>
                 <th>Interest Rate</th>
+                <th>Interest Amount</th>
                 <th>Tenure</th>
                 <th>EMI Collected</th>
                 <th>Remaining</th>
@@ -453,6 +446,7 @@ export default function AutoReports({
                       {money(inHand)}
                     </td>
                     <td>{l.interest_rate}%</td>
+                    <td>{money(l.total_interest)}</td>
                     <td>{l.tenure_months} Mo</td>
                     <td className="greenText">{money(l.total_paid)}</td>
                     <td style={{ color: rem > 0 ? "#dc2626" : "#059669", fontWeight: 600 }}>

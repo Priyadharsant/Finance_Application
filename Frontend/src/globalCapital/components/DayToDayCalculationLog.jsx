@@ -9,6 +9,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { money, formatDate } from "../utils/formatters.js";
+import { matchesSearch } from "../../utils/search.js";
 import { exportDayToDayLogs } from "../services/globalCapitalExportUtils.js";
 
 export default function DayToDayCalculationLog({
@@ -38,12 +39,7 @@ export default function DayToDayCalculationLog({
       if (statusFilter === "LOSS" && Number(l.netProfit || 0) >= 0) return false;
 
       // 3. Date Search
-      if (dateSearch.trim()) {
-        const q = dateSearch.toLowerCase().trim();
-        const rawDate = String(l.calcDate || "").toLowerCase();
-        const formatted = formatDate(l.calcDate).toLowerCase();
-        if (!rawDate.includes(q) && !formatted.includes(q)) return false;
-      }
+      if (!matchesSearch(dateSearch, l, { formatted_date: formatDate(l.calcDate) })) return false;
 
       return true;
     }).sort((a, b) => new Date(a.calcDate || 0).getTime() - new Date(b.calcDate || 0).getTime());
@@ -246,7 +242,7 @@ export default function DayToDayCalculationLog({
             <Search size={13} color="#94a3b8" />
             <input
               type="text"
-              placeholder="Search date (e.g. 17-10)..."
+              placeholder="Search date, month, amount, profit/loss, status..."
               value={dateSearch}
               onChange={(e) => setDateSearch(e.target.value)}
               style={{ fontSize: "11.5px", padding: "4px 8px" }}

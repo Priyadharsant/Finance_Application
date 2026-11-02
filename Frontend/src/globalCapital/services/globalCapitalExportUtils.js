@@ -1421,6 +1421,7 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
       "Registration Number": l.regNo || l.registration_number || "PENDING",
       "Loan Principal (₹)": loanAmt,
       "Interest Rate (%)": Number(l.interestRate || l.interest_rate || 0),
+      "Interest Amount (₹)": Number(l.totalInterest ?? l.total_interest ?? 0),
       "Tenure (Months)": tenure,
       "Monthly EMI (₹)": emi,
       "Agreed Total Amount (₹)": totAmt,

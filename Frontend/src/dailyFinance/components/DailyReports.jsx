@@ -4,6 +4,7 @@ import { Metric, Empty } from "./CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
 import { exportDailyCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
+import { matchesSearch } from "../../utils/search.js";
 
 export default function DailyReports({
   report,
@@ -62,14 +63,11 @@ export default function DailyReports({
     if (!report?.customers) return [];
     return report.customers
       .filter((row) => {
-        const q = (search || "").trim().toLowerCase();
-        const matchSearch =
-          !q ||
-          (row.customer_name && row.customer_name.toLowerCase().includes(q)) ||
-          (row.mobile_number && row.mobile_number.includes(q));
+        const matchSearch = matchesSearch(search, row);
         const matchCustomer = !customerId || row.customer_id === customerId;
         const matchStatus = !status || row.status === status;
-        return matchSearch && matchCustomer && matchStatus;
+        const hasCollection = Number(row.period_collected !== undefined ? row.period_collected : row.total_collected || 0) > 0;
+        return matchSearch && matchCustomer && matchStatus && hasCollection;
       })
       .sort((a, b) => {
         const da = new Date(a.finance_date || 0).getTime();
@@ -211,7 +209,7 @@ export default function DailyReports({
         </select>
 
         <input
-          placeholder="Search customer / phone..."
+          placeholder="Search name, phone, account ID, date, amount, notes..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />

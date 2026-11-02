@@ -369,7 +369,7 @@ router.put('/partners/:id', async (req, res) => {
 router.get('/partner-transactions', async (req, res) => {
   try {
     const txRes = await pool.query(`
-      SELECT t.*, p.name as partner_name 
+      SELECT t.*, p.name as partner_name, p.phone as partner_phone, p.email as partner_email, p.pan_number as partner_pan
       FROM partner_capital_transactions t
       JOIN global_partners p ON t.partner_id = p.id
       ORDER BY effective_date DESC, transaction_timestamp DESC

@@ -2,8 +2,13 @@ import React from "react";
 import { Download } from "lucide-react";
 import { money } from "../../autoFinance/services/autoFinanceApi";
 import { exportMonthlyStats } from "../services/globalCapitalExportUtils";
+import MetricTooltipCard from "../../components/MetricTooltipCard.jsx";
 
 export default function MonthlyStatsTab({ stats = [] }) {
+  // The API already returns latest month first.
+  const orderedStats = [...stats];
+  const latestStats = orderedStats[0];
+
   return (
     <section className="content">
       <div className="intro">
@@ -21,7 +26,7 @@ export default function MonthlyStatsTab({ stats = [] }) {
           <button
             className="primary"
             style={{ background: "#16a34a", border: "none" }}
-            onClick={() => exportMonthlyStats(stats)}
+            onClick={() => exportMonthlyStats(orderedStats)}
             disabled={!stats.length}
           >
             <Download size={15} /> Export Excel
@@ -32,32 +37,50 @@ export default function MonthlyStatsTab({ stats = [] }) {
       {/* Summary Cards */}
       {stats.length > 0 && (
         <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "20px" }}>
-          <div className="metric" style={{ borderLeft: "4px solid #4f46e5" }}>
-            <span>In-Hand Cash (Current)</span>
-            <b style={{ color: "#4f46e5" }}>{money(stats[0].closingCash)}</b>
-            <small style={{ color: "#64748b", display: "block", marginTop: "4px" }}>As of {stats[0].month}</small>
-          </div>
-          <div className="metric" style={{ borderLeft: "4px solid #0284c7" }}>
-            <span>Auto — Amount Given Outside</span>
-            <b style={{ color: "#0284c7" }}>{money(stats[0].closingAutoInv)}</b>
-            <small style={{ color: "#64748b", display: "block", marginTop: "4px" }}>Total loans not yet recovered</small>
-          </div>
-          <div className="metric" style={{ borderLeft: "4px solid #0f766e" }}>
-            <span>Daily — Amount Given Outside</span>
-            <b style={{ color: "#0f766e" }}>{money(stats[0].closingDailyInv)}</b>
-            <small style={{ color: "#64748b", display: "block", marginTop: "4px" }}>Total loans not yet recovered</small>
-          </div>
-          <div className="metric" style={{ borderLeft: "4px solid #16a34a" }}>
-            <span>Next Month Opening Balance</span>
-            <b style={{ color: "#16a34a" }}>{money(stats[0].closingCash)}</b>
-            <small style={{ color: "#64748b", display: "block", marginTop: "4px" }}>Carries forward to {
-              (() => {
-                const [yr, mo] = stats[0].month.split("-").map(Number);
-                const next = new Date(yr, mo, 1);
-                return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
-              })()
-            }</small>
-          </div>
+          <MetricTooltipCard
+            title="In-Hand Cash (Current)"
+            value={money(latestStats.closingCash)}
+            detail={`As of ${latestStats.month}`}
+            valueStyle={{ color: "#4f46e5" }}
+            style={{ borderLeft: "4px solid #4f46e5" }}
+            definition="Cash balance at the end of the latest month in the monthly roll-forward."
+            formula="Opening cash + total inflows - total outflows."
+            period={`Through ${latestStats.month}, accumulated from the earliest month returned by the API.`}
+            source="Partner capital transactions, Auto Finance payments and loans, and Daily Finance payments and loans."
+          />
+          <MetricTooltipCard
+            title="Auto — Amount Given Outside"
+            value={money(latestStats.closingAutoInv)}
+            detail="Auto disbursements less collections, rolled forward"
+            valueStyle={{ color: "#0284c7" }}
+            style={{ borderLeft: "4px solid #0284c7" }}
+            definition="Cumulative Auto Finance principal issued and not offset by recorded collections in the monthly movement calculation."
+            formula="Prior outside balance + loan disbursements - payments collected."
+            period={`Through ${latestStats.month}.`}
+            source="autofinance_loans.loan_amount and autofinance_payments.amount_paid."
+          />
+          <MetricTooltipCard
+            title="Daily — Amount Given Outside"
+            value={money(latestStats.closingDailyInv)}
+            detail="Daily disbursements less collections, rolled forward"
+            valueStyle={{ color: "#0f766e" }}
+            style={{ borderLeft: "4px solid #0f766e" }}
+            definition="Cumulative Daily Finance amount issued and not offset by recorded collections in the monthly movement calculation."
+            formula="Prior outside balance + daily disbursements - daily collections."
+            period={`Through ${latestStats.month}.`}
+            source="Daily Finance accounts and payment records."
+          />
+          <MetricTooltipCard
+            title="Next Month Opening Balance"
+            value={money(latestStats.closingCash)}
+            detail={`Carries forward from ${latestStats.month}`}
+            valueStyle={{ color: "#16a34a" }}
+            style={{ borderLeft: "4px solid #16a34a" }}
+            definition="The latest month closing cash is carried forward as the next month opening cash."
+            formula="Next month opening balance = latest closing cash."
+            period="Opening balance for the month immediately after the latest month shown."
+            source="Monthly Cash Flow & In-Hand Balance roll-forward."
+          />
         </div>
       )}
 
@@ -83,7 +106,7 @@ export default function MonthlyStatsTab({ stats = [] }) {
               </tr>
             </thead>
             <tbody>
-              {stats.map((s, idx) => (
+              {orderedStats.map((s, idx) => (
                 <tr key={idx} style={idx === 0 ? { background: "#f0fdf4", fontWeight: 600 } : {}}>
                   <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
                   <td><strong>{s.month}</strong>{idx === 0 && <span style={{ marginLeft: 6, fontSize: 10, color: "#16a34a", background: "#dcfce7", borderRadius: 8, padding: "2px 7px" }}>Latest</span>}</td>

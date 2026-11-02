@@ -10,6 +10,11 @@
 .globalCapitalView .financeHeader + .globalCapitalStats { margin-top: 20px; }
 .globalCapitalView .financeCard + .financeCard { margin-top: 24px; }
 .globalCapitalHero { padding: 28px 30px; border-radius: 16px; color: #ecfdf5; background: radial-gradient(circle at 85% 15%, rgba(45, 212, 191, .28), transparent 16rem), linear-gradient(135deg, #064e3b, #047857 58%, #0f766e); box-shadow: 0 18px 35px -18px rgba(6, 95, 70, .55); }
+.globalCapitalView .metric.globalCapitalBalanceMetric { padding: 28px 30px; border: 0; border-radius: 16px; color: #ecfdf5; background: radial-gradient(circle at 85% 15%, rgba(45, 212, 191, .28), transparent 16rem), linear-gradient(135deg, #064e3b, #047857 58%, #0f766e); box-shadow: 0 18px 35px -18px rgba(6, 95, 70, .55); }
+.globalCapitalView .metric.globalCapitalBalanceMetric::before { display: none; }
+.globalCapitalView .metric.globalCapitalBalanceMetric > span { display: flex; align-items: center; gap: 8px; color: #a7f3d0; font: 700 14px var(--font-main); letter-spacing: 0; text-transform: none; }
+.globalCapitalView .metric.globalCapitalBalanceMetric > b { margin-top: 18px; color: #fff; font: 800 clamp(30px, 4vw, 46px) var(--font-heading); letter-spacing: -.8px; }
+.globalCapitalView .metric.globalCapitalBalanceMetric > small { margin-top: 8px; color: #bbf7d0; font-size: 13px; font-weight: 400; }
 .globalCapitalHero h4 { display: flex; align-items: center; gap: 8px; margin: 0; color: #a7f3d0; font: 700 14px var(--font-main); }
 .globalCapitalHero strong { display: block; margin-top: 18px; color: #fff; font: 800 clamp(30px, 4vw, 46px) var(--font-heading); letter-spacing: -.8px; }
 .globalCapitalHero p { margin: 8px 0 0; color: #bbf7d0; font-size: 13px; }

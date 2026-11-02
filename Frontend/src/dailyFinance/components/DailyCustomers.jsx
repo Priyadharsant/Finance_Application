@@ -32,7 +32,7 @@ export default function DailyCustomers({
 
       <div className="filterBar">
         <input
-          placeholder="Search customer name"
+          placeholder="Search name, phone, account ID, date, amount, address, notes..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />

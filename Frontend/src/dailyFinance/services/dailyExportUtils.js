@@ -33,12 +33,16 @@ export const exportToExcel = (data, fileName, sheetName = "Sheet1") => {
  * Export Filtered Period Report (Excel)
  */
 export const exportDailyFinancePeriodReport = (report) => {
-  if (!report || !report.customers || !report.customers.length) {
-    alert("No report data available to export.");
+  const eligibleCustomers = (report?.customers || []).filter(
+    (row) => Number(row.period_collected !== undefined ? row.period_collected : row.total_collected || 0) > 0
+  );
+
+  if (!eligibleCustomers.length) {
+    alert("No collection records found in this report period to export.");
     return;
   }
 
-  const sortedCustomers = [...(report.customers || [])].sort((a, b) => {
+  const sortedCustomers = [...eligibleCustomers].sort((a, b) => {
     const da = new Date(a.finance_date || 0).getTime();
     const db = new Date(b.finance_date || 0).getTime();
     if (da !== db) return da - db;
@@ -216,7 +220,6 @@ export const exportCustomerStatement = (customer, collections = []) => {
     "S.No": idx + 1,
     "Collection Date": dateLabel(p.collection_date),
     "Amount Collected (₹)": Number(p.amount || 0),
-    "Total Collected To-Date (₹)": Number(p.total_collected || 0),
     "Remaining Balance (₹)": Number(p.remaining || 0),
     "Payment Method": p.payment_method || "CASH",
     "Notes": p.notes || "—",
@@ -227,7 +230,6 @@ export const exportCustomerStatement = (customer, collections = []) => {
       "S.No": 1,
       "Collection Date": "—",
       "Amount Collected (₹)": 0,
-      "Total Collected To-Date (₹)": 0,
       "Remaining Balance (₹)": remaining,
       "Payment Method": "—",
       "Notes": "No collections recorded yet.",
@@ -253,15 +255,20 @@ export const exportCustomerStatement = (customer, collections = []) => {
  * Export Today's Daily Collections Entry Sheet (Excel)
  */
 export const exportDailyCollectionsSheet = (date, dailyList = []) => {
-  if (!dailyList || !dailyList.length) {
-    alert("No collection records for this date to export.");
+  // Only show rows where amount was collected (> 0)
+  const collectedOnly = (dailyList || []).filter(
+    (c) => Number(c.today_collection || 0) > 0
+  );
+
+  if (!collectedOnly.length) {
+    alert("No collections recorded for this date to export.");
     return;
   }
 
   let totalCollectedToday = 0;
   let paidCustomers = 0;
 
-  const sortedDailyList = [...dailyList].sort((a, b) => {
+  const sortedDailyList = [...collectedOnly].sort((a, b) => {
     const da = new Date(a.finance_date || 0).getTime();
     const db = new Date(b.finance_date || 0).getTime();
     if (da !== db) return da - db;
@@ -285,7 +292,7 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
       "Already Returned (₹)": Number(c.total_collected || 0),
       "Remaining Balance (₹)": Number(c.remaining || 0),
       "Today's Collection (₹)": todayAmt,
-      "Payment Status": todayAmt > 0 ? "PAID TODAY" : "PENDING",
+      "Payment Status": "PAID TODAY",
     };
   });
 
@@ -298,9 +305,7 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
     [
       ["Selected Date Summary", ""],
       ["Collection Date", dateLabel(date)],
-      ["Total Customers", dailyList.length],
       ["Paid Customers", paidCustomers],
-      ["Unpaid Customers", dailyList.length - paidCustomers],
       ["Total Collection (₹)", totalCollectedToday],
     ],
     { origin: `A${summaryStartRow}` },
@@ -331,7 +336,12 @@ export const exportAllDailyCollectionsSheets = (dateCollections = []) => {
   const workbook = XLSX.utils.book_new();
 
   validCollections.forEach(({ date, dailyList }) => {
-    const sortedDailyList = [...dailyList].sort((a, b) => {
+    const paidOnlyList = (dailyList || []).filter(
+      (c) => Number(c.today_collection || 0) > 0
+    );
+    if (!paidOnlyList.length) return;
+
+    const sortedDailyList = [...paidOnlyList].sort((a, b) => {
       const da = new Date(a.finance_date || 0).getTime();
       const db = new Date(b.finance_date || 0).getTime();
       if (da !== db) return da - db;
@@ -339,11 +349,9 @@ export const exportAllDailyCollectionsSheets = (dateCollections = []) => {
     });
 
     let totalCollected = 0;
-    let paidCustomers = 0;
     const rows = sortedDailyList.map((customer, index) => {
       const amount = Number(customer.today_collection || 0);
       totalCollected += amount;
-      if (amount > 0) paidCustomers += 1;
 
       return {
         "S.No": index + 1,
@@ -354,7 +362,7 @@ export const exportAllDailyCollectionsSheets = (dateCollections = []) => {
         "Already Returned (₹)": Number(customer.total_collected || 0),
         "Remaining Balance (₹)": Number(customer.remaining || 0),
         "Today's Collection (₹)": amount,
-        "Payment Status": amount > 0 ? "PAID TODAY" : "PENDING",
+        "Payment Status": "PAID TODAY",
       };
     });
 
@@ -365,9 +373,7 @@ export const exportAllDailyCollectionsSheets = (dateCollections = []) => {
       [
         ["Selected Date Summary", ""],
         ["Collection Date", dateLabel(date)],
-        ["Total Customers", dailyList.length],
-        ["Paid Customers", paidCustomers],
-        ["Unpaid Customers", dailyList.length - paidCustomers],
+        ["Paid Customers", paidOnlyList.length],
         ["Total Collection (₹)", totalCollected],
       ],
       { origin: "J1" },
@@ -564,11 +570,14 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
     collections.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
     collections.forEach(({ date, dailyList = [] }) => {
-      const paidCustomers = dailyList.filter((customer) => Number(customer.today_collection || 0) > 0).length;
-      const totalCollection = dailyList.reduce((sum, customer) => sum + Number(customer.today_collection || 0), 0);
-      monthSummary.customers += dailyList.length;
-      monthSummary.paid += paidCustomers;
-      monthSummary.pending += dailyList.length - paidCustomers;
+      const paidOnlyList = dailyList.filter(
+        (customer) => Number(customer.today_collection || 0) > 0
+      );
+      if (!paidOnlyList.length) return;
+
+      const totalCollection = paidOnlyList.reduce((sum, customer) => sum + Number(customer.today_collection || 0), 0);
+      monthSummary.customers += paidOnlyList.length;
+      monthSummary.paid += paidOnlyList.length;
       monthSummary.collection += totalCollection;
 
       sheetRows.push([]);
@@ -584,7 +593,7 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
         "Payment Status",
       ]);
 
-      dailyList.forEach((customer, index) => {
+      paidOnlyList.forEach((customer, index) => {
         const amount = Number(customer.today_collection || 0);
         sheetRows.push([
           index + 1,
@@ -594,14 +603,14 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
           Number(customer.total_collected || 0),
           Number(customer.remaining || 0),
           amount,
-          amount > 0 ? "PAID" : "PENDING",
+          "PAID",
         ]);
       });
 
       sheetRows.push([
         "DATE TOTAL",
-        `${dailyList.length} customers`,
-        `Paid: ${paidCustomers} | Unpaid: ${dailyList.length - paidCustomers}`,
+        `${paidOnlyList.length} customers collected`,
+        "",
         "",
         "",
         "",
@@ -612,7 +621,7 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
 
     sheetRows[0] = [
       "MONTH TOTAL",
-      `${monthSummary.customers} customers | Paid: ${monthSummary.paid} | Unpaid: ${monthSummary.pending}`,
+      `${monthSummary.paid} customers collected`,
       "",
       "",
       monthSummary.collection,

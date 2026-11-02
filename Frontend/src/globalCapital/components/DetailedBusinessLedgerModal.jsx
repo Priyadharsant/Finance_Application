@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { globalCapitalApi } from "../services/globalCapitalApi.js";
 import { formatDate } from "../utils/formatters.js";
+import { matchesSearch } from "../../utils/search.js";
 import {
   exportMasterBusinessLedgerReport,
   exportAutoCategoryReport,
@@ -118,15 +119,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
   const filteredDailyLoans = useMemo(() => {
     if (!data?.dailyFinance?.loans) return [];
     let list = data.dailyFinance.loans;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter(
-        (l) =>
-          (l.customerName && l.customerName.toLowerCase().includes(q)) ||
-          (l.mobileNumber && l.mobileNumber.includes(q)) ||
-          (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
-      );
-    }
+    list = list.filter((loan) => matchesSearch(searchTerm, loan, { formatted_date: formatDate(loan.date || loan.finance_date) }));
     return [...list].sort((a, b) => {
       const da = new Date(a.date || a.finance_date || 0).getTime();
       const db = new Date(b.date || b.finance_date || 0).getTime();
@@ -137,17 +130,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
   const filteredAutoLoans = useMemo(() => {
     if (!data?.autoFinance?.loans) return [];
     let list = data.autoFinance.loans;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter(
-        (l) =>
-          (l.customerName && l.customerName.toLowerCase().includes(q)) ||
-          (l.vehicle && l.vehicle.toLowerCase().includes(q)) ||
-          (l.regNo && l.regNo.toLowerCase().includes(q)) ||
-          (l.brokerName && l.brokerName.toLowerCase().includes(q)) ||
-          (l.date && (l.date.includes(q) || formatDate(l.date).includes(q)))
-      );
-    }
+    list = list.filter((loan) => matchesSearch(searchTerm, loan, { formatted_date: formatDate(loan.date || loan.start_date || loan.disbursement_date) }));
     return [...list].sort((a, b) => {
       const da = new Date(a.date || a.start_date || a.disbursement_date || 0).getTime();
       const db = new Date(b.date || b.start_date || b.disbursement_date || 0).getTime();
@@ -158,15 +141,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
   const filteredExpenses = useMemo(() => {
     if (!data?.expenses?.items) return [];
     let list = data.expenses.items;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter(
-        (e) =>
-          (e.description && e.description.toLowerCase().includes(q)) ||
-          (e.categoryLabel && e.categoryLabel.toLowerCase().includes(q)) ||
-          (e.date && (e.date.includes(q) || formatDate(e.date).includes(q)))
-      );
-    }
+    list = list.filter((expense) => matchesSearch(searchTerm, expense, { formatted_date: formatDate(expense.date || expense.expense_date) }));
     return [...list].sort((a, b) => {
       const da = new Date(a.date || a.expense_date || 0).getTime();
       const db = new Date(b.date || b.expense_date || 0).getTime();
@@ -329,7 +304,7 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <input
               type="text"
-              placeholder="Search records..."
+              placeholder="Search name, phone, IDs, vehicle, partner, amount, date, notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 bg-slate-950/80 border border-slate-800 text-slate-200 text-xs rounded-xl focus:outline-none focus:border-emerald-500/60 placeholder:text-slate-600 transition-colors"

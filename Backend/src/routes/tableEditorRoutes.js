@@ -165,39 +165,61 @@ const TABLE_ENRICHMENTS = {
       { column_name: 'mobile_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
       { column_name: 'address', data_type: 'text', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['c.customer_name', 'c.mobile_number', 't.status']
+    searchFields: ['c.customer_name', 'c.mobile_number', 'c.address', 'c.notes', 't.status']
   },
   daily_finance_payments: {
-    selectExtra: `, COALESCE(dc.customer_name, '—') AS customer_name`,
+    selectExtra: `, COALESCE(dc.customer_name, '—') AS customer_name, COALESCE(dc.mobile_number, '—') AS mobile_number`,
     joinClause: `LEFT JOIN "daily_finance_customers" dc ON dc.customer_id = t.customer_id`,
     extraColumns: [
-      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'mobile_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['dc.customer_name']
+    searchFields: ['dc.customer_name', 'dc.mobile_number', 'dc.address', 'dc.notes']
+  },
+  autofinance_loans: {
+    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number, COALESCE(v.make, '—') AS vehicle_make, COALESCE(v.model, '—') AS vehicle_model`,
+    joinClause: `LEFT JOIN "autofinance_customers" c ON c.id = t.customer_id LEFT JOIN "autofinance_vehicles" v ON v.loan_id = t.id`,
+    extraColumns: [
+      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_phone', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_code', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'vehicle_make', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'vehicle_model', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+    ],
+    searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'v.make', 'v.model', 'v.vehicle_type']
   },
   autofinance_emi_schedules: {
-    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name`,
-    joinClause: `LEFT JOIN "autofinance_loans" l ON l.id = t.loan_id LEFT JOIN "autofinance_customers" c ON c.id = l.customer_id`,
+    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number`,
+    joinClause: `LEFT JOIN "autofinance_loans" l ON l.id = t.loan_id LEFT JOIN "autofinance_customers" c ON c.id = l.customer_id LEFT JOIN "autofinance_vehicles" v ON v.loan_id = l.id`,
     extraColumns: [
-      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_phone', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_code', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['c.first_name', 'c.last_name']
+    searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'l.id']
   },
   autofinance_payments: {
-    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name`,
-    joinClause: `LEFT JOIN "autofinance_loans" l ON l.id = t.loan_id LEFT JOIN "autofinance_customers" c ON c.id = l.customer_id`,
+    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number`,
+    joinClause: `LEFT JOIN "autofinance_loans" l ON l.id = t.loan_id LEFT JOIN "autofinance_customers" c ON c.id = l.customer_id LEFT JOIN "autofinance_vehicles" v ON v.loan_id = l.id`,
     extraColumns: [
-      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_phone', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'customer_code', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['c.first_name', 'c.last_name']
+    searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'l.id']
   },
   partner_capital_transactions: {
-    selectExtra: `, COALESCE(gp.name, '—') AS partner_name`,
+    selectExtra: `, COALESCE(gp.name, '—') AS partner_name, COALESCE(gp.phone, '—') AS partner_phone, COALESCE(gp.email, '—') AS partner_email`,
     joinClause: `LEFT JOIN "global_partners" gp ON gp.id = t.partner_id`,
     extraColumns: [
-      { column_name: 'partner_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'partner_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'partner_phone', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'partner_email', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['gp.name', 't.lender_name']
+    searchFields: ['gp.name', 'gp.phone', 'gp.email', 'gp.pan_number', 'gp.address', 'gp.notes', 't.lender_name']
   }
 };
 
@@ -383,6 +405,26 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
       if (searchConditions.length > 0) {
         conditions.push(`(${searchConditions.join(' OR ')})`);
         params.push(`%${search}%`);
+      }
+
+      const phoneDigits = search.replace(/\D/g, '');
+      const hasPhoneDigits = phoneDigits.length >= 4 && /^[+\d\s().-]+$/.test(search);
+      if (hasPhoneDigits) {
+        const phoneConditions = [];
+        columns
+          .filter((column) => /phone|mobile|contact/i.test(column.column_name) && !column.is_virtual)
+          .forEach((column) => {
+            phoneConditions.push(`REGEXP_REPLACE(COALESCE(CAST(t."${column.column_name}" AS TEXT), ''), '[^0-9]', '', 'g') LIKE $${params.length + 1}`);
+          });
+        (enrichment?.searchFields || [])
+          .filter((field) => /phone|mobile|contact/i.test(field))
+          .forEach((field) => {
+            phoneConditions.push(`REGEXP_REPLACE(COALESCE(CAST(${field} AS TEXT), ''), '[^0-9]', '', 'g') LIKE $${params.length + 1}`);
+          });
+        if (phoneConditions.length > 0) {
+          conditions.push(`(${phoneConditions.join(' OR ')})`);
+          params.push(`%${phoneDigits}%`);
+        }
       }
     }
 

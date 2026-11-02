@@ -66,6 +66,13 @@ export default function LoanDetailsModal({
   };
   if (!selectedLoan) return null;
 
+  const scheduledInterest = (selectedLoan.schedules || [])
+    .filter((schedule) => schedule.status !== "CANCELLED")
+    .reduce(
+      (total, schedule) => total + Number(schedule.scheduled_interest ?? schedule.interest_component ?? 0),
+      0,
+    );
+
   return (
     <div
       className="modal"
@@ -157,6 +164,16 @@ export default function LoanDetailsModal({
             <small>
               {selectedLoan.loan.interest_type || "FLAT"} interest
             </small>
+          </div>
+          <div className="loanSummaryMetric">
+            <div className="loanSummaryLabel">
+              <span>
+                <CircleDollarSign size={15} />
+              </span>{" "}
+              Interest amount
+            </div>
+            <strong>{money(scheduledInterest)}</strong>
+            <small>Total interest in scheduled installments</small>
           </div>
           <div className="loanSummaryMetric">
             <div className="loanSummaryLabel">
