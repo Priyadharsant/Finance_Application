@@ -124,13 +124,14 @@ export function createSimpleFinanceRouter(db) {
 
       const newTotal = currentCollected + Number(amount);
       const newStatus = newTotal >= agreedPayable ? 'COMPLETED' : 'ACTIVE';
+      const closedDate = newStatus === 'COMPLETED' ? collectionDate : null;
       await client.query(
         `UPDATE daily_finance_accounts
-         SET status=$1,
-             closed_date = CASE WHEN $1 = 'COMPLETED' THEN $3::date ELSE NULL END,
-             updated_at=NOW()
-         WHERE finance_id=$2`,
-        [newStatus, financeId, collectionDate]
+         SET status = $1,
+             closed_date = $3,
+             updated_at = NOW()
+         WHERE finance_id = $2`,
+        [newStatus, financeId, closedDate]
       );
 
       await client.query(
@@ -206,13 +207,14 @@ export function createSimpleFinanceRouter(db) {
 
       const newTotal = otherCollected + Number(amount);
       const newStatus = newTotal >= agreedPayable ? 'COMPLETED' : 'ACTIVE';
+      const closedDate = newStatus === 'COMPLETED' ? collectionDate : null;
       await client.query(
         `UPDATE daily_finance_accounts
-         SET status=$1,
-             closed_date = CASE WHEN $1 = 'COMPLETED' THEN $3::date ELSE NULL END,
-             updated_at=NOW()
-         WHERE finance_id=$2`,
-        [newStatus, financeId, collectionDate]
+         SET status = $1,
+             closed_date = $3,
+             updated_at = NOW()
+         WHERE finance_id = $2`,
+        [newStatus, financeId, closedDate]
       );
 
       await client.query(
