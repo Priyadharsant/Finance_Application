@@ -1,6 +1,6 @@
 {
   "name": "finance-application-workspace",
-  "version": "2.4.14",
+  "version": "2.4.15",
   "private": true,
   "type": "module",
   "scripts": {

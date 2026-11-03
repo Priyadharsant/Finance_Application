@@ -149,7 +149,7 @@ export async function recordEmiPayment(req, res) {
 
     const totalContractualInterest = Number(
       (loan.interest_type === 'FLAT'
-        ? (originalPrincipal * (interestRate / 100) * (tenureMonths / 12))
+        ? (originalPrincipal * (interestRate / 100) * tenureMonths)
         : scheduledInterestSum
       ).toFixed(2)
     );

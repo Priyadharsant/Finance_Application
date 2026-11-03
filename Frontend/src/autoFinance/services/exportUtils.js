@@ -74,7 +74,7 @@ export const exportTotalPortfolio = (loans = [], label = "") => {
     const customerInterestRate = Number(l.interest_rate || 0);
     
     // Total interest from customer (approx flat)
-    const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 1200);
+    const totalCustomerInterest = Math.round((loanAmount * customerInterestRate * tenureMonths) / 100);
     const scheduledInterest = Number(l.total_interest ?? 0);
 
     return {

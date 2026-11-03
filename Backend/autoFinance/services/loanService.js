@@ -203,7 +203,7 @@ export async function createLoanWithVehicle(data) {
     const method = (interestType || 'FLAT').toUpperCase();
 
     if (method === 'REDUCING') {
-      const r = (ratePercent / 100) / 12;
+      const r = (ratePercent / 100);
       let emi = 0;
       if (r > 0) {
         emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
@@ -243,7 +243,7 @@ export async function createLoanWithVehicle(data) {
       }
     } else {
       // FLAT INTEREST
-      const totalInterest = P * (ratePercent / 100) * (n / 12);
+      const totalInterest = P * (ratePercent / 100) * n;
       const monthlyPrincipal = P / n;
       const monthlyInterest = totalInterest / n;
       const monthlyEMI = monthlyPrincipal + monthlyInterest;
@@ -613,7 +613,7 @@ export async function rescheduleFutureEMIs(client, loanId) {
 
   // 3. Recalculate & Update Pending Schedules
   if (isReducing) {
-    const r = (ratePercent / 100) / 12;
+    const r = (ratePercent / 100);
     let newEmi = 0;
     
     if (principalToDistribute > 0) {
@@ -649,7 +649,7 @@ export async function rescheduleFutureEMIs(client, loanId) {
     }
   } else {
     // FLAT INTEREST
-    const totalContractualInterest = P_initial * ratePercent * (n_total / 12) / 100;
+    const totalContractualInterest = P_initial * (ratePercent / 100) * n_total;
     let interestToDistribute = totalContractualInterest - totalInterestPaid - unpaidInterestInPartials;
     if (interestToDistribute < 0) interestToDistribute = 0;
 

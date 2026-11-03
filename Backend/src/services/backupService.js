@@ -372,6 +372,14 @@ export function getLatestBackupMetadata() {
  * Initializes the automated 1-hour recurring cron schedule (0 * * * *)
  */
 export function initHourlyBackupCron() {
+  const connStr = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
+  const isLocalDb = !connStr || connStr.includes('localhost') || connStr.includes('127.0.0.1');
+
+  if (isLocalDb || process.env.DISABLE_LOCAL_BACKUP === 'true') {
+    console.log('[BackupCron] Local database detected. Automated backup cron and startup dump are disabled.');
+    return;
+  }
+
   ensureDirectories();
 
   // Run at minute 0 of every hour: '0 * * * *'

@@ -165,7 +165,7 @@ export default function CreateLoanModal({
           </label>
 
           <label>
-            Interest Rate (% p.a.) *
+            Interest Rate (% per month) *
             <input
               type="number"
               step="0.1"
@@ -295,14 +295,14 @@ export default function CreateLoanModal({
               let totalPay = 0;
 
               if (isReducing && rateVal > 0 && n > 0) {
-                const rMo = rateVal / 100 / 12;
+                const rMo = rateVal / 100;
                 monthlyEmi =
                   (P * rMo * Math.pow(1 + rMo, n)) /
                   (Math.pow(1 + rMo, n) - 1);
                 totalPay = monthlyEmi * n;
                 totalInt = totalPay - P;
               } else {
-                totalInt = P * (rateVal / 100) * (n / 12);
+                totalInt = P * (rateVal / 100) * n;
                 totalPay = P + totalInt;
                 monthlyEmi = n > 0 ? totalPay / n : 0;
               }
