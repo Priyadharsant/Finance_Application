@@ -60,30 +60,37 @@ export const formatDate = (val) => {
       if (isNaN(val.getTime())) return "—";
       const day = String(val.getDate()).padStart(2, "0");
       const month = String(val.getMonth() + 1).padStart(2, "0");
-      const year = val.getFullYear();
+      let year = val.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     const str = String(val).trim();
     const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (dateOnlyMatch) {
-      const [, y, m, d] = dateOnlyMatch;
+      let [, y, m, d] = dateOnlyMatch;
+      if (y === "2001" || parseInt(y, 10) < 2010) y = String(new Date().getFullYear());
       return `${d}-${m}-${y}`;
     }
-    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
-      return str;
+    const ddmmyyyy = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (ddmmyyyy) {
+      let [, d, m, y] = ddmmyyyy;
+      if (y === "2001" || parseInt(y, 10) < 2010) y = String(new Date().getFullYear());
+      return `${d}-${m}-${y}`;
     }
     const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
     if (!isNaN(d.getTime())) {
       const day = String(d.getDate()).padStart(2, "0");
       const month = String(d.getMonth() + 1).padStart(2, "0");
-      const year = d.getFullYear();
+      let year = d.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     const fallback = new Date(str);
     if (!isNaN(fallback.getTime())) {
       const day = String(fallback.getDate()).padStart(2, "0");
       const month = String(fallback.getMonth() + 1).padStart(2, "0");
-      const year = fallback.getFullYear();
+      let year = fallback.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     return str;
@@ -1752,13 +1759,23 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
     if (nameKey) customerMetaMap.set(nameKey, c);
   });
 
+  const pickBestDate = (d1, d2, d3) => {
+    const hasYear = (v) => /\b(19\d\d|20\d\d)\b/.test(String(v));
+    for (const d of [d1, d2, d3]) {
+      if (d && (d instanceof Date || hasYear(d))) return d;
+    }
+    return d1 || d2 || d3;
+  };
+
   const enrichedLoans = dfLoans.map((l) => {
     const meta =
       customerMetaMap.get(String(l.financeId || l.finance_id)) ||
       customerMetaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase());
+    const validDate = pickBestDate(l.finance_date, l.date, meta?.finance_date);
     return {
       ...l,
-      finance_date: l.finance_date || l.date || meta?.finance_date,
+      finance_date: validDate,
+      date: validDate,
       created_at: l.created_at || l.account_created_at || meta?.created_at || meta?.account_created_at,
       account_created_at: l.account_created_at || l.created_at || meta?.account_created_at || meta?.created_at,
     };
@@ -1788,10 +1805,22 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
     ];
     if (!val) return { key: "9999-99", title: "PRIOR / GENERAL DISBURSEMENTS", shortName: "OTHER" };
     try {
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        let y = val.getFullYear();
+        if (y === 2001 || y < 2010) y = new Date().getFullYear();
+        const m = val.getMonth() + 1;
+        const mName = monthNames[m - 1] || `MONTH ${m}`;
+        return {
+          key: `${y}-${String(m).padStart(2, "0")}`,
+          title: `${mName} ${y} - LOAN DISBURSEMENTS`,
+          shortName: `${mName} ${y}`,
+        };
+      }
       const str = String(val).trim();
       const isoMatch = str.match(/^(\d{4})-(\d{2})/);
       if (isoMatch) {
-        const y = parseInt(isoMatch[1], 10);
+        let y = parseInt(isoMatch[1], 10);
+        if (y === 2001 || y < 2010) y = new Date().getFullYear();
         const m = parseInt(isoMatch[2], 10);
         const mName = monthNames[m - 1] || `MONTH ${m}`;
         return {
@@ -1800,10 +1829,11 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
           shortName: `${mName} ${y}`,
         };
       }
-      const ddmmyyyy = str.match(/^(\d{2})-(\d{2})-(\d{4})/);
+      const ddmmyyyy = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
       if (ddmmyyyy) {
         const m = parseInt(ddmmyyyy[2], 10);
-        const y = parseInt(ddmmyyyy[3], 10);
+        let y = parseInt(ddmmyyyy[3], 10);
+        if (y === 2001 || y < 2010) y = new Date().getFullYear();
         const mName = monthNames[m - 1] || `MONTH ${m}`;
         return {
           key: `${y}-${String(m).padStart(2, "0")}`,
@@ -1813,8 +1843,21 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
       }
       const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
       if (!isNaN(d.getTime())) {
-        const y = d.getFullYear();
+        let y = d.getFullYear();
+        if (y === 2001 || y < 2010) y = new Date().getFullYear();
         const m = d.getMonth() + 1;
+        const mName = monthNames[m - 1] || `MONTH ${m}`;
+        return {
+          key: `${y}-${String(m).padStart(2, "0")}`,
+          title: `${mName} ${y} - LOAN DISBURSEMENTS`,
+          shortName: `${mName} ${y}`,
+        };
+      }
+      const fallback = new Date(str);
+      if (!isNaN(fallback.getTime())) {
+        let y = fallback.getFullYear();
+        if (y === 2001 || y < 2010) y = new Date().getFullYear();
+        const m = fallback.getMonth() + 1;
         const mName = monthNames[m - 1] || `MONTH ${m}`;
         return {
           key: `${y}-${String(m).padStart(2, "0")}`,

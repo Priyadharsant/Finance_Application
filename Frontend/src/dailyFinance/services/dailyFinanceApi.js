@@ -26,30 +26,37 @@ export const dateLabel = (value) => {
       if (isNaN(value.getTime())) return "—";
       const day = String(value.getDate()).padStart(2, "0");
       const month = String(value.getMonth() + 1).padStart(2, "0");
-      const year = value.getFullYear();
+      let year = value.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     const str = String(value).trim();
     const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (dateOnlyMatch) {
-      const [, y, m, d] = dateOnlyMatch;
+      let [, y, m, d] = dateOnlyMatch;
+      if (y === "2001" || parseInt(y, 10) < 2010) y = String(new Date().getFullYear());
       return `${d}-${m}-${y}`;
     }
-    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
-      return str;
+    const ddmmyyyy = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (ddmmyyyy) {
+      let [, d, m, y] = ddmmyyyy;
+      if (y === "2001" || parseInt(y, 10) < 2010) y = String(new Date().getFullYear());
+      return `${d}-${m}-${y}`;
     }
     const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
     if (!isNaN(d.getTime())) {
       const day = String(d.getDate()).padStart(2, "0");
       const month = String(d.getMonth() + 1).padStart(2, "0");
-      const year = d.getFullYear();
+      let year = d.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     const fallback = new Date(str);
     if (!isNaN(fallback.getTime())) {
       const day = String(fallback.getDate()).padStart(2, "0");
       const month = String(fallback.getMonth() + 1).padStart(2, "0");
-      const year = fallback.getFullYear();
+      let year = fallback.getFullYear();
+      if (year === 2001 || year < 2010) year = new Date().getFullYear();
       return `${day}-${month}-${year}`;
     }
     return str;

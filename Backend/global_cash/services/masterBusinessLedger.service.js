@@ -1,5 +1,30 @@
 import { pool } from '../../autoFinance/config/db.js';
 
+function formatDateISO(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(val).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  const ddmmyyyy = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return str;
+}
+
+
 export async function getMasterBusinessLedger(client = pool, options = {}) {
   const { year, month } = options;
 
@@ -8,6 +33,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     SELECT 
       a.finance_id,
       a.finance_date,
+      TO_CHAR(a.finance_date, 'YYYY-MM-DD') as finance_date_str,
       a.gross_finance_amount,
       a.initial_deduction,
       a.net_disbursement,
@@ -95,8 +121,8 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     return {
       sNo: idx + 1,
       financeId: a.finance_id,
-      date: a.finance_date ? String(a.finance_date).slice(0, 10) : '',
-      finance_date: a.finance_date ? String(a.finance_date).slice(0, 10) : '',
+      date: a.finance_date_str || formatDateISO(a.finance_date),
+      finance_date: a.finance_date_str || formatDateISO(a.finance_date),
       created_at: a.created_at,
       account_created_at: a.created_at,
       customerName: a.customer_name || '—',
@@ -128,6 +154,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     SELECT 
       l.id,
       l.start_date,
+      TO_CHAR(l.start_date, 'YYYY-MM-DD') as start_date_str,
       l.loan_amount,
       l.interest_rate,
       l.tenure_months,
@@ -218,8 +245,8 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     return {
       sNo: idx + 1,
       id: l.id,
-      date: l.start_date ? String(l.start_date).slice(0, 10) : '',
-      start_date: l.start_date ? String(l.start_date).slice(0, 10) : '',
+      date: l.start_date_str || formatDateISO(l.start_date),
+      start_date: l.start_date_str || formatDateISO(l.start_date),
       created_at: l.created_at,
       createdAt: l.created_at,
       customerName: `${l.first_name || ''} ${l.last_name || ''}`.trim() || '—',
@@ -333,6 +360,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     SELECT 
       id,
       expense_date,
+      TO_CHAR(expense_date, 'YYYY-MM-DD') as expense_date_str,
       amount,
       category,
       expense_type,
@@ -373,7 +401,7 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     return {
       sNo: idx + 1,
       id: e.id,
-      date: e.expense_date ? String(e.expense_date).slice(0, 10) : '',
+      date: e.expense_date_str || formatDateISO(e.expense_date),
       amount: amt,
       categoryKey: cat,
       categoryLabel: e.category || 'GENERAL',
