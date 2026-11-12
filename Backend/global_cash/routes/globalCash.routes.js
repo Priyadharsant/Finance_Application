@@ -60,14 +60,17 @@ router.get('/monthly-stats', async (req, res) => {
 router.get('/ledger', async (req, res) => {
   try {
     const breakdown = await getCapitalBreakdown(pool);
-    const ledgerRes = await pool.query('SELECT * FROM global_cash_ledger ORDER BY transaction_date DESC LIMIT 100');
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 500));
+    const ledgerRes = await pool.query('SELECT * FROM global_cash_ledger ORDER BY transaction_date DESC LIMIT $1', [limit]);
     
     res.json({
       availableCapital: breakdown.availableCapital,
       grossCapital: breakdown.grossCapital,
       totalCredits: breakdown.totalCredits,
       totalDebits: breakdown.totalDebits,
+      capital: breakdown.capital,
       expenses: breakdown.expenses,
+      portfolio: breakdown.portfolio,
       revenue: breakdown.revenue,
       netProfit: breakdown.netProfit,
       ledger: ledgerRes.rows
@@ -169,7 +172,7 @@ router.get('/expenses', async (req, res) => {
       from,
       to,
       search,
-      limit: limit ? parseInt(limit, 10) : 200,
+      limit: limit ? parseInt(limit, 10) : 10000,
       offset: offset ? parseInt(offset, 10) : 0,
     });
     res.json(data);
@@ -385,7 +388,7 @@ const handleContribution = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate } = req.body;
+    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate, targetModule } = req.body;
     
     if (!partnerId) throw new Error('Partner is required');
     if (!amount || Number(amount) <= 0) throw new Error('Valid contribution amount is required');
@@ -393,7 +396,8 @@ const handleContribution = async (req, res) => {
     const tx = await createContribution(client, partnerId, Number(amount), effectiveDate, notes, {
       fundSourceType,
       lenderName,
-      interestRate
+      interestRate,
+      targetModule: targetModule || 'DAILY'
     });
     
     await client.query('COMMIT');
@@ -413,7 +417,7 @@ const handleWithdrawal = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate } = req.body;
+    const { partnerId, amount, effectiveDate, notes, fundSourceType, lenderName, interestRate, targetModule } = req.body;
 
     if (!partnerId) throw new Error('Partner is required');
     if (!amount || Number(amount) <= 0) throw new Error('Valid withdrawal amount is required');
@@ -421,7 +425,8 @@ const handleWithdrawal = async (req, res) => {
     const tx = await createWithdrawal(client, partnerId, Number(amount), effectiveDate, notes, {
       fundSourceType,
       lenderName,
-      interestRate
+      interestRate,
+      targetModule: targetModule || 'DAILY'
     });
 
     await client.query('COMMIT');

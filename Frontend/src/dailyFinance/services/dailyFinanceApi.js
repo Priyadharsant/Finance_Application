@@ -117,4 +117,18 @@ export const dailyFinanceApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updateCustomerWithFinance: (financeId, body) =>
+    call(`/customers-with-finance/${financeId}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  createDailyExpense: (body) =>
+    call("/expenses", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteDailyExpense: (expenseId) =>
+    call(`/expenses/${expenseId}`, {
+      method: "DELETE",
+    }),
 };

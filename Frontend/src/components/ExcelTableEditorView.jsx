@@ -20,6 +20,11 @@ import {
   Receipt,
   Globe,
   Lock,
+  Trash2,
+  Archive,
+  CarFront,
+  Eye,
+  AlertTriangle,
 } from "lucide-react";
 import { getApiBaseUrl } from "../apiConfig.js";
 
@@ -28,6 +33,11 @@ const ESSENTIAL_COLUMNS_MAP = {
   daily_finance_accounts: [
     "customer_name",
     "gross_finance_amount",
+    "interest_value",
+    "interest_type",
+    "initial_deduction",
+    "agreed_total_payable",
+    "daily_agreed_due",
     "mobile_number",
     "finance_date",
     "status",
@@ -35,11 +45,36 @@ const ESSENTIAL_COLUMNS_MAP = {
   ],
   daily_finance_payments: [
     "customer_name",
-    "collection_date",
     "amount",
+    "loan_remaining_balance",
+    "loan_status",
+    "collection_date",
     "payment_method",
+    "loan_total_payable",
     "status",
     "notes",
+  ],
+  autofinance_loans: [
+    "customer_name",
+    "customer_phone",
+    "registration_number",
+    "loan_amount",
+    "interest_rate",
+    "total_amount",
+    "tenure_months",
+    "disbursement_date",
+    "status",
+  ],
+  deleted_loans_archive: [
+    "loan_id",
+    "loan_type",
+    "customer_name",
+    "customer_phone",
+    "principal_amount",
+    "total_collected",
+    "deleted_at",
+    "deleted_by",
+    "deletion_reason",
   ],
   autofinance_customers: [
     "customer_code",
@@ -119,12 +154,36 @@ const COLUMN_LABEL_MAP = {
   expense_date: "Expense Date",
   category: "Category",
   expense_type: "Expense Type",
+  interest_value: "Interest Value",
+  interest_type: "Interest Type",
+  initial_deduction: "Upfront Interest (Pitipu)",
+  agreed_total_payable: "Total Return",
+  daily_agreed_due: "Daily Due",
+  loan_amount: "Loan Amount",
+  total_amount: "Total Return",
+  loan_total_payable: "Total Payable",
+  loan_remaining_balance: "Remaining Balance",
+  loan_status: "Loan Status",
+  tenure_months: "Tenure (Months)",
+  disbursement_date: "Disbursed Date",
+  customer_phone: "Phone",
+  registration_number: "Reg Number",
+  principal_component: "Principal Component",
+  interest_component: "Interest Component",
   description: "Description",
   notes: "Notes",
   transaction_type: "Txn Type",
   transaction_date: "Txn Date",
   direction: "Direction",
   source_module: "Source Module",
+  loan_id: "Loan ID",
+  loan_type: "Loan Type",
+  principal_amount: "Principal / Disbursed",
+  total_collected: "Total Collected",
+  deleted_at: "Deleted Date",
+  deleted_by: "Deleted By",
+  deletion_reason: "Reason",
+  details_json: "Archived Details",
 };
 
 const getTableIcon = (tableName) => {
@@ -143,6 +202,10 @@ const getTableIcon = (tableName) => {
       return Landmark;
     case "partner_capital_transactions":
       return Database;
+    case "autofinance_loans":
+      return CarFront;
+    case "deleted_loans_archive":
+      return Archive;
     default:
       return Table;
   }
@@ -166,6 +229,11 @@ export default function ExcelTableEditorView({ onClose }) {
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [notification, setNotification] = useState(null);
   const editInputRef = useRef(null);
+  const [deleteModal, setDeleteModal] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [viewArchiveModal, setViewArchiveModal] = useState(null);
+  const [violationModal, setViolationModal] = useState(null);
 
   const getAuthToken = () => localStorage.getItem("kambam_finance_app_auth") || "";
 
@@ -279,24 +347,19 @@ export default function ExcelTableEditorView({ onClose }) {
   // Check if a cell is editable
   const isCellEditable = (colName, isPK, row) => {
     if (isPK) return false;
-
-    // Strict rule for Auto Collections: ONLY collected_amount is editable! total_emi, dates, status are read-only!
-    if (selectedTable === "autofinance_emi_schedules") {
-      return colName === "collected_amount";
-    }
-
-    // Strict rule for Daily Finance Loans: Only customer_name, gross_finance_amount, mobile_number, and notes are editable
-    if (selectedTable === "daily_finance_accounts") {
-      return ["customer_name", "gross_finance_amount", "mobile_number", "notes"].includes(colName);
-    }
-
+    if (selectedTable === "deleted_loans_archive") return false;
     if (
-      colName === "customer_name" &&
-      selectedTable !== "daily_finance_accounts" &&
-      selectedTable !== "daily_finance_customers"
+      colName === "id" ||
+      colName === "customer_code" ||
+      colName === "installment_number" ||
+      colName === "net_disbursement" ||
+      colName === "loan_remaining_balance" ||
+      colName === "loan_total_payable" ||
+      colName === "loan_status"
     ) {
       return false;
     }
+
     if (
       colName === "partner_name" &&
       selectedTable !== "partner_capital_amounts" &&
@@ -373,6 +436,96 @@ export default function ExcelTableEditorView({ onClose }) {
     const changes = modifiedRows[rowId];
     if (!changes || Object.keys(changes).length === 0) return;
 
+    // Validate daily collection amount against remaining loan balance
+    if (selectedTable === "daily_finance_payments" && changes.amount !== undefined) {
+      const remaining = Number(row.loan_remaining_balance || 0);
+      const curAmt = Number(row.amount || 0);
+      const maxAllowed = remaining + curAmt;
+      const newAmt = Number(changes.amount);
+
+      if (newAmt < 0) {
+        setViolationModal({
+          title: "Violation: Negative Amount Not Permitted",
+          message: "Daily collection payment amount cannot be negative.",
+          details: [
+            { label: "Customer Name", value: row.customer_name || row.finance_id || `#${rowId}` },
+            { label: "Field", value: "Collection Amount (₹)" },
+            { label: "Entered Value", value: `₹${newAmt}` }
+          ],
+          hint: "Please enter ₹0 or a positive collection value.",
+          onRevert: () => {
+            setModifiedRows((prev) => {
+              const next = { ...prev };
+              if (next[rowId]) {
+                delete next[rowId].amount;
+                if (Object.keys(next[rowId]).length === 0) delete next[rowId];
+              }
+              return next;
+            });
+            setViolationModal(null);
+          }
+        });
+        showNotice("error", "Violation: Payment amount cannot be negative.");
+        return;
+      }
+
+      if (newAmt > maxAllowed + 0.001) {
+        setViolationModal({
+          title: "Violation Prevented: Payment Exceeds Remaining Balance",
+          message: `The entered payment amount (₹${newAmt.toLocaleString("en-IN")}) exceeds the total remaining balance of this loan.`,
+          details: [
+            { label: "Customer Name", value: row.customer_name || row.finance_id || `#${rowId}` },
+            { label: "Current Recorded Value", value: `₹${curAmt.toLocaleString("en-IN")}` },
+            { label: "Loan Remaining Balance", value: `₹${remaining.toLocaleString("en-IN")}` },
+            { label: "Maximum Allowed Collection", value: `₹${maxAllowed.toLocaleString("en-IN")}` },
+            { label: "Attempted Collection", value: `₹${newAmt.toLocaleString("en-IN")}` }
+          ],
+          hint: `Collections cannot exceed the outstanding balance of a loan. The maximum amount you can collect on this loan is ₹${maxAllowed.toLocaleString("en-IN")}.`,
+          onRevert: () => {
+            setModifiedRows((prev) => {
+              const next = { ...prev };
+              if (next[rowId]) {
+                delete next[rowId].amount;
+                if (Object.keys(next[rowId]).length === 0) delete next[rowId];
+              }
+              return next;
+            });
+            setViolationModal(null);
+          }
+        });
+        showNotice("error", `Violation: Amount exceeds maximum allowed (₹${maxAllowed.toLocaleString("en-IN")})`);
+        return;
+      }
+    }
+
+    if (selectedTable === "daily_finance_accounts" && changes.gross_finance_amount !== undefined) {
+      const gross = Number(changes.gross_finance_amount);
+      if (gross <= 0) {
+        setViolationModal({
+          title: "Violation: Invalid Loan Amount",
+          message: "Total loan amount must be greater than zero.",
+          details: [
+            { label: "Customer Name", value: row.customer_name || `#${rowId}` },
+            { label: "Entered Loan Amount", value: `₹${gross}` }
+          ],
+          hint: "Please provide a valid loan disbursement principal (₹1 or higher).",
+          onRevert: () => {
+            setModifiedRows((prev) => {
+              const next = { ...prev };
+              if (next[rowId]) {
+                delete next[rowId].gross_finance_amount;
+                if (Object.keys(next[rowId]).length === 0) delete next[rowId];
+              }
+              return next;
+            });
+            setViolationModal(null);
+          }
+        });
+        showNotice("error", "Violation: Loan amount must be greater than ₹0.");
+        return;
+      }
+    }
+
     setSavingRows((prev) => ({ ...prev, [rowId]: true }));
     try {
       const apiBase = getApiBaseUrl();
@@ -383,13 +536,33 @@ export default function ExcelTableEditorView({ onClose }) {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getAuthToken()}`,
+            "x-admin-password": localStorage.getItem("kambam_finance_app_password") || "kambam@2k26",
           },
           body: JSON.stringify(changes),
         }
       );
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Save failed");
+        const errMsg = data.error || "Save failed";
+        setViolationModal({
+          title: "Constraint Violation Prevented",
+          message: errMsg,
+          details: [
+            { label: "Table", value: selectedTable },
+            { label: "Record Key", value: String(rowId) },
+            { label: "Server Status", value: `HTTP ${res.status}` }
+          ],
+          hint: "The database rejected this update to protect ledger balance consistency. Please adjust the entered value.",
+          onRevert: () => {
+            setModifiedRows((prev) => {
+              const next = { ...prev };
+              delete next[rowId];
+              return next;
+            });
+            setViolationModal(null);
+          }
+        });
+        throw new Error(errMsg);
       }
 
       setTableData((prev) => ({
@@ -417,11 +590,59 @@ export default function ExcelTableEditorView({ onClose }) {
         return next;
       });
 
-      showNotice("success", `Row updated successfully`);
+      const updatedRemaining = Number(data.updatedRow?.loan_remaining_balance || 0);
+      if (selectedTable === "daily_finance_payments" && updatedRemaining <= 0) {
+        showNotice("success", "Saved! Remaining balance reached ₹0 — Loan marked as COMPLETED.");
+      } else {
+        showNotice("success", `Row updated successfully`);
+      }
+
+      // Reload to refresh joined loan balances and statuses
+      if (selectedTable === "daily_finance_payments" || selectedTable === "daily_finance_accounts") {
+        loadTableData(selectedTable, page, limit, search, sortBy, sortOrder);
+      }
     } catch (err) {
       showNotice("error", `Failed to save: ${err.message}`);
     } finally {
       setSavingRows((prev) => ({ ...prev, [rowId]: false }));
+    }
+  };
+
+  // Delete Loan handler (cascade all payments & revert capital)
+  const handleDeleteLoanConfirm = async () => {
+    if (!deleteModal || isDeleting) return;
+    const { row, tableName } = deleteModal;
+    const pkCol = tableData?.primaryKey || (tableName === "daily_finance_accounts" ? "finance_id" : "id");
+    const rowId = row[pkCol];
+
+    setIsDeleting(true);
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(
+        `${apiBase}/table-editor/loan/${tableName}/${encodeURIComponent(rowId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getAuthToken()}`,
+            "x-admin-password": localStorage.getItem("kambam_finance_app_password") || "kambam@2k26",
+          },
+          body: JSON.stringify({ reason: deleteReason.trim() || "Deleted via Table Studio" }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Delete loan failed");
+      }
+
+      showNotice("success", data.message || "Loan successfully deleted and capital reverted.");
+      setDeleteModal(null);
+      setDeleteReason("");
+      loadTableData(selectedTable, page, limit, search, sortBy, sortOrder);
+    } catch (err) {
+      showNotice("error", `Failed to delete loan: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1070,11 +1291,11 @@ export default function ExcelTableEditorView({ onClose }) {
                       #
                     </th>
 
-                    {/* Update / Save Header (NO DELETE) */}
+                    {/* Action Header */}
                     <th
                       style={{
                         padding: "8px 9px",
-                        width: "60px",
+                        width: selectedTable === "daily_finance_accounts" || selectedTable === "autofinance_loans" || selectedTable === "deleted_loans_archive" ? "130px" : "60px",
                         textAlign: "center",
                         borderRight: "1px solid #243044",
                         color: "#94a3b8",
@@ -1084,7 +1305,7 @@ export default function ExcelTableEditorView({ onClose }) {
                         background: "#101624",
                       }}
                     >
-                      Save
+                      Action
                     </th>
 
                     {/* Data Columns */}
@@ -1280,7 +1501,7 @@ export default function ExcelTableEditorView({ onClose }) {
                             </td>
                           )}
 
-                          {/* Row Update Button (NO DELETE) */}
+                          {/* Row Action Column */}
                           <td
                             style={{
                               textAlign: "center",
@@ -1290,39 +1511,91 @@ export default function ExcelTableEditorView({ onClose }) {
                                   ? "2px solid rgba(56, 189, 248, 0.3)"
                                   : "1px dashed rgba(255, 255, 255, 0.08)"
                                 : undefined,
-                              padding: "3px",
+                              padding: "3px 6px",
                               verticalAlign: "middle",
+                              whiteSpace: "nowrap",
                             }}
                           >
-                            {hasChanges ? (
-                              <button
-                                type="button"
-                                onClick={() => saveRow(row)}
-                                disabled={isSaving || isSavingAll}
-                                style={{
-                                  background: isSaving ? "#475569" : "#10b981",
-                                  border: "none",
-                                  color: "#ffffff",
-                                  borderRadius: "4px",
-                                  padding: "2px 7px",
-                                  cursor: isSaving || isSavingAll ? "not-allowed" : "pointer",
-                                  opacity: isSaving || isSavingAll ? 0.6 : 1,
-                                  pointerEvents: isSaving || isSavingAll ? "none" : "auto",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "3px",
-                                  boxShadow: isSaving ? "none" : "0 0 6px rgba(16, 185, 129, 0.4)",
-                                }}
-                                title={isSaving ? "Saving changes..." : "Save / Update row changes"}
-                              >
-                                <Save size={12} className={isSaving ? "animate-spin" : ""} />
-                                <span>{isSaving ? "Saving..." : "Save"}</span>
-                              </button>
-                            ) : (
-                              <span style={{ color: "#334155", fontSize: "11px" }}>—</span>
-                            )}
+                            <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                              {hasChanges && (
+                                <button
+                                  type="button"
+                                  onClick={() => saveRow(row)}
+                                  disabled={isSaving || isSavingAll}
+                                  style={{
+                                    background: isSaving ? "#475569" : "#10b981",
+                                    border: "none",
+                                    color: "#ffffff",
+                                    borderRadius: "4px",
+                                    padding: "2px 7px",
+                                    cursor: isSaving || isSavingAll ? "not-allowed" : "pointer",
+                                    opacity: isSaving || isSavingAll ? 0.6 : 1,
+                                    fontSize: "11px",
+                                    fontWeight: "700",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    boxShadow: isSaving ? "none" : "0 0 6px rgba(16, 185, 129, 0.4)",
+                                  }}
+                                  title={isSaving ? "Saving changes..." : "Save / Update row changes"}
+                                >
+                                  <Save size={12} className={isSaving ? "animate-spin" : ""} />
+                                  <span>{isSaving ? "..." : "Save"}</span>
+                                </button>
+                              )}
+
+                              {(selectedTable === "daily_finance_accounts" || selectedTable === "autofinance_loans") && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteModal({ row, tableName: selectedTable })}
+                                  style={{
+                                    background: "rgba(239, 68, 68, 0.15)",
+                                    border: "1px solid rgba(239, 68, 68, 0.4)",
+                                    color: "#f87171",
+                                    borderRadius: "4px",
+                                    padding: "2px 7px",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                    fontWeight: "600",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title="Delete Loan (cascades collections & reverts capital)"
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Delete Loan</span>
+                                </button>
+                              )}
+
+                              {selectedTable === "deleted_loans_archive" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewArchiveModal(row)}
+                                  style={{
+                                    background: "rgba(14, 165, 233, 0.15)",
+                                    border: "1px solid rgba(14, 165, 233, 0.4)",
+                                    color: "#38bdf8",
+                                    borderRadius: "4px",
+                                    padding: "2px 7px",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                    fontWeight: "600",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title="View archived loan & payment snapshot"
+                                >
+                                  <Eye size={12} />
+                                  <span>Snapshot</span>
+                                </button>
+                              )}
+
+                              {!hasChanges && selectedTable !== "daily_finance_accounts" && selectedTable !== "autofinance_loans" && selectedTable !== "deleted_loans_archive" && (
+                                <span style={{ color: "#334155", fontSize: "11px" }}>—</span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Editable Cells */}
@@ -1716,6 +1989,628 @@ export default function ExcelTableEditorView({ onClose }) {
             )}
           </footer>
         </div>
+
+        {/* ========================================================================= */}
+        {/* DELETE LOAN CONFIRMATION MODAL */}
+        {/* ========================================================================= */}
+        {deleteModal && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              background: "rgba(0, 0, 0, 0.78)",
+              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+            onClick={() => !isDeleting && setDeleteModal(null)}
+          >
+            <div
+              style={{
+                background: "#0f172a",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 25px rgba(239, 68, 68, 0.15)",
+                borderRadius: "14px",
+                width: "480px",
+                maxWidth: "100%",
+                overflow: "hidden",
+                color: "#ffffff",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: "14px 18px",
+                  background: "linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(15, 23, 42, 0.9))",
+                  borderBottom: "1px solid rgba(239, 68, 68, 0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      background: "rgba(239, 68, 68, 0.2)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      padding: "6px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <AlertTriangle size={18} color="#ef4444" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#f87171" }}>
+                      Delete Loan & Revert Capital
+                    </h3>
+                    <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>
+                      Permanent cascading deletion with capital refund
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setDeleteModal(null)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "4px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div style={{ padding: "18px 20px" }}>
+                <div
+                  style={{
+                    background: "rgba(239, 68, 68, 0.08)",
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    borderRadius: "8px",
+                    padding: "12px",
+                    marginBottom: "16px",
+                    fontSize: "12px",
+                    lineHeight: "1.5",
+                    color: "#fca5a5",
+                  }}
+                >
+                  <strong>Warning:</strong> This will completely remove this loan, all its linked collection payments, and foreign-key relational records. The disbursed capital will be <strong>reverted back into your Capital Ledger</strong>.
+                </div>
+
+                {/* Loan Info Summary Card */}
+                <div
+                  style={{
+                    background: "#1e293b",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    padding: "12px 14px",
+                    marginBottom: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "10px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Borrower / Customer</span>
+                    <strong style={{ color: "#38bdf8" }}>{deleteModal.row?.customer_name || "—"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Phone Number</span>
+                    <span style={{ color: "#e2e8f0" }}>{deleteModal.row?.mobile_number || deleteModal.row?.customer_phone || "—"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Loan Principal</span>
+                    <strong style={{ color: "#10b981", fontSize: "13px" }}>
+                      ₹{Number(deleteModal.row?.gross_finance_amount || deleteModal.row?.loan_amount || 0).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Disbursement Date</span>
+                    <span style={{ color: "#e2e8f0" }}>
+                      {deleteModal.row?.finance_date ? String(deleteModal.row.finance_date).split("T")[0] : deleteModal.row?.start_date ? String(deleteModal.row.start_date).split("T")[0] : "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Deletion Reason Input */}
+                <div style={{ marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "11.5px", color: "#94a3b8", marginBottom: "6px" }}>
+                    Reason for Deletion (recorded in audit archive):
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    placeholder="e.g., entered by mistake, customer canceled, duplicate..."
+                    style={{
+                      width: "100%",
+                      background: "#0b1120",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      borderRadius: "6px",
+                      padding: "8px 12px",
+                      color: "#ffffff",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  background: "#0b1120",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setDeleteModal(null);
+                    setDeleteReason("");
+                  }}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "#cbd5e1",
+                    borderRadius: "6px",
+                    padding: "7px 14px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteLoanConfirm}
+                  style={{
+                    background: isDeleting ? "rgba(239, 68, 68, 0.5)" : "#dc2626",
+                    border: "none",
+                    color: "#ffffff",
+                    borderRadius: "6px",
+                    padding: "7px 16px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 2px 8px rgba(220, 38, 38, 0.4)",
+                  }}
+                >
+                  <Trash2 size={13} className={isDeleting ? "animate-spin" : ""} />
+                  <span>{isDeleting ? "Deleting & Reverting..." : "Confirm & Delete Loan"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW ARCHIVE SNAPSHOT MODAL */}
+        {/* ========================================================================= */}
+        {viewArchiveModal && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              background: "rgba(0, 0, 0, 0.78)",
+              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+            onClick={() => setViewArchiveModal(null)}
+          >
+            <div
+              style={{
+                background: "#0f172a",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15)",
+                borderRadius: "14px",
+                width: "600px",
+                maxWidth: "100%",
+                maxHeight: "85vh",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                color: "#ffffff",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: "14px 18px",
+                  background: "linear-gradient(90deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.9))",
+                  borderBottom: "1px solid rgba(56, 189, 248, 0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      background: "rgba(56, 189, 248, 0.2)",
+                      border: "1px solid rgba(56, 189, 248, 0.4)",
+                      padding: "6px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Archive size={18} color="#38bdf8" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#38bdf8" }}>
+                      Archived Loan Snapshot
+                    </h3>
+                    <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>
+                      Immutable historical record preserved upon deletion
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewArchiveModal(null)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "4px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ padding: "18px 20px", overflowY: "auto", flex: 1 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "12px",
+                    background: "#1e293b",
+                    borderRadius: "8px",
+                    padding: "14px",
+                    marginBottom: "16px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Borrower / Customer</span>
+                    <strong style={{ color: "#38bdf8", fontSize: "13px" }}>{viewArchiveModal.customer_name || "—"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Phone Number</span>
+                    <span style={{ color: "#e2e8f0" }}>{viewArchiveModal.customer_phone || "—"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Loan Module</span>
+                    <span style={{ color: "#facc15", fontWeight: "700" }}>{viewArchiveModal.loan_type}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Original Loan ID</span>
+                    <span style={{ color: "#94a3b8", fontFamily: "monospace", fontSize: "11px" }}>{viewArchiveModal.loan_id}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Principal Disbursed</span>
+                    <strong style={{ color: "#10b981", fontSize: "13px" }}>
+                      ₹{Number(viewArchiveModal.principal_amount || 0).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Total Collected Before Deletion</span>
+                    <strong style={{ color: "#a855f7", fontSize: "13px" }}>
+                      ₹{Number(viewArchiveModal.total_collected || 0).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Deleted By</span>
+                    <span style={{ color: "#cbd5e1" }}>{viewArchiveModal.deleted_by || "Admin"}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block" }}>Deleted Date</span>
+                    <span style={{ color: "#cbd5e1" }}>
+                      {viewArchiveModal.deleted_at ? new Date(viewArchiveModal.deleted_at).toLocaleString("en-IN") : "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {viewArchiveModal.deletion_reason && (
+                  <div
+                    style={{
+                      background: "rgba(255, 255, 255, 0.04)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      marginBottom: "16px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <span style={{ color: "#64748b", fontSize: "10.5px", display: "block", marginBottom: "3px" }}>Deletion Reason</span>
+                    <span style={{ color: "#e2e8f0" }}>{viewArchiveModal.deletion_reason}</span>
+                  </div>
+                )}
+
+                {/* Details Snapshot JSON preview if present */}
+                {viewArchiveModal.details_json && (
+                  <div>
+                    <span style={{ color: "#64748b", fontSize: "11px", fontWeight: "600", display: "block", marginBottom: "6px" }}>
+                      Archived Details Snapshot:
+                    </span>
+                    <pre
+                      style={{
+                        background: "#080d1a",
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: "8px",
+                        padding: "10px",
+                        fontSize: "11px",
+                        color: "#94a3b8",
+                        maxHeight: "180px",
+                        overflow: "auto",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {typeof viewArchiveModal.details_json === "string"
+                        ? viewArchiveModal.details_json
+                        : JSON.stringify(viewArchiveModal.details_json, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                style={{
+                  padding: "10px 20px",
+                  background: "#0b1120",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewArchiveModal(null)}
+                  style={{
+                    background: "rgba(56, 189, 248, 0.15)",
+                    border: "1px solid rgba(56, 189, 248, 0.4)",
+                    color: "#38bdf8",
+                    borderRadius: "6px",
+                    padding: "6px 14px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rule Violation Prevention Popup Modal */}
+        {violationModal && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.78)",
+              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: "16px",
+            }}
+          >
+            <div
+              style={{
+                background: "#0f172a",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                boxShadow: "0 25px 50px -12px rgba(239, 68, 68, 0.3)",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "500px",
+                overflow: "hidden",
+                animation: "scaleIn 0.15s ease-out",
+              }}
+            >
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: "16px 20px",
+                  background: "linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(15, 23, 42, 0.95))",
+                  borderBottom: "1px solid rgba(239, 68, 68, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "10px",
+                      background: "rgba(239, 68, 68, 0.2)",
+                      border: "1px solid rgba(239, 68, 68, 0.5)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <AlertTriangle size={20} color="#ef4444" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#f87171" }}>
+                      {violationModal.title || "Rule Violation Prevented"}
+                    </h3>
+                    <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: "#94a3b8" }}>
+                      Financial Ledger Safeguard System
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViolationModal(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "4px",
+                    display: "flex",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div style={{ padding: "20px" }}>
+                <p style={{ margin: "0 0 16px 0", fontSize: "13px", lineHeight: "1.5", color: "#e2e8f0" }}>
+                  {violationModal.message}
+                </p>
+
+                {/* Details Breakdown Grid */}
+                {Array.isArray(violationModal.details) && violationModal.details.length > 0 && (
+                  <div
+                    style={{
+                      background: "rgba(15, 23, 42, 0.8)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      borderRadius: "8px",
+                      padding: "12px 14px",
+                      marginBottom: "16px",
+                      display: "grid",
+                      gap: "8px",
+                    }}
+                  >
+                    {violationModal.details.map((d, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "12px",
+                          borderBottom: i < violationModal.details.length - 1 ? "1px solid rgba(255, 255, 255, 0.04)" : "none",
+                          paddingBottom: i < violationModal.details.length - 1 ? "6px" : 0,
+                        }}
+                      >
+                        <span style={{ color: "#94a3b8", fontWeight: "500" }}>{d.label}:</span>
+                        <span style={{ color: "#f1f5f9", fontWeight: "600", fontFamily: "monospace" }}>
+                          {d.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Guidance / Hint Box */}
+                {violationModal.hint && (
+                  <div
+                    style={{
+                      background: "rgba(245, 158, 11, 0.1)",
+                      border: "1px solid rgba(245, 158, 11, 0.25)",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      fontSize: "12px",
+                      color: "#fbbf24",
+                      lineHeight: "1.4",
+                    }}
+                  >
+                    💡 <strong>Notice:</strong> {violationModal.hint}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  background: "#0b1120",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                }}
+              >
+                {violationModal.onRevert && (
+                  <button
+                    type="button"
+                    onClick={violationModal.onRevert}
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      color: "#f87171",
+                      borderRadius: "6px",
+                      padding: "7px 14px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Revert Invalid Value
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setViolationModal(null)}
+                  style={{
+                    background: "#2563eb",
+                    border: "none",
+                    color: "#ffffff",
+                    borderRadius: "6px",
+                    padding: "7px 18px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Understood & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

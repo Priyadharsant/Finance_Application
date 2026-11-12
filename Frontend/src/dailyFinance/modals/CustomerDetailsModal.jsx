@@ -1,5 +1,5 @@
 import React from "react";
-import { X, TrendingUp, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { X, TrendingUp, CheckCircle2, FileSpreadsheet, Edit3 } from "lucide-react";
 import { Metric, Empty } from "../components/CommonComponents.jsx";
 import { money, dateLabel } from "../services/dailyFinanceApi.js";
 import { exportCustomerStatement } from "../services/dailyExportUtils.js";
@@ -10,6 +10,7 @@ export default function CustomerDetailsModal({
   editPayment,
   onOpenCloseLoan,
   onOpenIncreaseLoan,
+  onOpenEditCustomer,
 }) {
   if (!data || !data.customer) return null;
   const customer = data.customer;
@@ -74,6 +75,27 @@ export default function CustomerDetailsModal({
             >
               <FileSpreadsheet size={15} /> Statement (Excel)
             </button>
+
+            {onOpenEditCustomer && (
+              <button
+                type="button"
+                className="iconTextButton"
+                style={{
+                  background: "#f0fdfa",
+                  color: "#0f766e",
+                  border: "1.5px solid #99f6e4",
+                  borderRadius: "9px",
+                  padding: "7px 14px",
+                  fontSize: "12.5px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+                onClick={() => onOpenEditCustomer(customer)}
+                title="Edit customer and loan details"
+              >
+                <Edit3 size={15} /> Edit Details
+              </button>
+            )}
 
             {isActive && onOpenIncreaseLoan && (
               <button

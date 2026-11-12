@@ -254,14 +254,14 @@ export const exportCustomerStatement = (customer, collections = []) => {
 /**
  * Export Today's Daily Collections Entry Sheet (Excel)
  */
-export const exportDailyCollectionsSheet = (date, dailyList = []) => {
+export const exportDailyCollectionsSheet = (date, dailyList = [], expenses = []) => {
   // Only show rows where amount was collected (> 0)
   const collectedOnly = (dailyList || []).filter(
     (c) => Number(c.today_collection || 0) > 0
   );
 
-  if (!collectedOnly.length) {
-    alert("No collections recorded for this date to export.");
+  if (!collectedOnly.length && !(expenses || []).length) {
+    alert("No collections or expenses recorded for this date to export.");
     return;
   }
 
@@ -296,18 +296,33 @@ export const exportDailyCollectionsSheet = (date, dailyList = []) => {
     };
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  autoFitColumns(worksheet, rows);
+  const worksheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Message": "No collections on this date" }]);
+  autoFitColumns(worksheet, rows.length ? rows : [{ "Message": "No collections on this date" }]);
 
-  const summaryStartRow = rows.length + 2;
+  const totalExpToday = (expenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const netInHandToday = totalCollectedToday - totalExpToday;
+
+  const summaryRows = [
+    ["Selected Date Summary", ""],
+    ["Collection Date", dateLabel(date)],
+    ["Paid Customers", paidCustomers],
+    ["Total Collection (₹)", totalCollectedToday],
+    ["Total Daily Expenses (₹)", totalExpToday],
+    ["Net Cash In-Hand (₹)", netInHandToday],
+  ];
+
+  if ((expenses || []).length) {
+    summaryRows.push([]);
+    summaryRows.push(["DAILY EXPENSES DETAILS", "AMOUNT (₹)"]);
+    expenses.forEach((e) => {
+      summaryRows.push([e.description || "Expense", Number(e.amount || 0)]);
+    });
+  }
+
+  const summaryStartRow = (rows.length || 1) + 2;
   XLSX.utils.sheet_add_aoa(
     worksheet,
-    [
-      ["Selected Date Summary", ""],
-      ["Collection Date", dateLabel(date)],
-      ["Paid Customers", paidCustomers],
-      ["Total Collection (₹)", totalCollectedToday],
-    ],
+    summaryRows,
     { origin: `A${summaryStartRow}` },
   );
 
@@ -581,11 +596,14 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
       monthSummary.collection += totalCollection;
 
       sheetRows.push([]);
-      sheetRows.push([`COLLECTION DATE: ${dateLabel(date)}`, "", "", "", ""]);
+      sheetRows.push([`COLLECTION DATE: ${dateLabel(date)}`, "", "", "", "", "", "", "", "", "", ""]);
       sheetRows.push([
         "S.No",
+        "Finance Date",
         "Customer Name",
         "Mobile Number",
+        "Gross Finance Amount (₹)",
+        "Net Amount Given (₹)",
         "Total Agreed Return (₹)",
         "Already Returned (₹)",
         "Remaining Balance (₹)",
@@ -595,21 +613,28 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
 
       paidOnlyList.forEach((customer, index) => {
         const amount = Number(customer.today_collection || 0);
+        const isCompleted = Number(customer.remaining || 0) <= 0 || customer.status === "COMPLETED";
         sheetRows.push([
           index + 1,
+          dateLabel(customer.finance_date),
           customer.customer_name || "—",
           customer.mobile_number || "—",
+          Number(customer.gross_finance_amount || 0),
+          Number(customer.net_disbursement !== undefined ? customer.net_disbursement : (Number(customer.gross_finance_amount || 0) - Number(customer.initial_deduction || 0))),
           Number(customer.agreed_total_payable || 0),
           Number(customer.total_collected || 0),
           Number(customer.remaining || 0),
           amount,
-          "PAID",
+          isCompleted ? "COMPLETED" : "PAID",
         ]);
       });
 
       sheetRows.push([
         "DATE TOTAL",
+        "",
         `${paidOnlyList.length} customers collected`,
+        "",
+        "",
         "",
         "",
         "",
@@ -621,10 +646,16 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
 
     sheetRows[0] = [
       "MONTH TOTAL",
+      "",
       `${monthSummary.paid} customers collected`,
       "",
       "",
+      "",
+      "",
+      "",
+      "",
       monthSummary.collection,
+      "",
     ];
 
     const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
@@ -643,11 +674,11 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
       rightSummaryRows[rowIndex + 3] = ["Unpaid customers", dailyList.length - paidCustomers];
       rightSummaryRows[rowIndex + 4] = ["Total collection (₹)", totalCollection];
       mergedRanges.push(
-        { s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: 7 } },
-        { s: { r: rowIndex, c: 9 }, e: { r: rowIndex, c: 10 } },
+        { s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: 10 } },
+        { s: { r: rowIndex, c: 12 }, e: { r: rowIndex, c: 13 } },
       );
     });
-    XLSX.utils.sheet_add_aoa(worksheet, rightSummaryRows, { origin: "J1" });
+    XLSX.utils.sheet_add_aoa(worksheet, rightSummaryRows, { origin: "M1" });
     worksheet["!merges"] = mergedRanges;
 
     let dateSectionIndex = -1;
@@ -673,7 +704,7 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
       }
 
       if (rowStyle) {
-        for (let column = 0; column < 8; column += 1) {
+        for (let column = 0; column < 11; column += 1) {
           const address = XLSX.utils.encode_cell({ r: rowIndex, c: column });
           if (worksheet[address]) {
             worksheet[address].s = {
@@ -686,7 +717,7 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
         }
       }
       if (isDateHeading) {
-        const rightDateCell = worksheet[`J${rowIndex + 1}`];
+        const rightDateCell = worksheet[`M${rowIndex + 1}`];
         if (rightDateCell) {
           rightDateCell.s = {
             fill: { patternType: "solid", fgColor: { rgb: "BFDBFE" } },
@@ -699,21 +730,24 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
       }
     });
 
-    worksheet["J1"].s = {
+    worksheet["M1"].s = {
       fill: { patternType: "solid", fgColor: { rgb: "1D4ED8" } },
       font: { bold: true, sz: 13, color: { rgb: "FFFFFF" } },
       alignment: { horizontal: "center", vertical: "center" },
     };
 
     worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 15 },
+      { wch: 26 },
       { wch: 16 },
-      { wch: 28 },
-      { wch: 18 },
       { wch: 24 },
-      { wch: 24 },
-      { wch: 24 },
-      { wch: 18 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 20 },
       { wch: 16 },
+      { wch: 18 },
       { wch: 3 },
       { wch: 24 },
       { wch: 18 },

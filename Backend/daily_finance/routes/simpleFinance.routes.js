@@ -30,6 +30,27 @@ export function createSimpleFinanceRouter(db) {
           COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS receivable,
           COALESCE((SELECT SUM(initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS profit,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS today_collected,
+          COALESCE((
+            SELECT SUM(CASE 
+              WHEN transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+              WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+              ELSE 0 END)
+            FROM partner_capital_transactions
+            WHERE UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY'
+          ), 1202000) AS total_capital,
+          COALESCE((
+            SELECT SUM(CASE 
+              WHEN transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+              WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+              ELSE 0 END)
+            FROM partner_capital_transactions
+            WHERE UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY'
+          ), 1202000)
+          + COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'), 0)
+          - (
+            COALESCE((SELECT SUM(gross_finance_amount - initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'), 0)
+            + COALESCE((SELECT SUM(amount) FROM daily_finance_expenses), 0)
+          ) AS kai_iruppu,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='ACTIVE') AS active_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='COMPLETED') AS completed_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status <> 'CANCELLED') AS total_accounts,
@@ -80,6 +101,174 @@ export function createSimpleFinanceRouter(db) {
       invalidateCustomerCache();
       res.status(201).json({ customer: customer.rows[0], account: account.rows[0] });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message || 'Unable to create customer' }); } finally { client.release(); }
+  });
+
+  // FULL EDIT: Update customer and loan details
+  router.put('/customers-with-finance/:financeId', async (req, res) => {
+    const client = await db.connect();
+    try {
+      const { financeId } = req.params;
+      const {
+        customerName,
+        mobileNumber,
+        address,
+        notes: customerNotes,
+        grossFinanceAmount,
+        interestType = 'AMOUNT',
+        interestValue = 0,
+        initialDeduction,
+        agreedTotalPayable,
+        dailyAgreedDue,
+        expectedCollectionDays,
+        financeDate,
+        status,
+        closedDate,
+        accountNotes,
+      } = req.body;
+
+      if (!customerName?.trim()) {
+        throw new Error('Customer name is required');
+      }
+      if (!amountPattern.test(String(grossFinanceAmount)) || Number(grossFinanceAmount) <= 0) {
+        throw new Error('Valid gross finance amount is required');
+      }
+
+      const normalizedInterestType = interestType === 'PERCENT' ? 'PERCENT' : 'AMOUNT';
+      let deduction = 0;
+      if (initialDeduction !== undefined && initialDeduction !== null && amountPattern.test(String(initialDeduction))) {
+        deduction = Number(initialDeduction);
+      } else if (normalizedInterestType === 'PERCENT') {
+        deduction = (Number(grossFinanceAmount || 0) * Number(interestValue || 0)) / 100;
+      } else {
+        deduction = Number(interestValue || 0);
+      }
+
+      if (deduction > Number(grossFinanceAmount)) {
+        throw new Error('Interest deduction cannot exceed gross finance amount');
+      }
+
+      const payable = agreedTotalPayable !== undefined && amountPattern.test(String(agreedTotalPayable))
+        ? Number(agreedTotalPayable)
+        : Number(grossFinanceAmount);
+
+      const dailyDue = dailyAgreedDue !== undefined && amountPattern.test(String(dailyAgreedDue))
+        ? Number(dailyAgreedDue)
+        : 0;
+
+      const normFinanceDate = datePattern.test(String(financeDate || ''))
+        ? financeDate
+        : new Date().toISOString().slice(0, 10);
+
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(1001);');
+
+      // 1. Fetch existing account & lock it
+      const accRes = await client.query(
+        `SELECT * FROM daily_finance_accounts WHERE finance_id = $1 FOR UPDATE`,
+        [financeId]
+      );
+      if (!accRes.rowCount) throw new Error('Finance account not found');
+      const existingAccount = accRes.rows[0];
+      const customerId = existingAccount.customer_id;
+
+      // 2. Update daily_finance_customers
+      const customerRes = await client.query(
+        `UPDATE daily_finance_customers
+         SET customer_name = $1,
+             mobile_number = $2,
+             address = $3,
+             notes = COALESCE($4, notes),
+             updated_at = NOW()
+         WHERE customer_id = $5
+         RETURNING *`,
+        [customerName.trim(), mobileNumber || null, address || null, customerNotes || null, customerId]
+      );
+
+      // Determine status and closed_date
+      const targetStatus = status || existingAccount.status || 'ACTIVE';
+      let targetClosedDate = existingAccount.closed_date;
+      if (targetStatus === 'COMPLETED' || targetStatus === 'CLOSED') {
+        targetClosedDate = datePattern.test(String(closedDate || '')) ? closedDate : (existingAccount.closed_date || normFinanceDate);
+      } else if (targetStatus === 'ACTIVE') {
+        targetClosedDate = null;
+      }
+
+      const expDays = expectedCollectionDays !== undefined && !isNaN(Number(expectedCollectionDays))
+        ? Number(expectedCollectionDays)
+        : (existingAccount.expected_collection_days || 0);
+
+      // 3. Update daily_finance_accounts (net_disbursement is GENERATED ALWAYS STORED)
+      const accountRes = await client.query(
+        `UPDATE daily_finance_accounts
+         SET finance_date = $1,
+             gross_finance_amount = $2,
+             initial_deduction = $3,
+             interest_type = $4,
+             interest_value = $5,
+             agreed_total_payable = $6,
+             daily_agreed_due = $7,
+             expected_collection_days = $8,
+             status = $9,
+             closed_date = $10,
+             notes = COALESCE($11, notes),
+             updated_at = NOW()
+         WHERE finance_id = $12
+         RETURNING *`,
+        [
+          normFinanceDate,
+          grossFinanceAmount,
+          deduction,
+          normalizedInterestType,
+          interestValue || 0,
+          payable,
+          dailyDue,
+          expDays,
+          targetStatus,
+          targetClosedDate,
+          accountNotes || null,
+          financeId,
+        ]
+      );
+
+      // 4. Update or sync global_cash_ledger disbursement
+      const updatedNetDisbursement = Number(grossFinanceAmount) - deduction;
+      await client.query(
+        `UPDATE global_cash_ledger
+         SET amount = $1,
+             effective_date = $2,
+             notes = $3
+         WHERE type = 'DAILY_LOAN_DISBURSEMENT'
+           AND reference_id = $4::uuid`,
+        [
+          updatedNetDisbursement,
+          normFinanceDate,
+          `Daily Finance Loan Disbursement for Customer ${customerId}`,
+          financeId,
+        ]
+      );
+
+      // 5. Audit log
+      await client.query(
+        `INSERT INTO daily_finance_audit_logs(action, entity, entity_id, new_value)
+         VALUES('UPDATE', 'CUSTOMER_AND_FINANCE', $1, $2)`,
+        [financeId, JSON.stringify({ customer: customerRes.rows[0], account: accountRes.rows[0] })]
+      );
+
+      await client.query('COMMIT');
+      invalidateCustomerCache(customerId);
+      customerDetailsCache.clear();
+
+      res.json({
+        success: true,
+        customer: customerRes.rows[0],
+        account: accountRes.rows[0],
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: error.message || 'Unable to update finance' });
+    } finally {
+      client.release();
+    }
   });
 
   router.post('/payments', async (req, res) => {
@@ -296,12 +485,29 @@ export function createSimpleFinanceRouter(db) {
             a.status = 'ACTIVE'
             OR (
               a.status IN ('COMPLETED', 'CLOSED')
-              AND COALESCE(a.closed_date, (SELECT MAX(p.collection_date) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), a.finance_date) >= $1::date
+              AND (
+                EXISTS (SELECT 1 FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.collection_date = $1::date AND p.status <> 'VOID')
+                OR COALESCE(a.closed_date, (SELECT MAX(p.collection_date) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), a.finance_date) >= $1::date
+              )
             )
           )
           AND (a.finance_date IS NULL OR a.finance_date <= $1::date)
         ORDER BY a.finance_date ASC, a.created_at ASC`, [entryDate]);
-      res.json({ date: entryDate, customers: result.rows });
+
+      const expensesRes = await db.query(`
+        SELECT expense_id, TO_CHAR(expense_date, 'YYYY-MM-DD') AS expense_date, amount, description, created_at
+        FROM daily_finance_expenses
+        WHERE expense_date = $1::date
+        ORDER BY created_at DESC
+      `, [entryDate]);
+      const dayExpensesTotal = expensesRes.rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+      res.json({
+        date: entryDate,
+        customers: result.rows,
+        expenses: expensesRes.rows,
+        dayExpensesTotal,
+      });
     } catch (error) { next(error); }
   });
 
@@ -373,10 +579,10 @@ export function createSimpleFinanceRouter(db) {
   router.get('/reports/collection-dates', async (req, res, next) => {
     try {
       const result = await db.query(`
-        SELECT DISTINCT collection_date::date AS collection_date
+        SELECT DISTINCT TO_CHAR(collection_date, 'YYYY-MM-DD') AS collection_date
         FROM daily_finance_payments
         WHERE status <> 'VOID'
-        ORDER BY collection_date::date ASC
+        ORDER BY collection_date ASC
       `);
       res.json({ dates: result.rows.map((row) => row.collection_date) });
     } catch (error) { next(error); }
@@ -516,6 +722,17 @@ export function createSimpleFinanceRouter(db) {
 
   router.get('/expenses', async (req, res, next) => {
     try { const result = await db.query(`SELECT * FROM daily_finance_expenses WHERE expense_date BETWEEN $1 AND $2 ORDER BY expense_date DESC`, [req.query.from || '2000-01-01', req.query.to || '2999-12-31']); res.json(result.rows); } catch (error) { next(error); }
+  });
+
+  router.delete('/expenses/:expenseId', async (req, res) => {
+    try {
+      const { expenseId } = req.params;
+      await db.query(`DELETE FROM daily_finance_expenses WHERE expense_id = $1`, [expenseId]);
+      await db.query(`DELETE FROM expenses WHERE id = $1`, [expenseId]);
+      res.json({ success: true, message: 'Expense deleted' });
+    } catch (error) {
+      res.status(400).json({ error: error.message || 'Unable to delete expense' });
+    }
   });
 
   router.post('/capital', async (req, res) => {

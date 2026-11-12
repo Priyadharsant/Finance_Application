@@ -2,8 +2,16 @@ import express from 'express';
 import { pool as db } from '../../autoFinance/config/db.js';
 import { verifyAuthToken } from './appAuthRoutes.js';
 import { rescheduleFutureEMIs } from '../../autoFinance/services/loanService.js';
+import {
+  ensureDeletedLoansTable,
+  deleteDailyLoan,
+  deleteAutoLoan,
+} from '../services/deletedLoansService.js';
 
 const router = express.Router();
+
+// Initialize deleted loans archive table on module load
+ensureDeletedLoansTable(db);
 
 // Middleware to verify authentication
 function requireAuth(req, res, next) {
@@ -48,8 +56,16 @@ const MAIN_TABLES_CONFIG = [
   },
 
   // =========================================================
-  // 2. AUTO FINANCE (Collected list only, uncollected schedules excluded)
+  // 2. AUTO FINANCE
   // =========================================================
+  {
+    id: 'autofinance_loans',
+    name: 'autofinance_loans',
+    label: 'Auto Loans (Vehicle & Loan Details)',
+    module: 'Auto Finance',
+    description: 'Edit loan details, disbursement, interest, and terms. Delete loan option available.',
+    icon: 'CarFront',
+  },
   {
     id: 'autofinance_customers',
     name: 'autofinance_customers',
@@ -93,6 +109,19 @@ const MAIN_TABLES_CONFIG = [
     module: 'Global Capital',
     description: 'Edit capital transactions, deposits, withdrawals, dates, and amounts',
     icon: 'Database',
+  },
+
+  // =========================================================
+  // 4. AUDIT & ARCHIVES (View-Only)
+  // =========================================================
+  {
+    id: 'deleted_loans_archive',
+    name: 'deleted_loans_archive',
+    label: 'Deleted Loans (View-Only History)',
+    module: 'Audit & Archives',
+    description: 'View-only historical audit archive of deleted loans, payments, and reverted capital',
+    icon: 'Archive',
+    isViewOnly: true,
   },
 ];
 
@@ -168,13 +197,16 @@ const TABLE_ENRICHMENTS = {
     searchFields: ['c.customer_name', 'c.mobile_number', 'c.address', 'c.notes', 't.status']
   },
   daily_finance_payments: {
-    selectExtra: `, COALESCE(dc.customer_name, '—') AS customer_name, COALESCE(dc.mobile_number, '—') AS mobile_number`,
-    joinClause: `LEFT JOIN "daily_finance_customers" dc ON dc.customer_id = t.customer_id`,
+    selectExtra: `, COALESCE(dc.customer_name, '—') AS customer_name, COALESCE(dc.mobile_number, '—') AS mobile_number, COALESCE(a.agreed_total_payable, 0) AS loan_total_payable, GREATEST(0, COALESCE(a.agreed_total_payable, 0) - COALESCE((SELECT SUM(allp.amount) FROM daily_finance_payments allp WHERE allp.finance_id = t.finance_id AND allp.status <> 'VOID'), 0)) AS loan_remaining_balance, COALESCE(a.status, 'ACTIVE') AS loan_status`,
+    joinClause: `LEFT JOIN "daily_finance_customers" dc ON dc.customer_id = t.customer_id LEFT JOIN "daily_finance_accounts" a ON a.finance_id = t.finance_id`,
     extraColumns: [
       { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
-      { column_name: 'mobile_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'mobile_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'loan_total_payable', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'loan_remaining_balance', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'loan_status', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
-    searchFields: ['dc.customer_name', 'dc.mobile_number', 'dc.address', 'dc.notes']
+    searchFields: ['dc.customer_name', 'dc.mobile_number', 'dc.address', 'dc.notes', 'a.status']
   },
   autofinance_loans: {
     selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number, COALESCE(v.make, '—') AS vehicle_make, COALESCE(v.model, '—') AS vehicle_model`,
@@ -210,6 +242,12 @@ const TABLE_ENRICHMENTS = {
       { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
     searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'l.id']
+  },
+  deleted_loans_archive: {
+    selectExtra: '',
+    joinClause: '',
+    extraColumns: [],
+    searchFields: ['t.loan_id', 't.customer_name', 't.customer_phone', 't.loan_type', 't.deletion_reason']
   },
   partner_capital_transactions: {
     selectExtra: `, COALESCE(gp.name, '—') AS partner_name, COALESCE(gp.phone, '—') AS partner_phone, COALESCE(gp.email, '—') AS partner_email`,
@@ -484,11 +522,16 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
 router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
   try {
     const { tableName, id } = req.params;
+    if (tableName === 'deleted_loans_archive') {
+      return res.status(403).json({ error: 'Deleted loans archive is view-only and cannot be modified.' });
+    }
     const updates = req.body;
     const validTables = await getValidTables();
     if (!validTables.includes(tableName)) {
       return res.status(404).json({ error: 'Table not found' });
     }
+
+    let autoFinanceLoanIdToReschedule = null;
 
     // =========================================================================
     // 1. UPDATE: partner_capital_amounts
@@ -634,46 +677,302 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
     // 2. UPDATE: daily_finance_accounts (Unified Name + Amount)
     // =========================================================================
     if (tableName === 'daily_finance_accounts') {
-      const disbursementFields = ['gross_finance_amount', 'initial_deduction', 'net_disbursement', 'finance_date'];
-      if (disbursementFields.some((field) => Object.prototype.hasOwnProperty.call(updates, field))) {
+      const accRes = await db.query(
+        `SELECT * FROM daily_finance_accounts WHERE finance_id = $1`,
+        [id]
+      );
+      if (accRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Daily loan account not found' });
+      }
+      const currentAcc = accRes.rows[0];
+      const custId = currentAcc.customer_id;
+
+      // Update customer details in daily_finance_customers
+      const custSetClauses = [];
+      const custValues = [];
+      let cIdx = 1;
+
+      if (updates.customer_name !== undefined && updates.customer_name.trim() !== '') {
+        custSetClauses.push(`customer_name = $${cIdx++}`);
+        custValues.push(updates.customer_name.trim());
+      }
+      if (updates.mobile_number !== undefined) {
+        custSetClauses.push(`mobile_number = $${cIdx++}`);
+        custValues.push(updates.mobile_number ? updates.mobile_number.trim() : null);
+      }
+      if (updates.address !== undefined) {
+        custSetClauses.push(`address = $${cIdx++}`);
+        custValues.push(updates.address ? updates.address.trim() : null);
+      }
+      if (custSetClauses.length > 0) {
+        custSetClauses.push(`updated_at = NOW()`);
+        custValues.push(custId);
+        await db.query(
+          `UPDATE daily_finance_customers SET ${custSetClauses.join(', ')} WHERE customer_id = $${cIdx}`,
+          custValues
+        );
+      }
+
+      // Financial term calculations
+      const gross = updates.gross_finance_amount !== undefined
+        ? Number(updates.gross_finance_amount)
+        : Number(currentAcc.gross_finance_amount);
+
+      const intType = updates.interest_type || currentAcc.interest_type || 'AMOUNT';
+      const intVal = updates.interest_value !== undefined
+        ? Number(updates.interest_value)
+        : Number(currentAcc.interest_value || 0);
+
+      let deduction = Number(currentAcc.initial_deduction || 0);
+      if (updates.initial_deduction !== undefined && !isNaN(Number(updates.initial_deduction))) {
+        deduction = Number(updates.initial_deduction);
+      } else if (
+        updates.gross_finance_amount !== undefined ||
+        updates.interest_value !== undefined ||
+        updates.interest_type !== undefined
+      ) {
+        deduction = intType === 'PERCENT' ? (gross * intVal) / 100 : intVal;
+        updates.initial_deduction = deduction;
+      }
+
+      if (updates.gross_finance_amount !== undefined && updates.agreed_total_payable === undefined) {
+        updates.agreed_total_payable = gross;
+      }
+
+      // Check remaining balance vs total collected for this daily loan
+      const collRes = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total_collected 
+         FROM daily_finance_payments 
+         WHERE finance_id = $1 AND status <> 'VOID'`,
+        [id]
+      );
+      const totalCollected = Number(collRes.rows[0]?.total_collected || 0);
+      const targetPayable = updates.agreed_total_payable !== undefined
+        ? Number(updates.agreed_total_payable)
+        : Number(currentAcc.agreed_total_payable);
+
+      if (targetPayable < totalCollected - 0.001) {
         return res.status(400).json({
-          error: 'Disbursement amount, deduction, and date cannot be edited in Table Studio because that can make the loan account disagree with its cash ledger. Correct the account with verified cash paid and any refinance settlement recorded separately.',
+          error: `Agreed total payable (₹${targetPayable.toLocaleString('en-IN')}) cannot be reduced below the amount already collected (₹${totalCollected.toLocaleString('en-IN')}).`
         });
       }
 
-      const accRes = await db.query(
-        `SELECT customer_id, gross_finance_amount, agreed_total_payable FROM daily_finance_accounts WHERE finance_id = $1`,
+      const accRemaining = Number(Math.max(0, targetPayable - totalCollected).toFixed(2));
+      if (accRemaining <= 0) {
+        updates.status = 'COMPLETED';
+        if (!updates.closed_date && !currentAcc.closed_date) {
+          updates.closed_date = updates.finance_date || currentAcc.finance_date || new Date();
+        }
+      } else if (accRemaining > 0 && currentAcc.status === 'COMPLETED' && updates.status === undefined) {
+        updates.status = 'ACTIVE';
+        updates.closed_date = null;
+      }
+
+      // Prevent modifying Postgres GENERATED ALWAYS STORED column
+      delete updates.net_disbursement;
+
+      // Update global_cash_ledger disbursement
+      const netDisbursement = gross - deduction;
+      let effDate = updates.finance_date || currentAcc.finance_date;
+      if (typeof effDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(effDate.trim())) {
+        const [d, m, y] = effDate.trim().split('-');
+        effDate = `${y}-${m}-${d}`;
+      }
+      await db.query(
+        `UPDATE global_cash_ledger
+         SET amount = $1, effective_date = $2
+         WHERE type = 'DAILY_LOAN_DISBURSEMENT' AND reference_id = $3::uuid`,
+        [netDisbursement, effDate, id]
+      );
+    }
+
+    // =========================================================================
+    // 3. UPDATE: daily_finance_payments
+    // =========================================================================
+    if (tableName === 'daily_finance_payments') {
+      const payRes = await db.query(
+        `SELECT * FROM daily_finance_payments WHERE payment_id = $1`,
         [id]
       );
-      if (accRes.rows.length > 0) {
-        const custId = accRes.rows[0].customer_id;
-        const custSetClauses = [];
-        const custValues = [];
-        let cIdx = 1;
+      if (payRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Payment record not found' });
+      }
+      const curPay = payRes.rows[0];
+      const financeId = curPay.finance_id;
 
-        if (updates.customer_name !== undefined && updates.customer_name.trim() !== '') {
-          custSetClauses.push(`customer_name = $${cIdx++}`);
-          custValues.push(updates.customer_name.trim());
+      // Fetch parent loan account details
+      const accRes = await db.query(
+        `SELECT agreed_total_payable, gross_finance_amount, status, finance_date, closed_date 
+         FROM daily_finance_accounts WHERE finance_id = $1`,
+        [financeId]
+      );
+      if (accRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Associated daily loan account not found' });
+      }
+      const curAcc = accRes.rows[0];
+      const agreedPayable = Number(curAcc.agreed_total_payable || curAcc.gross_finance_amount || 0);
+
+      // Fetch sum of all OTHER valid payments for this loan
+      const otherCollRes = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS other_collected 
+         FROM daily_finance_payments 
+         WHERE finance_id = $1 AND payment_id <> $2 AND status <> 'VOID'`,
+        [financeId, id]
+      );
+      const otherCollected = Number(otherCollRes.rows[0]?.other_collected || 0);
+      const maxAllowed = Math.max(0, Number((agreedPayable - otherCollected).toFixed(2)));
+
+      if (updates.amount !== undefined) {
+        const newAmt = Number(updates.amount);
+        if (isNaN(newAmt) || newAmt < 0) {
+          return res.status(400).json({ error: 'Collection amount must be a valid positive number.' });
         }
-        if (updates.mobile_number !== undefined) {
-          custSetClauses.push(`mobile_number = $${cIdx++}`);
-          custValues.push(updates.mobile_number ? updates.mobile_number.trim() : null);
+
+        // PREVENT edited amount from exceeding the remaining balance!
+        if (newAmt > maxAllowed + 0.001) {
+          return res.status(400).json({
+            error: `Edited collection amount (₹${newAmt.toLocaleString('en-IN')}) exceeds remaining loan balance. Maximum allowed amount is ₹${maxAllowed.toLocaleString('en-IN')}.`
+          });
         }
-        if (updates.address !== undefined) {
-          custSetClauses.push(`address = $${cIdx++}`);
-          custValues.push(updates.address);
+      }
+
+      // Update customer name if provided
+      if (updates.customer_name !== undefined && updates.customer_name.trim() !== '') {
+        await db.query(
+          `UPDATE daily_finance_customers SET customer_name = $1, updated_at = NOW() WHERE customer_id = $2`,
+          [updates.customer_name.trim(), curPay.customer_id]
+        );
+      }
+
+      // Sync global_cash_ledger collection
+      const newAmt = updates.amount !== undefined ? Number(updates.amount) : Number(curPay.amount);
+      let newDate = updates.collection_date || curPay.collection_date;
+      if (typeof newDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(newDate.trim())) {
+        const [d, m, y] = newDate.trim().split('-');
+        newDate = `${y}-${m}-${d}`;
+      }
+      await db.query(
+        `UPDATE global_cash_ledger
+         SET amount = $1, effective_date = $2
+         WHERE type = 'DAILY_COLLECTION' AND reference_id = $3::uuid`,
+        [newAmt, newDate, id]
+      );
+
+      // Reconcile and close/reopen loan:
+      // If remaining balance becomes 0 -> close loan (status = 'COMPLETED')
+      // If remaining balance > 0 and loan was completed -> revert to 'ACTIVE'
+      const newTotalCollected = Number((otherCollected + newAmt).toFixed(2));
+      const newRemaining = Number(Math.max(0, agreedPayable - newTotalCollected).toFixed(2));
+
+      let newLoanStatus = curAcc.status;
+      let newClosedDate = curAcc.closed_date;
+
+      if (newRemaining <= 0) {
+        newLoanStatus = 'COMPLETED';
+        newClosedDate = newDate || new Date();
+      } else if (newRemaining > 0 && curAcc.status === 'COMPLETED') {
+        newLoanStatus = 'ACTIVE';
+        newClosedDate = null;
+      }
+
+      await db.query(
+        `UPDATE daily_finance_accounts 
+         SET status = $1, closed_date = $2, updated_at = NOW() 
+         WHERE finance_id = $3`,
+        [newLoanStatus, newClosedDate, financeId]
+      );
+    }
+
+    // =========================================================================
+    // 4. UPDATE: autofinance_loans
+    // =========================================================================
+    if (tableName === 'autofinance_loans') {
+      const lRes = await db.query(
+        `SELECT l.*, v.id AS vehicle_id, c.id AS cust_id
+         FROM autofinance_loans l
+         LEFT JOIN autofinance_customers c ON c.id = l.customer_id
+         LEFT JOIN autofinance_vehicles v ON v.loan_id = l.id
+         WHERE l.id = $1`,
+        [id]
+      );
+      if (lRes.rows.length > 0) {
+        const curL = lRes.rows[0];
+
+        // Update customer name & phone if provided
+        if (curL.cust_id && (updates.customer_name !== undefined || updates.customer_phone !== undefined)) {
+          const cSet = [];
+          const cVals = [];
+          let ci = 1;
+          if (updates.customer_name !== undefined && updates.customer_name.trim()) {
+            const parts = updates.customer_name.trim().split(' ');
+            const first = parts[0];
+            const last = parts.slice(1).join(' ') || null;
+            cSet.push(`first_name = $${ci++}`, `last_name = $${ci++}`);
+            cVals.push(first, last);
+          }
+          if (updates.customer_phone !== undefined) {
+            cSet.push(`phone = $${ci++}`);
+            cVals.push(updates.customer_phone ? updates.customer_phone.trim() : null);
+          }
+          if (cSet.length > 0) {
+            cSet.push(`updated_at = NOW()`);
+            cVals.push(curL.cust_id);
+            await db.query(`UPDATE autofinance_customers SET ${cSet.join(', ')} WHERE id = $${ci}`, cVals);
+          }
         }
-        if (custSetClauses.length > 0) {
-          custSetClauses.push(`updated_at = NOW()`);
-          custValues.push(custId);
+
+        // Update vehicle registration number if provided
+        if (updates.registration_number !== undefined && curL.vehicle_id) {
           await db.query(
-            `UPDATE daily_finance_customers SET ${custSetClauses.join(', ')} WHERE customer_id = $${cIdx}`,
-            custValues
+            `UPDATE autofinance_vehicles SET registration_number = $1, updated_at = NOW() WHERE id = $2`,
+            [updates.registration_number.trim(), curL.vehicle_id]
           );
         }
 
-        if (updates.gross_finance_amount !== undefined) {
-          updates.agreed_total_payable = updates.gross_finance_amount;
+        // Sync global_cash_ledger if loan_amount or disbursement_date changes
+        const newLoanAmt = updates.loan_amount !== undefined ? Number(updates.loan_amount) : Number(curL.loan_amount);
+        let newDisbDate = updates.disbursement_date || updates.start_date || curL.start_date || new Date();
+        if (typeof newDisbDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(newDisbDate.trim())) {
+          const [d, m, y] = newDisbDate.trim().split('-');
+          newDisbDate = `${y}-${m}-${d}`;
+        }
+        await db.query(
+          `UPDATE global_cash_ledger
+           SET amount = $1, effective_date = $2
+           WHERE type = 'AUTO_LOAN_DISBURSEMENT' AND reference_id = $3::uuid`,
+          [newLoanAmt, newDisbDate, id]
+        );
+
+        autoFinanceLoanIdToReschedule = id;
+      }
+    }
+
+    // =========================================================================
+    // 5. UPDATE: expenses
+    // =========================================================================
+    if (tableName === 'expenses') {
+      const expRes = await db.query(`SELECT * FROM expenses WHERE id = $1`, [id]);
+      if (expRes.rows.length > 0) {
+        const curExp = expRes.rows[0];
+        const finalCat = (updates.category || curExp.category || '').toUpperCase();
+        if (finalCat === 'DAILY') {
+          const newAmt = updates.amount !== undefined ? Number(updates.amount) : Number(curExp.amount);
+          let newDate = updates.expense_date || curExp.expense_date;
+          if (typeof newDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(newDate.trim())) {
+            const [d, m, y] = newDate.trim().split('-');
+            newDate = `${y}-${m}-${d}`;
+          }
+          const newDesc = updates.description !== undefined ? updates.description : curExp.description;
+          await db.query(
+            `INSERT INTO daily_finance_expenses (expense_id, expense_date, amount, description, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (expense_id) DO UPDATE
+             SET amount = EXCLUDED.amount,
+                 expense_date = EXCLUDED.expense_date,
+                 description = EXCLUDED.description,
+                 updated_at = NOW()`,
+            [id, newDate, newAmt, newDesc]
+          );
         }
       }
     }
@@ -681,8 +980,6 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
     // =========================================================================
     // 3. UPDATE: autofinance_emi_schedules (Sync breakdown, status & payments)
     // =========================================================================
-    let autoFinanceLoanIdToReschedule = null;
-
     if (tableName === 'autofinance_emi_schedules') {
       const curRes = await db.query(
         `SELECT id, loan_id, installment_number, principal_component, interest_component, total_emi 
@@ -870,11 +1167,55 @@ router.post('/data/:tableName', requireAuth, async (req, res) => {
   });
 });
 
-// 5. DELETE /api/table-editor/data/:tableName/:id - DISABLED (Edit & Update only)
-router.delete('/data/:tableName/:id', requireAuth, async (req, res) => {
-  return res.status(403).json({
-    error: 'Deletions are disabled in Table Studio. Only editing and updating existing records are allowed.',
-  });
+// Details for deleted loan archive record
+router.get('/loan-archive-details/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query('SELECT * FROM deleted_loans_archive WHERE id = $1 OR loan_id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted loan archive record not found.' });
+    }
+    return res.json(result.rows[0]);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
+
+// 5. DELETE /api/table-editor/data/:tableName/:id and /loan/:tableName/:id
+const handleDeleteLoan = async (req, res) => {
+  try {
+    const { tableName, id } = req.params;
+    const adminUser = req.session?.user?.username || req.headers['x-admin-user'] || 'Admin';
+    const reason = req.body?.reason || req.query?.reason || 'Deleted via Table Studio';
+
+    if (tableName === 'daily_finance_accounts') {
+      const result = await deleteDailyLoan(db, id, adminUser, reason);
+      return res.json({
+        success: true,
+        message: `Daily Loan #${id} (${result.customerName}) deleted successfully. Reverted ₹${result.revertedCapital} capital and removed ${result.deletedCollectionsCount} collection payments.`,
+        data: result,
+      });
+    }
+
+    if (tableName === 'autofinance_loans') {
+      const result = await deleteAutoLoan(db, id, adminUser, reason);
+      return res.json({
+        success: true,
+        message: `Auto Loan #${id} (${result.customerName}) deleted successfully. Reverted ₹${result.revertedCapital} capital and removed ${result.deletedCollectionsCount} collection payments.`,
+        data: result,
+      });
+    }
+
+    return res.status(403).json({
+      error: "Deletions are only permitted on loan tables ('daily_finance_accounts' and 'autofinance_loans').",
+    });
+  } catch (err) {
+    console.error('[tableEditorRoutes] Delete loan error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+router.delete('/loan/:tableName/:id', requireAuth, handleDeleteLoan);
+router.delete('/data/:tableName/:id', requireAuth, handleDeleteLoan);
 
 export default router;

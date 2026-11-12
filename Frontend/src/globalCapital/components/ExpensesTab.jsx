@@ -95,30 +95,63 @@ export default function ExpensesTab({
             className="secondaryBtn"
             onClick={() =>
               exportBusinessExpenses(sortedExpenseList, {
-                label: expenseFilterMonth ? `${expenseFilterYear}_${expenseFilterMonth}` : `${expenseFilterYear}_All`,
+                label: expenseFilterMonth ? `${expenseFilterYear}_${expenseFilterMonth}` : `${expenseFilterYear}_Filtered`,
               })
             }
             title="Export Filtered Expenses Report to Excel"
           >
             <Download size={16} /> Export Report (Excel) ({sortedExpenseList.length})
           </button>
+          {(expenseFilterCategory !== "ALL" || expenseFilterMonth || expenseFilterYear || expenseSearch) && (
+            <button
+              className="secondaryBtn"
+              onClick={() =>
+                exportBusinessExpenses(expenseList, {
+                  label: "All_Lifetime",
+                })
+              }
+              title="Export All Lifetime Expenses Report to Excel"
+            >
+              <Download size={16} /> Export All ({expenseList.length})
+            </button>
+          )}
           <button className="primaryBtn" onClick={onOpenAddExpense}>
             <Plus size={16} /> Record Expense
           </button>
         </div>
       </div>
 
-      {/* Simple total */}
+      {/* KPI Stats Cards */}
       <div
         className="globalCapitalStats compact"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px", marginBottom: "18px" }}
       >
-        <div>
-          <span>{expenseFilterCategory !== "ALL" ? `${expenseFilterCategory} Expenses` : "Filtered Period Total"}</span>
-          <strong style={{ color: "#e11d48" }}>
+        <div style={{ background: "#ffffff", padding: "14px 18px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+          <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", color: "#64748b", display: "block" }}>
+            Total Company Expenses (All-Time)
+          </span>
+          <strong style={{ fontSize: "22px", fontWeight: "700", color: "#0f172a", display: "block", marginTop: "4px" }}>
+            {money(expenseSummary?.allTimeTotal || expenseList.reduce((s, e) => s + Number(e.amount || 0), 0))}
+          </strong>
+          <small style={{ color: "#64748b", fontSize: "11px" }}>
+            {expenseSummary?.allTimeCount || expenseList.length} total recorded entries
+          </small>
+        </div>
+
+        <div style={{ background: "#ffffff", padding: "14px 18px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+          <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase", color: "#e11d48", display: "block" }}>
+            {expenseFilterCategory !== "ALL"
+              ? `${expenseFilterCategory} Category Total`
+              : (expenseFilterYear || expenseFilterMonth || expenseSearch)
+              ? "Filtered Period Total"
+              : "Active Selection Total"}
+          </span>
+          <strong style={{ fontSize: "22px", fontWeight: "700", color: "#e11d48", display: "block", marginTop: "4px" }}>
             {money(filteredTotal)}
           </strong>
-            <small>{sortedExpenseList.length} matching entries in view</small>
+          <small style={{ color: "#64748b", fontSize: "11px" }}>
+            {sortedExpenseList.length} matching entries in view
+          </small>
         </div>
       </div>
 

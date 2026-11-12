@@ -19,6 +19,7 @@ import CustomerDetailsModal from "./modals/CustomerDetailsModal.jsx";
 import PaymentEditorModal from "./modals/PaymentEditorModal.jsx";
 import CloseLoanModal from "./modals/CloseLoanModal.jsx";
 import IncreaseLoanModal from "./modals/IncreaseLoanModal.jsx";
+import EditFinanceModal from "./modals/EditFinanceModal.jsx";
 import { X, Loader2 } from "lucide-react";
 
 export default function DailyFinanceView({
@@ -37,13 +38,14 @@ export default function DailyFinanceView({
     customers: [],
     recentPayments: [],
   });
-  const [daily, setDaily] = useState({ date: today(), customers: [] });
+  const [daily, setDaily] = useState({ date: today(), customers: [], expenses: [], dayExpensesTotal: 0 });
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerStatus, setCustomerStatus] = useState("");
   const [details, setDetails] = useState(null);
   const [editingPayment, setEditingPayment] = useState(null);
   const [closingCustomer, setClosingCustomer] = useState(null);
   const [increasingCustomer, setIncreasingCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
   const [finance, setFinance] = useState(emptyFinance);
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -120,7 +122,7 @@ export default function DailyFinanceView({
     }
   };
 
-  const savePayment = async (customer, amount) => {
+  const savePayment = async (customer, amount, paymentMethod = "CASH") => {
     if (busy || actionLoading || !amount || Number(amount) < 0) return;
     setBusy(true);
     setActionLoading("Recording Daily Collection...");
@@ -129,6 +131,7 @@ export default function DailyFinanceView({
         await dailyFinanceApi.updatePayment(customer.today_payment_id, {
           collectionDate: entryDate,
           amount,
+          paymentMethod: paymentMethod || customer.today_payment_method || "CASH",
         });
       } else {
         await dailyFinanceApi.createPayment({
@@ -136,6 +139,7 @@ export default function DailyFinanceView({
           financeId: customer.finance_id,
           collectionDate: entryDate,
           amount,
+          paymentMethod: paymentMethod || "CASH",
         });
       }
       setBusy(false);
@@ -227,6 +231,31 @@ export default function DailyFinanceView({
     }
   };
 
+  const handleSaveEditFinance = async (payload) => {
+    if (!editingCustomer?.finance_id) return;
+    setBusy(true);
+    setActionLoading("Saving all changes...");
+    try {
+      await dailyFinanceApi.updateCustomerWithFinance(editingCustomer.finance_id, payload);
+      const custId = editingCustomer.customer_id;
+      setEditingCustomer(null);
+      customerCacheRef.current.clear();
+      setNotice?.({ type: "success", text: "Customer and loan details updated successfully!" });
+      await Promise.allSettled([loadDashboard(), loadDaily()]);
+      if (details && (details.customer?.customer_id === custId || details.customer?.finance_id === editingCustomer.finance_id)) {
+        const fresh = await dailyFinanceApi.getCustomerDetails(custId);
+        customerCacheRef.current.set(custId, fresh);
+        setDetails(fresh);
+      }
+    } catch (error) {
+      setNotice?.({ type: "error", text: error.message });
+      throw error;
+    } finally {
+      setBusy(false);
+      setActionLoading(null);
+    }
+  };
+
   const openDetails = async (customerId, preloaded = null) => {
     // 1. Instant return if already cached
     const cached = customerCacheRef.current.get(customerId);
@@ -267,23 +296,30 @@ export default function DailyFinanceView({
     }
   };
 
+  const sortedMasterCustomers = useMemo(() => {
+    return [...(dashboard.customers || [])]
+      .sort((a, b) => {
+        const da = new Date(a.finance_date || 0).getTime();
+        const db = new Date(b.finance_date || 0).getTime();
+        if (da !== db) return da - db;
+        const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+        const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+        return ca - cb;
+      })
+      .map((customer, idx) => ({
+        ...customer,
+        originalSNo: idx + 1,
+      }));
+  }, [dashboard.customers]);
+
   const filteredCustomers = useMemo(
     () =>
-      dashboard.customers
-        .filter(
-          (customer) =>
-            matchesSearch(customerSearch, customer) &&
-            (!customerStatus || customer.status === customerStatus),
-        )
-        .sort((a, b) => {
-          const da = new Date(a.finance_date || 0).getTime();
-          const db = new Date(b.finance_date || 0).getTime();
-          if (da !== db) return da - db;
-          const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
-          const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
-          return ca - cb;
-        }),
-    [dashboard.customers, customerSearch, customerStatus],
+      sortedMasterCustomers.filter(
+        (customer) =>
+          matchesSearch(customerSearch, customer) &&
+          (!customerStatus || customer.status === customerStatus),
+      ),
+    [sortedMasterCustomers, customerSearch, customerStatus],
   );
 
   const position = dashboard.position || {};
@@ -322,6 +358,7 @@ export default function DailyFinanceView({
               loadingDetailsId={loadingDetails?.id}
               onOpenCloseLoan={setClosingCustomer}
               onOpenIncreaseLoan={setIncreasingCustomer}
+              onOpenEditCustomer={setEditingCustomer}
             />
           )}
 
@@ -329,7 +366,10 @@ export default function DailyFinanceView({
             <DailyEntryTab
               date={entryDate}
               setDate={setEntryDate}
-              daily={daily.customers}
+              daily={daily.customers || []}
+              expenses={daily.expenses || []}
+              dayExpensesTotal={daily.dayExpensesTotal || 0}
+              onRefreshDaily={loadDaily}
               savePayment={savePayment}
               openDetails={openDetails}
               loadingDetailsId={loadingDetails?.id}
@@ -358,6 +398,7 @@ export default function DailyFinanceView({
           editPayment={setEditingPayment}
           onOpenCloseLoan={setClosingCustomer}
           onOpenIncreaseLoan={setIncreasingCustomer}
+          onOpenEditCustomer={setEditingCustomer}
         />
       )}
 
@@ -386,6 +427,15 @@ export default function DailyFinanceView({
           onClose={() => setIncreasingCustomer(null)}
           onSubmit={handleIncreaseLoan}
           busy={busy}
+        />
+      )}
+
+      {editingCustomer && (
+        <EditFinanceModal
+          customerData={editingCustomer}
+          onSave={handleSaveEditFinance}
+          busy={busy}
+          close={() => setEditingCustomer(null)}
         />
       )}
 

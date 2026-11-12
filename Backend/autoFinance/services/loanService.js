@@ -516,11 +516,46 @@ export async function getAutoFinanceOverview() {
   const remaining = Math.max(0, totalExpected - totalCollected);
   const recoveryRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : '0.0';
 
+  // Capital & Expenses dedicated for Auto Finance
+  let autoCapital = 0;
+  let autoExpenses = 0;
+  try {
+    const capRes = await pool.query(`
+      SELECT COALESCE(SUM(CASE 
+        WHEN transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+        WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+        ELSE 0 END), 0) AS auto_capital
+      FROM partner_capital_transactions
+      WHERE UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO';
+    `);
+    autoCapital = parseFloat(capRes.rows[0]?.auto_capital || 0);
+
+    const expRes = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) AS auto_expenses
+      FROM expenses
+      WHERE UPPER(COALESCE(category, 'GENERAL')) = 'AUTO';
+    `);
+    autoExpenses = parseFloat(expRes.rows[0]?.auto_expenses || 0);
+  } catch (err) {
+    console.error("Error fetching auto capital/expenses:", err);
+  }
+
+  const autoKaiIruppu = (autoCapital + totalCollected) - (totalDisbursed + autoExpenses);
+
   return {
     ...row,
+    total_capital: autoCapital,
+    expenses: autoExpenses,
+    kai_iruppu: autoKaiIruppu,
+    total_finance_amount: totalExpected,
+    gross_finance_amount: totalExpected,
+    disbursed: totalDisbursed,
+    collected: totalCollected,
     total_expected: totalExpected,
     total_profit: totalProfit,
+    profit: totalProfit,
     remaining: remaining,
+    receivable: remaining,
     recovery_rate: recoveryRate,
     pending_installments: schedRow.pending_installments || 0,
     paid_installments: schedRow.paid_installments || 0,

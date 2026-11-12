@@ -165,6 +165,110 @@ export async function getCapitalBreakdown(client) {
     FROM global_cash_ledger;
   `);
 
+  // Capital breakdown across Daily and Auto
+  let capitalData = { totalCapital: 0, dailyCapital: 0, autoCapital: 0 };
+  try {
+    const capRes = await client.query(`
+      SELECT
+        COALESCE(SUM(CASE 
+          WHEN transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+          WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+          ELSE 0 END), 0) AS total_capital,
+        COALESCE(SUM(CASE 
+          WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+          WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+          ELSE 0 END), 0) AS daily_capital,
+        COALESCE(SUM(CASE 
+          WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
+          WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount 
+          ELSE 0 END), 0) AS auto_capital
+      FROM partner_capital_transactions;
+    `);
+    capitalData = {
+      totalCapital: parseFloat(capRes.rows[0]?.total_capital || 0),
+      dailyCapital: parseFloat(capRes.rows[0]?.daily_capital || 0),
+      autoCapital: parseFloat(capRes.rows[0]?.auto_capital || 0),
+    };
+  } catch (err) {
+    console.error("Error in getCapitalBreakdown (capitalData):", err);
+  }
+
+  // Portfolio aggregates across Daily and Auto
+  let portfolioData = {
+    grossGiven: 0,
+    interest: 0,
+    disbursed: 0,
+    collected: 0,
+    remaining: 0,
+    totalCustomers: 0,
+    daily: { gross: 0, interest: 0, disbursed: 0, collected: 0, remaining: 0, customers: 0 },
+    auto: { gross: 0, interest: 0, disbursed: 0, collected: 0, remaining: 0, customers: 0 }
+  };
+
+  try {
+    const dfRes = await client.query(`
+      SELECT
+        COALESCE(SUM(gross_finance_amount), 0) AS gross,
+        COALESCE(SUM(initial_deduction), 0) AS interest,
+        COALESCE(SUM(gross_finance_amount - initial_deduction), 0) AS disbursed,
+        COALESCE(SUM(agreed_total_payable), 0) AS payable,
+        COUNT(*) AS customers
+      FROM daily_finance_accounts
+      WHERE status <> 'CANCELLED';
+    `);
+    const dfCollRes = await client.query(`
+      SELECT COALESCE(SUM(amount), 0) AS collected
+      FROM daily_finance_payments
+      WHERE status <> 'VOID';
+    `);
+
+    const autoRes = await client.query(`
+      SELECT
+        COALESCE(SUM(loan_amount), 0) AS disbursed,
+        COUNT(*) AS customers
+      FROM autofinance_loans
+      WHERE status <> 'CANCELLED';
+    `);
+    const autoSchedRes = await client.query(`
+      SELECT
+        COALESCE(SUM(total_emi), 0) AS expected,
+        COALESCE(SUM(interest_component), 0) AS interest
+      FROM autofinance_emi_schedules;
+    `);
+    const autoCollRes = await client.query(`
+      SELECT COALESCE(SUM(amount_paid), 0) AS collected
+      FROM autofinance_payments;
+    `);
+
+    const dfGross = parseFloat(dfRes.rows[0]?.gross || 0);
+    const dfInterest = parseFloat(dfRes.rows[0]?.interest || 0);
+    const dfDisbursed = parseFloat(dfRes.rows[0]?.disbursed || 0);
+    const dfPayable = parseFloat(dfRes.rows[0]?.payable || dfGross);
+    const dfCollected = parseFloat(dfCollRes.rows[0]?.collected || 0);
+    const dfRemaining = Math.max(0, dfPayable - dfCollected);
+    const dfCust = parseInt(dfRes.rows[0]?.customers || 0, 10);
+
+    const autoDisbursed = parseFloat(autoRes.rows[0]?.disbursed || 0);
+    const autoExpected = parseFloat(autoSchedRes.rows[0]?.expected || autoDisbursed);
+    const autoInterest = parseFloat(autoSchedRes.rows[0]?.interest || (autoExpected - autoDisbursed));
+    const autoCollected = parseFloat(autoCollRes.rows[0]?.collected || 0);
+    const autoRemaining = Math.max(0, autoExpected - autoCollected);
+    const autoCust = parseInt(autoRes.rows[0]?.customers || 0, 10);
+
+    portfolioData = {
+      grossGiven: dfGross + autoExpected,
+      interest: dfInterest + autoInterest,
+      disbursed: dfDisbursed + autoDisbursed,
+      collected: dfCollected + autoCollected,
+      remaining: dfRemaining + autoRemaining,
+      totalCustomers: dfCust + autoCust,
+      daily: { gross: dfGross, interest: dfInterest, disbursed: dfDisbursed, collected: dfCollected, remaining: dfRemaining, customers: dfCust },
+      auto: { gross: autoExpected, interest: autoInterest, disbursed: autoDisbursed, collected: autoCollected, remaining: autoRemaining, customers: autoCust }
+    };
+  } catch (err) {
+    console.error("Error in getCapitalBreakdown (portfolioData):", err);
+  }
+
   let expensesData = { totalExpenses: 0, autoExpenses: 0, dailyExpenses: 0, generalExpenses: 0 };
   try {
     const expRes = await client.query(`
@@ -214,13 +318,28 @@ export async function getCapitalBreakdown(client) {
   const netProfit = totalRevenue - expensesData.totalExpenses;
 
   const grossCapital = parseFloat(ledgerRes.rows[0].gross_capital || 0);
-  const availableCapital = grossCapital - expensesData.totalExpenses;
+
+  // Exact Dynamic Kai Iruppu: Capital + Collections - (Disbursed + Expenses)
+  const totalCapital = capitalData.totalCapital;
+  const totalCollections = portfolioData.collected;
+  const totalDisbursed = portfolioData.disbursed;
+  const totalExpenses = expensesData.totalExpenses;
+
+  const availableCapital = (totalCapital + totalCollections) - (totalDisbursed + totalExpenses);
+  const dailyKaiIruppu = (capitalData.dailyCapital + portfolioData.daily.collected) - (portfolioData.daily.disbursed + expensesData.dailyExpenses);
+  const autoKaiIruppu = (capitalData.autoCapital + portfolioData.auto.collected) - (portfolioData.auto.disbursed + expensesData.autoExpenses);
 
   return {
     grossCapital,
     totalCredits: parseFloat(ledgerRes.rows[0].total_credits || 0),
     totalDebits: parseFloat(ledgerRes.rows[0].total_debits || 0),
+    capital: {
+      ...capitalData,
+      dailyKaiIruppu,
+      autoKaiIruppu,
+    },
     expenses: expensesData,
+    portfolio: portfolioData,
     revenue: {
       totalRevenue,
       autoRevenue,

@@ -31,9 +31,11 @@ win-unpacked/
 
 # Runtime data, logs, and backups
 *.log
+*.sql
 *.sql.gz
 *.dump
 *.xlsx
+backup_*
 Backend/backups/
 
 # OS/editor

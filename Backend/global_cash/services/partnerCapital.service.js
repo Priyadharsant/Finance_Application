@@ -11,6 +11,9 @@ export async function ensurePartnerCapitalColumns(client) {
       
       ALTER TABLE partner_capital_transactions 
       ADD COLUMN IF NOT EXISTS interest_rate NUMERIC(10,2) DEFAULT 0;
+      
+      ALTER TABLE partner_capital_transactions 
+      ADD COLUMN IF NOT EXISTS target_module VARCHAR(20) DEFAULT 'DAILY';
     `);
   } catch (err) {
     console.error('Failed to ensure partner_capital_transactions columns:', err);
@@ -24,17 +27,18 @@ export async function createContribution(client, partnerId, amount, effectiveDat
   const fundSourceType = extraFields.fundSourceType || 'OWN';
   const lenderName = extraFields.lenderName || null;
   const interestRate = Number(extraFields.interestRate || 0);
+  const targetModule = (extraFields.targetModule || extraFields.target_module || 'DAILY').toUpperCase();
 
   // 1. Insert Partner Capital Transaction
   const capQuery = `
     INSERT INTO partner_capital_transactions (
       partner_id, transaction_type, amount, effective_date, status, notes,
-      fund_source_type, lender_name, interest_rate
+      fund_source_type, lender_name, interest_rate, target_module
     )
-    VALUES ($1, 'CONTRIBUTION', $2, $3, 'COMPLETED', $4, $5, $6, $7)
+    VALUES ($1, 'CONTRIBUTION', $2, $3, 'COMPLETED', $4, $5, $6, $7, $8)
     RETURNING *;
   `;
-  const capRes = await client.query(capQuery, [partnerId, amount, date, notes, fundSourceType, lenderName, interestRate]);
+  const capRes = await client.query(capQuery, [partnerId, amount, date, notes, fundSourceType, lenderName, interestRate, targetModule]);
   const capitalTransaction = capRes.rows[0];
 
   // 2. Insert Global Cash Ledger Entry
@@ -43,10 +47,10 @@ export async function createContribution(client, partnerId, amount, effectiveDat
     type: 'PARTNER_CONTRIBUTION',
     amount: amount,
     direction: 'CREDIT',
-    sourceModule: 'GLOBAL',
+    sourceModule: targetModule,
     referenceType: 'CAPITAL_TRANSACTION',
     referenceId: capitalTransaction.id,
-    notes: notes
+    notes: notes ? `[${targetModule}] ${notes}` : `[${targetModule}] Partner Capital Contribution`
   });
 
   return capitalTransaction;
@@ -95,16 +99,18 @@ export async function createWithdrawal(client, partnerId, amount, effectiveDate,
 
   const date = effectiveDate || new Date().toISOString().slice(0, 10);
 
+  const targetModule = (extraFields.targetModule || extraFields.target_module || 'DAILY').toUpperCase();
+
   // 1. Insert Partner Capital Transaction (WITHDRAWAL)
   const capQuery = `
     INSERT INTO partner_capital_transactions (
       partner_id, transaction_type, amount, effective_date, status, notes,
-      fund_source_type, lender_name, interest_rate
+      fund_source_type, lender_name, interest_rate, target_module
     )
-    VALUES ($1, 'WITHDRAWAL', $2, $3, 'COMPLETED', $4, $5, $6, $7)
+    VALUES ($1, 'WITHDRAWAL', $2, $3, 'COMPLETED', $4, $5, $6, $7, $8)
     RETURNING *;
   `;
-  const capRes = await client.query(capQuery, [partnerId, amount, date, notes, fundSourceType, lenderName, interestRate]);
+  const capRes = await client.query(capQuery, [partnerId, amount, date, notes, fundSourceType, lenderName, interestRate, targetModule]);
   const capitalTransaction = capRes.rows[0];
 
   // 2. Insert Global Cash Ledger Entry (DEBIT)
@@ -113,10 +119,10 @@ export async function createWithdrawal(client, partnerId, amount, effectiveDate,
     type: 'PARTNER_WITHDRAWAL',
     amount: amount,
     direction: 'DEBIT',
-    sourceModule: 'GLOBAL',
+    sourceModule: targetModule,
     referenceType: 'CAPITAL_TRANSACTION',
     referenceId: capitalTransaction.id,
-    notes: notes || `Capital withdrawal by partner (${fundSourceType === 'LEND' ? 'Lend: ' + (lenderName || 'Borrowed') : 'Own Money'})`
+    notes: notes || `[${targetModule}] Capital withdrawal by partner (${fundSourceType === 'LEND' ? 'Lend: ' + (lenderName || 'Borrowed') : 'Own Money'})`
   });
 
   return capitalTransaction;

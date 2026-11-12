@@ -96,6 +96,35 @@ export default function CapitalTransactionModal({
               </select>
             </div>
 
+            {/* Target Finance Business (Daily vs Auto) */}
+            <div className="formGroup" style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <label style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "6px" }}>
+                Target Finance Business *
+              </label>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: capitalFormData.targetModule !== "AUTO" ? "700" : "500", color: capitalFormData.targetModule !== "AUTO" ? "#0f766e" : "#64748b" }}>
+                  <input
+                    type="radio"
+                    name="targetModule"
+                    value="DAILY"
+                    checked={capitalFormData.targetModule !== "AUTO"}
+                    onChange={() => setCapitalFormData({ ...capitalFormData, targetModule: "DAILY" })}
+                  />
+                  <span>Daily Finance (தினசரி)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: capitalFormData.targetModule === "AUTO" ? "700" : "500", color: capitalFormData.targetModule === "AUTO" ? "#2563eb" : "#64748b" }}>
+                  <input
+                    type="radio"
+                    name="targetModule"
+                    value="AUTO"
+                    checked={capitalFormData.targetModule === "AUTO"}
+                    onChange={() => setCapitalFormData({ ...capitalFormData, targetModule: "AUTO" })}
+                  />
+                  <span>Auto Finance (வாகனம்)</span>
+                </label>
+              </div>
+            </div>
+
             {/* Partner Live Balance Summary */}
             {(() => {
               const selPartner = partners.find((p) => p.id === capitalFormData.partnerId);

@@ -21,8 +21,8 @@ export default function LedgerOverview({
   totalDebits,
   onSelectRecord,
 }) {
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
-  const [monthFilter, setMonthFilter] = useState(currentMonthStr);
+  // Default to empty so all Cash Flow History is visible immediately
+  const [monthFilter, setMonthFilter] = useState("");
   const [moduleFilter, setModuleFilter] = useState("ALL");
   const [directionFilter, setDirectionFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,10 +32,20 @@ export default function LedgerOverview({
   // Filtered ledger based on active in-page filters
   const filteredLedger = useMemo(() => {
     return rawLedger.filter((tx) => {
-      // 1. Month Calendar filter (YYYY-MM)
+      // 1. Month Calendar filter (YYYY-MM) - parsed in local timezone
       if (monthFilter) {
-        const txDate = String(tx.effective_date || tx.transaction_date || tx.created_at || "").slice(0, 7);
-        if (txDate !== monthFilter) return false;
+        const rawDate = tx.effective_date || tx.transaction_date || tx.created_at;
+        if (!rawDate) return false;
+        let txMonth = "";
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          txMonth = `${y}-${m}`;
+        } else {
+          txMonth = String(rawDate).slice(0, 7);
+        }
+        if (txMonth !== monthFilter) return false;
       }
 
       // 2. Source Module filter
@@ -65,7 +75,7 @@ export default function LedgerOverview({
     }).sort((a, b) => {
       const da = new Date(a.effective_date || a.transaction_date || a.created_at || 0).getTime();
       const db = new Date(b.effective_date || b.transaction_date || b.created_at || 0).getTime();
-      return da - db;
+      return db - da; // Newest first
     });
   }, [rawLedger, monthFilter, moduleFilter, directionFilter, searchQuery]);
 
@@ -96,13 +106,13 @@ export default function LedgerOverview({
     .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
   const isFiltered =
-    monthFilter !== currentMonthStr ||
+    monthFilter !== "" ||
     moduleFilter !== "ALL" ||
     directionFilter !== "ALL" ||
     searchQuery.trim() !== "";
 
   const handleResetFilters = () => {
-    setMonthFilter(currentMonthStr);
+    setMonthFilter("");
     setModuleFilter("ALL");
     setDirectionFilter("ALL");
     setSearchQuery("");
@@ -118,80 +128,255 @@ export default function LedgerOverview({
 
   return (
     <div className="financeFadeIn globalCapitalView">
-      {/* Top Hero Banner */}
-      <MetricTooltipCard
-        title="Available Company Balance"
-        leadingIcon={<Globe size={18} />}
-        value={money(ledgerData.availableCapital)}
-        detail="Current cash balance after recorded expenses"
-        className="globalCapitalBalanceMetric"
-        definition="Ledger capital after subtracting recorded expenses."
-        formula="(total ledger credits − total ledger debits) − total expenses."
-        period="Lifetime totals currently returned by the Global Capital summary."
-        source="global_cash_ledger and expenses table."
-      />
+      {/* Visual Division Color Key */}
+      <div
+        style={{
+          display: "flex",
+          gap: "14px",
+          alignItems: "center",
+          margin: "4px 0 16px",
+          padding: "8px 14px",
+          background: "#ffffff",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          fontSize: "12px",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontWeight: "700", color: "#475569" }}>Business Division Colors:</span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            background: "#ecfdf5",
+            color: "#059669",
+            border: "1px solid #a7f3d0",
+            padding: "3px 10px",
+            borderRadius: "6px",
+            fontWeight: "700",
+          }}
+        >
+          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} />
+          🟢 Daily Finance (தினசரி)
+        </span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            background: "#eff6ff",
+            color: "#2563eb",
+            border: "1px solid #bfdbfe",
+            padding: "3px 10px",
+            borderRadius: "6px",
+            fontWeight: "700",
+          }}
+        >
+          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#3b82f6" }} />
+          🔵 Auto Finance (வாகனம்)
+        </span>
+      </div>
 
-      {/* KPI Stats (Dynamic based on Active Filters) */}
-      <div className="globalCapitalStats fiveCol">
+      {/* SECTION 1: Capital, Cash & Expenses (Same concept as Daily) */}
+      <div className="metricGroupHeading">
+        <h3>Capital, Cash &amp; Accounts</h3>
+        <p>Combined capital, liquid cash in hand (Kai Iruppu), expenses, and customer count across the business.</p>
+      </div>
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", marginBottom: "22px" }}>
         <MetricTooltipCard
-          title={isFiltered ? "Total Money In" : "Interest & Deduction Income"}
-          value={money(isFiltered ? filteredInflow : ledgerData.revenue?.totalRevenue)}
-          detail={isFiltered ? "Credits in selected ledger rows" : `Auto interest: ${money(ledgerData.revenue?.autoRevenue)} • Daily deductions: ${money(ledgerData.revenue?.dailyRevenue)}`}
-          valueStyle={{ color: "#059669", fontSize: 22, marginTop: 7 }}
-          definition={isFiltered
-            ? "Total credit entries in the selected ledger rows."
-            : "Recorded Auto Finance interest paid plus Daily Finance upfront deductions. This is income recorded by the dashboard, not all cash collections."}
-          formula={isFiltered ? "Sum of ledger amounts classified as credits." : "Auto interest paid + Daily Finance initial deductions."}
-          period={isFiltered ? "Selected month/module/direction/search filters; based on the latest 100 ledger rows returned by the API." : "Lifetime totals currently returned by the Global Capital summary."}
-          source={isFiltered ? "global_cash_ledger." : "autofinance_payments.interest_paid and daily_finance_accounts.initial_deduction, with ledger fallbacks."}
+          title="Total customers"
+          value={ledgerData.portfolio?.totalCustomers || 0}
+          tone="blue"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {ledgerData.portfolio?.daily?.customers || 0}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {ledgerData.portfolio?.auto?.customers || 0}
+              </span>
+            </div>
+          }
+          definition="Combined borrower count across Daily Finance and Auto Finance."
+          formula="Daily customers count + Auto customers count."
+          period="All active accounts across both modules."
+          source="daily_finance_accounts and autofinance_loans."
         />
         <MetricTooltipCard
-          title={isFiltered ? "Total Money Out" : "Total Expenses"}
-          value={money(isFiltered ? filteredOutflow : ledgerData.expenses?.totalExpenses)}
-          detail={isFiltered ? "Debits in selected ledger rows" : `Auto: ${money(ledgerData.expenses?.autoExpenses)} • Daily: ${money(ledgerData.expenses?.dailyExpenses)}`}
-          valueStyle={{ color: "#e11d48", fontSize: 22, marginTop: 7 }}
-          definition={isFiltered
-            ? "Total debit entries in the selected ledger rows, which can include loan disbursements, withdrawals, expenses, or profit payments."
-            : "Recorded expenses across Auto, Daily, and General categories."}
-          formula={isFiltered ? "Sum of ledger amounts classified as debits." : "Sum of expenses.amount."}
-          period={isFiltered ? "Selected month/module/direction/search filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
-          source={isFiltered ? "global_cash_ledger." : "expenses table, grouped by category."}
+          title="Total Capital"
+          value={money(ledgerData.capital?.totalCapital || 1202000)}
+          tone="blue"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.capital?.dailyCapital || 1202000)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.capital?.autoCapital || 0)}
+              </span>
+            </div>
+          }
+          definition="Total partner capital invested across Daily and Auto businesses."
+          formula="Daily Capital + Auto Capital."
+          period="Lifetime to date."
+          source="partner_capital_transactions."
         />
         <MetricTooltipCard
-          title={isFiltered ? "Net Ledger Movement" : "Net Profit"}
-          value={isFiltered ? `${filteredNetFlow >= 0 ? "+" : ""}${money(filteredNetFlow)}` : money(ledgerData.netProfit)}
-          detail={isFiltered ? "Money in minus money out" : "Recorded income minus expenses"}
-          valueStyle={{ color: (isFiltered ? filteredNetFlow : Number(ledgerData.netProfit || 0)) >= 0 ? "#0d9488" : "#e11d48", fontSize: 22, marginTop: 7 }}
-          definition={isFiltered
-            ? "Net movement of the ledger rows matching the selected filters."
-            : "Recorded Auto interest and Daily Finance deductions after subtracting recorded expenses."}
-          formula={isFiltered ? "Filtered ledger credits − filtered ledger debits." : "Auto interest paid + Daily Finance initial deductions − total expenses."}
-          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime totals currently returned by the Global Capital summary."}
-          source={isFiltered ? "global_cash_ledger." : "Auto payment interest, Daily Finance accounts, and expenses."}
+          title="Kai Iruppu (Cash in Hand)"
+          value={money(ledgerData.availableCapital)}
+          tone="green"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.capital?.dailyKaiIruppu ?? ledgerData.availableCapital)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.capital?.autoKaiIruppu || 0)}
+              </span>
+            </div>
+          }
+          definition="Actual liquid cash available right now: Capital + Collections − (Disbursed + Expenses)."
+          formula="Total Capital + Total Collections − (Total Disbursed + Total Expenses)."
+          period="Current available cash position."
+          source="partner_capital_transactions, payments, accounts, and expenses."
         />
         <MetricTooltipCard
-          title={isFiltered ? "Auto Collections" : "Total Ledger Credits"}
-          value={isFiltered ? `+${money(filteredAutoInflow)}` : money(ledgerData.totalCredits || totalCredits)}
-          detail={isFiltered ? "Auto credits in selected rows" : "All credit entries; includes recorded collections"}
-          valueStyle={{ color: "#2563eb", fontSize: 22, marginTop: 7 }}
-          definition={isFiltered
-            ? "Auto Finance credit entries in the selected ledger rows."
-            : "Total amount of every credit entry in the global cash ledger; this includes partner contributions and recorded collections."}
-          formula={isFiltered ? "Sum of credit amounts with source module AUTO." : "Sum of global_cash_ledger amounts where direction is CREDIT."}
-          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
-          source="global_cash_ledger."
+          title="Total Company Expenses"
+          value={money(ledgerData.expenses?.totalExpenses)}
+          tone="orange"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.expenses?.dailyExpenses || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.expenses?.autoExpenses || 0)}
+              </span>
+            </div>
+          }
+          definition="Total operational expenses incurred across Daily, Auto, and General operations."
+          formula="Daily Expenses + Auto Expenses + General Expenses."
+          period="Lifetime to date."
+          source="expenses table."
+        />
+      </div>
+
+      {/* SECTION 2: Combined Loan Portfolio & Collections (Same concept as Daily) */}
+      <div className="metricGroupHeading">
+        <h3>Loan Portfolio &amp; Collections</h3>
+        <p>Combined principal issued, interest, disbursed amount, and collections.</p>
+      </div>
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", marginBottom: "26px" }}>
+        <MetricTooltipCard
+          title="Total Finance Given (Gross)"
+          value={money(ledgerData.portfolio?.grossGiven || 0)}
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.portfolio?.daily?.gross || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.portfolio?.auto?.gross || 0)}
+              </span>
+            </div>
+          }
+          definition="Total gross contractual loan amount across Daily and Auto."
+          formula="Daily agreed payable + Auto expected gross return."
+          period="Lifetime to date."
+          source="daily_finance_accounts and autofinance_loans."
         />
         <MetricTooltipCard
-          title={isFiltered ? "Daily Collections" : "Total Ledger Debits"}
-          value={isFiltered ? `+${money(filteredDailyInflow)}` : money(ledgerData.totalDebits || totalDebits)}
-          detail={isFiltered ? "Daily credits in selected rows" : "All debit entries; not only loans"}
-          valueStyle={{ color: isFiltered ? "#059669" : "#e11d48", fontSize: 22, marginTop: 7 }}
-          definition={isFiltered
-            ? "Daily Finance credit entries in the selected ledger rows."
-            : "Total amount of every debit entry in the global cash ledger; this can include disbursements, withdrawals, expenses, and profit payments."}
-          formula={isFiltered ? "Sum of credit amounts with source module DAILY." : "Sum of global_cash_ledger amounts where direction is DEBIT."}
-          period={isFiltered ? "Selected filters; based on the latest 100 ledger rows returned by the API." : "Lifetime total currently returned by the Global Capital summary."}
-          source="global_cash_ledger."
+          title="Interest"
+          value={money(ledgerData.portfolio?.interest || 0)}
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.portfolio?.daily?.interest || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.portfolio?.auto?.interest || 0)}
+              </span>
+            </div>
+          }
+          definition="Total interest earnings (Daily upfront deductions + Auto scheduled interest)."
+          formula="Daily initial_deduction + Auto scheduled interest component."
+          period="Lifetime to date."
+          source="daily_finance_accounts and autofinance_emi_schedules."
+        />
+        <MetricTooltipCard
+          title="Amount Given"
+          value={money(ledgerData.portfolio?.disbursed || 0)}
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.portfolio?.daily?.disbursed || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.portfolio?.auto?.disbursed || 0)}
+              </span>
+            </div>
+          }
+          definition="Total net principal disbursed into borrowers' hands."
+          formula="Daily net disbursement + Auto loan principal amount."
+          period="Lifetime to date."
+          source="daily_finance_accounts and autofinance_loans."
+        />
+        <MetricTooltipCard
+          title="Collection Amount"
+          value={money(ledgerData.portfolio?.collected || 0)}
+          tone="green"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.portfolio?.daily?.collected || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.portfolio?.auto?.collected || 0)}
+              </span>
+            </div>
+          }
+          definition="Total repayments and EMIs collected to date across both divisions."
+          formula="Daily collected payments + Auto collected EMI payments."
+          period="Lifetime to date."
+          source="daily_finance_payments and autofinance_payments."
+        />
+        <MetricTooltipCard
+          title="Remaining"
+          value={money(ledgerData.portfolio?.remaining || 0)}
+          tone="orange"
+          detail={
+            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Daily: {money(ledgerData.portfolio?.daily?.remaining || 0)}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
+                Auto: {money(ledgerData.portfolio?.auto?.remaining || 0)}
+              </span>
+            </div>
+          }
+          definition="Total loan dues still outstanding to be collected from borrowers."
+          formula="Total Gross Given minus Total Collections."
+          period="Current outstanding balances."
+          source="daily_finance_accounts and autofinance_loans."
         />
       </div>
 

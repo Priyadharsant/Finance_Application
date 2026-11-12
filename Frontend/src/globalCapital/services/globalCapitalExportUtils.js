@@ -542,6 +542,20 @@ export const exportBusinessExpenses = (expenses = [], filters = {}) => {
     "Logged At": formatDateTime(exp.created_at),
   }));
 
+  if (rows.length > 0) {
+    const totalAmount = list.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    rows.push({
+      "S.No": "TOTAL",
+      "Date": "",
+      "Reason (Why)": `${list.length} Expense Records`,
+      "Category": "",
+      "Type": "",
+      "Reference / Vehicle": "",
+      "Amount (₹)": totalAmount,
+      "Logged At": "",
+    });
+  }
+
   downloadExcelFile(
     rows.length ? rows : [{ Message: "No expenses found for the selected period." }],
     "Business Expenses",
@@ -1754,8 +1768,10 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   const sortedLoans = sortLoansByStatusAndName(enrichedLoans);
 
   // -------------------------------------------------------------
-  // SHEET 1: Portfolio Table (Replacing Ledger, removing 2nd portfolio)
-  // Columns: Sl, Name, Total Loan, Pitibu, By hand, Income, Vasul, Balance, Status
+  // SHEET 1: Month-Wise Portfolio Table with Fixed Month Summary Cards
+  // Columns Left (A-L): Sl, Finance Date, Name, Mobile, Total Loan, Pitibu, Loan Without Int, Total Return, Vasul, Balance, Daily Due, Status
+  // Column M: Spacer
+  // Columns Right (N-O): Fixed Month Summary Card (Loan Count, Total Loan Amount, Interest, Net Given, Return, Vasul, Balance, etc.)
   // -------------------------------------------------------------
   let totLoanSum = 0;
   let totPitibuSum = 0;
@@ -1764,50 +1780,243 @@ export const exportDailyCategoryReport = (reportData, additionalData = {}, custo
   let totVasulSum = 0;
   let totBalanceSum = 0;
 
-  const portfolioRows = sortedLoans.map((l, idx) => {
-    const custName = l.customerName || l.customer_name || "—";
-    const gross = Number(l.loanAmount || l.gross_finance_amount || 0);
-    const pitibu = Number(l.pitibu || l.initial_deduction || 0);
-    const byHand = Number(l.byHand || l.net_disbursement || (gross - pitibu));
-    const income = Number(l.agreed_total_payable || gross);
-    const vasul = Number(l.total_collected ?? l.vasul ?? (l.income !== undefined && l.income !== income ? l.income : 0) ?? 0);
-    const balance = Number(l.balance ?? l.remaining ?? Math.max(0, income - vasul));
-    const status = l.status || "ACTIVE";
+  // Helper to extract Month Key (YYYY-MM) and User-friendly Header Label
+  const getMonthInfo = (val) => {
+    const monthNames = [
+      "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+      "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+    ];
+    if (!val) return { key: "9999-99", title: "PRIOR / GENERAL DISBURSEMENTS", shortName: "OTHER" };
+    try {
+      const str = String(val).trim();
+      const isoMatch = str.match(/^(\d{4})-(\d{2})/);
+      if (isoMatch) {
+        const y = parseInt(isoMatch[1], 10);
+        const m = parseInt(isoMatch[2], 10);
+        const mName = monthNames[m - 1] || `MONTH ${m}`;
+        return {
+          key: `${y}-${String(m).padStart(2, "0")}`,
+          title: `${mName} ${y} - LOAN DISBURSEMENTS`,
+          shortName: `${mName} ${y}`,
+        };
+      }
+      const ddmmyyyy = str.match(/^(\d{2})-(\d{2})-(\d{4})/);
+      if (ddmmyyyy) {
+        const m = parseInt(ddmmyyyy[2], 10);
+        const y = parseInt(ddmmyyyy[3], 10);
+        const mName = monthNames[m - 1] || `MONTH ${m}`;
+        return {
+          key: `${y}-${String(m).padStart(2, "0")}`,
+          title: `${mName} ${y} - LOAN DISBURSEMENTS`,
+          shortName: `${mName} ${y}`,
+        };
+      }
+      const d = str.includes("T") ? new Date(str) : new Date(`${str}T00:00:00`);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const mName = monthNames[m - 1] || `MONTH ${m}`;
+        return {
+          key: `${y}-${String(m).padStart(2, "0")}`,
+          title: `${mName} ${y} - LOAN DISBURSEMENTS`,
+          shortName: `${mName} ${y}`,
+        };
+      }
+    } catch (_) {}
+    return { key: "9999-99", title: "PRIOR / GENERAL DISBURSEMENTS", shortName: "OTHER" };
+  };
 
-    totLoanSum += gross;
-    totPitibuSum += pitibu;
-    totByHandSum += byHand;
-    totIncomeSum += income;
-    totVasulSum += vasul;
-    totBalanceSum += balance;
+  // Group loans by disbursement month
+  const monthGroupsMap = new Map();
+  sortedLoans.forEach((l) => {
+    const meta =
+      customerMetaMap.get(String(l.financeId || l.finance_id)) ||
+      customerMetaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase());
+    const rawDate = l.finance_date || l.date || l.start_date || meta?.finance_date || l.account_created_at || l.created_at;
+    const mInfo = getMonthInfo(rawDate);
 
-    return {
-      "Sl": idx + 1,
-      "Finance Date": formatDate(l.finance_date || l.date || l.start_date),
-      "Name": custName,
-      "Total Loan": gross,
-      "Pitibu": pitibu,
-      "By hand": byHand,
-      "Income": income,
-      "Vasul": vasul,
-      "Balance": balance,
-      "Profit": pitibu,
-      "Status": status,
-    };
+    if (!monthGroupsMap.has(mInfo.key)) {
+      monthGroupsMap.set(mInfo.key, {
+        key: mInfo.key,
+        title: mInfo.title,
+        shortName: mInfo.shortName,
+        loans: [],
+      });
+    }
+    monthGroupsMap.get(mInfo.key).loans.push(l);
   });
+
+  // Sort months chronologically
+  const sortedMonthGroups = Array.from(monthGroupsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
 
   const sheet1Data = [];
-  sheet1Data.push(["Sl", "Finance Date", "Name", "Total Loan", "Pitibu", "By hand", "Income", "Vasul", "Balance", "Profit", "Status"]);
+  let globalSl = 1;
 
-  portfolioRows.forEach((r) => {
+  sortedMonthGroups.forEach((group) => {
+    // 1. Month Title Banner
     sheet1Data.push([
-      r["Sl"], r["Finance Date"], r["Name"], r["Total Loan"], r["Pitibu"], r["By hand"], r["Income"], r["Vasul"], r["Balance"], r["Profit"], r["Status"]
+      `📅 ${group.title}`,
+      "", "", "", "", "", "", "", "", "", "", "",
+      "",
+      `📊 SUMMARY: ${group.shortName}`,
+      ""
     ]);
+
+    // 2. Table Header Row: Loan Details on Left, Month Summary Card Header on Right
+    sheet1Data.push([
+      "Sl",
+      "Finance Date",
+      "Customer Name",
+      "Mobile Number",
+      "Total Loan",
+      "Interest (Pitibu)",
+      "Loan Without Int (Given)",
+      "Total Return (Income)",
+      "Collected (Vasul)",
+      "Balance Remaining",
+      "Daily Due",
+      "Status",
+      "",
+      "MONTH METRIC",
+      "AMOUNT / COUNT"
+    ]);
+
+    // Month totals accumulator
+    let mGross = 0;
+    let mPitibu = 0;
+    let mByHand = 0;
+    let mIncome = 0;
+    let mVasul = 0;
+    let mBalance = 0;
+    let mActive = 0;
+    let mClosed = 0;
+
+    const groupLoanRows = group.loans.map((l) => {
+      const meta =
+        customerMetaMap.get(String(l.financeId || l.finance_id)) ||
+        customerMetaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase());
+      const custName = l.customerName || l.customer_name || meta?.customer_name || "—";
+      const mobile = l.mobileNumber || l.mobile || meta?.mobile_number || meta?.phone || "—";
+      const gross = Number(l.loanAmount || l.gross_finance_amount || meta?.gross_finance_amount || 0);
+      const pitibu = Number(l.pitibu || l.initial_deduction || meta?.initial_deduction || 0);
+      const byHand = Number(l.byHand || l.net_disbursement || (gross - pitibu));
+      const income = Number(l.agreed_total_payable || meta?.agreed_total_payable || gross);
+      const vasul = Number(l.total_collected ?? l.vasul ?? (l.income !== undefined && l.income !== income ? l.income : 0) ?? 0);
+      const balance = Number(l.balance ?? l.remaining ?? Math.max(0, income - vasul));
+      const dailyDue = Number(l.daily_agreed_due || l.daily_due || meta?.daily_agreed_due || 0);
+      const status = (l.status || meta?.status || "ACTIVE").toUpperCase();
+
+      mGross += gross;
+      mPitibu += pitibu;
+      mByHand += byHand;
+      mIncome += income;
+      mVasul += vasul;
+      mBalance += balance;
+      if (status === "ACTIVE") mActive++;
+      else mClosed++;
+
+      totLoanSum += gross;
+      totPitibuSum += pitibu;
+      totByHandSum += byHand;
+      totIncomeSum += income;
+      totVasulSum += vasul;
+      totBalanceSum += balance;
+
+      return [
+        globalSl++,
+        formatDate(l.finance_date || l.date || l.start_date || meta?.finance_date || l.created_at),
+        custName,
+        mobile,
+        gross,
+        pitibu,
+        byHand,
+        income,
+        vasul,
+        balance,
+        dailyDue,
+        status,
+      ];
+    });
+
+    // Fixed Summary of the month placed on the right side of the rows
+    const monthSummaryEntries = [
+      ["Month Period", group.shortName],
+      ["Loan Count", group.loans.length],
+      ["Total Loan Amount", mGross],
+      ["Total Interest (Pitibu)", mPitibu],
+      ["Loan Amount Without Int", mByHand],
+      ["Total Return (Income)", mIncome],
+      ["Total Collected (Vasul)", mVasul],
+      ["Remaining Balance", mBalance],
+      ["Active Loans", mActive],
+      ["Completed Loans", mClosed],
+    ];
+
+    const maxRows = Math.max(groupLoanRows.length, monthSummaryEntries.length);
+    for (let rIdx = 0; rIdx < maxRows; rIdx++) {
+      const row = [];
+      // Left side: Loan Details
+      if (rIdx < groupLoanRows.length) {
+        row.push(...groupLoanRows[rIdx]);
+      } else {
+        for (let c = 0; c < 12; c++) row.push("");
+      }
+
+      // Column 12: Spacer
+      row.push("");
+
+      // Right side: Month Summary Card
+      if (rIdx < monthSummaryEntries.length) {
+        row.push(monthSummaryEntries[rIdx][0]);
+        row.push(monthSummaryEntries[rIdx][1]);
+      } else {
+        row.push("");
+        row.push("");
+      }
+
+      sheet1Data.push(row);
+    }
+
+    // Month Subtotal Row
+    sheet1Data.push([
+      `SUBTOTAL (${group.shortName})`,
+      "",
+      `${group.loans.length} Loans`,
+      "",
+      mGross,
+      mPitibu,
+      mByHand,
+      mIncome,
+      mVasul,
+      mBalance,
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]);
+
+    // Empty separator between months
+    sheet1Data.push([]);
   });
 
-  if (portfolioRows.length > 0) {
+  if (sortedLoans.length > 0) {
     sheet1Data.push([
-      "TOTAL", "", `${sortedLoans.length} Customers`, totLoanSum, totPitibuSum, totByHandSum, totIncomeSum, totVasulSum, totBalanceSum, totPitibuSum, ""
+      "GRAND PORTFOLIO TOTAL",
+      "",
+      `${sortedLoans.length} Total Loans`,
+      "",
+      totLoanSum,
+      totPitibuSum,
+      totByHandSum,
+      totIncomeSum,
+      totVasulSum,
+      totBalanceSum,
+      "",
+      "",
+      "",
+      "",
+      ""
     ]);
   }
 

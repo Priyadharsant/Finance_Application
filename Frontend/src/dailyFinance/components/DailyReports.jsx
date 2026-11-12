@@ -59,16 +59,9 @@ export default function DailyReports({
   };
 
   // Real-time client-side filter and sorting (older to newest) over the fetched report
-  const displayedCustomers = useMemo(() => {
+  const sortedReportCustomers = useMemo(() => {
     if (!report?.customers) return [];
-    return report.customers
-      .filter((row) => {
-        const matchSearch = matchesSearch(search, row);
-        const matchCustomer = !customerId || row.customer_id === customerId;
-        const matchStatus = !status || row.status === status;
-        const hasCollection = Number(row.period_collected !== undefined ? row.period_collected : row.total_collected || 0) > 0;
-        return matchSearch && matchCustomer && matchStatus && hasCollection;
-      })
+    return [...report.customers]
       .sort((a, b) => {
         const da = new Date(a.finance_date || 0).getTime();
         const db = new Date(b.finance_date || 0).getTime();
@@ -76,8 +69,20 @@ export default function DailyReports({
         const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
         const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
         return ca - cb;
+      })
+      .map((row, idx) => ({ ...row, originalSNo: idx + 1 }));
+  }, [report?.customers]);
+
+  const displayedCustomers = useMemo(() => {
+    return sortedReportCustomers
+      .filter((row) => {
+        const matchSearch = matchesSearch(search, row);
+        const matchCustomer = !customerId || row.customer_id === customerId;
+        const matchStatus = !status || row.status === status;
+        const hasCollection = Number(row.period_collected !== undefined ? row.period_collected : row.total_collected || 0) > 0;
+        return matchSearch && matchCustomer && matchStatus && hasCollection;
       });
-  }, [report?.customers, search, customerId, status]);
+  }, [sortedReportCustomers, search, customerId, status]);
 
   // Real-time dynamic totals for the currently displayed rows
   const displayedTotals = useMemo(() => {
@@ -368,7 +373,7 @@ export default function DailyReports({
                 <tbody>
                   {displayedCustomers.map((row, idx) => (
                     <tr key={row.finance_id}>
-                      <td style={{ color: "#64748b", fontWeight: "600" }}>{idx + 1}</td>
+                      <td style={{ color: "#64748b", fontWeight: "600" }}>{row.originalSNo || idx + 1}</td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{dateLabel(row.finance_date)}</td>
                       <td>
                         <b>{row.customer_name}</b>

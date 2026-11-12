@@ -10,6 +10,11 @@ import {
   Edit3,
   ArrowRight,
   Loader2,
+  Plus,
+  Trash2,
+  Receipt,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Metric, Empty, PhoneLink } from "./CommonComponents.jsx";
 import { dailyFinanceApi, money, dateLabel } from "../services/dailyFinanceApi.js";
@@ -36,16 +41,18 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
     : (!isLoanClosed && customer.daily_agreed_due > 0 ? Math.min(Number(customer.daily_agreed_due), maxAllowed) : "");
 
   const [amount, setAmount] = useState(defaultAmount);
+  const [paymentMethod, setPaymentMethod] = useState(customer.today_payment_method || "CASH");
 
   useEffect(() => {
     if (isCollected) {
       setAmount(customer.today_collection || "");
+      setPaymentMethod(customer.today_payment_method || "CASH");
     } else if (isLoanClosed) {
       setAmount("");
     } else {
       setAmount(customer.daily_agreed_due > 0 ? Math.min(Number(customer.daily_agreed_due), maxAllowed) : "");
     }
-  }, [customer.today_collection, customer.daily_agreed_due, isCollected, isLoanClosed, maxAllowed]);
+  }, [customer.today_collection, customer.today_payment_method, customer.daily_agreed_due, isCollected, isLoanClosed, maxAllowed]);
 
   const isExceeded = Number(amount || 0) > maxAllowed;
 
@@ -54,7 +61,7 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
     if (isLoanClosed && !isCollected) return;
     const finalAmount = amount !== "" ? amount : customer.daily_agreed_due;
     if (!finalAmount || Number(finalAmount) <= 0 || isExceeded) return;
-    savePayment(customer, finalAmount);
+    savePayment(customer, finalAmount, paymentMethod);
   };
 
   const handleOpenEditPopup = () => {
@@ -64,11 +71,12 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
       customer_name: customer.customer_name,
       collectionDate: date,
       amount: customer.today_collection,
-      paymentMethod: customer.today_payment_method || "CASH",
+      paymentMethod: customer.today_payment_method || paymentMethod || "CASH",
       notes: customer.notes || "",
       maxAllowed,
       agreedTotalPayable: customer.agreed_total_payable,
       remaining: customer.remaining,
+      total_collected: customer.total_collected,
     });
   };
 
@@ -205,6 +213,27 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
                 />
               </div>
 
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                style={{
+                  height: "36px",
+                  padding: "4px 8px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  cursor: "pointer",
+                }}
+                title="Select payment method (Default: Cash)"
+              >
+                <option value="CASH">Cash</option>
+                <option value="UPI">UPI / GPay</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+              </select>
+
               {maxAllowed > 0 && maxAllowed < Number(customer.daily_agreed_due) && (
                 <button
                   type="button"
@@ -310,6 +339,9 @@ export default function DailyEntryTab({
   date,
   setDate,
   daily = [],
+  expenses = [],
+  dayExpensesTotal = 0,
+  onRefreshDaily,
   savePayment,
   openDetails,
   loadingDetailsId,
@@ -332,7 +364,7 @@ export default function DailyEntryTab({
   };
 
   const handleExportSelectedDate = () => {
-    exportDailyCollectionsSheet(date, daily);
+    exportDailyCollectionsSheet(date, daily, expenses);
   };
 
   const loadAllDateCollections = async () => {
@@ -419,9 +451,23 @@ export default function DailyEntryTab({
       ? Math.min(100, Math.round((totalCollectedToday / predictedDayCollection) * 100))
       : 0;
 
+  // Sorted master with persistent sequence number
+  const sortedDailyMaster = useMemo(() => {
+    return [...daily]
+      .sort((a, b) => {
+        const da = new Date(a.finance_date || 0).getTime();
+        const db = new Date(b.finance_date || 0).getTime();
+        if (da !== db) return da - db;
+        const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
+        const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
+        return ca - cb;
+      })
+      .map((c, idx) => ({ ...c, originalSNo: idx + 1 }));
+  }, [daily]);
+
   // Filtered list
   const filteredList = useMemo(() => {
-    return daily.filter((c) => {
+    return sortedDailyMaster.filter((c) => {
       const matchSearch = matchesSearch(search, c);
 
       const isPaid = Number(c.today_collection || 0) > 0;
@@ -430,15 +476,8 @@ export default function DailyEntryTab({
       if (filterTab === "COLLECTED") matchTab = isPaid;
 
       return matchSearch && matchTab;
-    }).sort((a, b) => {
-      const da = new Date(a.finance_date || 0).getTime();
-      const db = new Date(b.finance_date || 0).getTime();
-      if (da !== db) return da - db;
-      const ca = new Date(a.created_at || a.account_created_at || 0).getTime();
-      const cb = new Date(b.created_at || b.account_created_at || 0).getTime();
-      return ca - cb;
     });
-  }, [daily, search, filterTab]);
+  }, [sortedDailyMaster, search, filterTab]);
 
   return (
     <section className="content">
@@ -535,12 +574,22 @@ export default function DailyEntryTab({
         </div>
       </div>
 
-      {/* KPI Cards: Total Collection & Predicted Day Collection */}
-      <div className="metricGrid">
+      {/* KPI Cards: Total Collection & Predicted Day Collection & Expenses */}
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
         <Metric
           title="Total collection"
           value={totalCollectedToday}
           tone="green"
+        />
+        <Metric
+          title="Daily Expenses"
+          value={dayExpensesTotal}
+          tone="orange"
+        />
+        <Metric
+          title="Net Day Cash"
+          value={totalCollectedToday - dayExpensesTotal}
+          tone="teal"
         />
         <Metric
           title="Predicted day collection"
@@ -721,7 +770,7 @@ export default function DailyEntryTab({
             {filteredList.map((customer, idx) => (
               <EntryRow
                 key={customer.finance_id}
-                index={idx + 1}
+                index={customer.originalSNo || idx + 1}
                 customer={customer}
                 date={date}
                 savePayment={savePayment}

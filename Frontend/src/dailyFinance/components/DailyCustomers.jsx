@@ -14,6 +14,7 @@ export default function DailyCustomers({
   loadingDetailsId,
   onOpenCloseLoan,
   onOpenIncreaseLoan,
+  onOpenEditCustomer,
 }) {
   return (
     <section className="content">
@@ -73,7 +74,7 @@ export default function DailyCustomers({
                   onClick={() => openDetails(customer.customer_id, customer)}
                   className={`clickable ${isThisLoading ? "rowLoading" : ""}`}
                 >
-                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{customer.originalSNo || idx + 1}</td>
                   <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{dateLabel(customer.finance_date)}</td>
                   <td>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
@@ -119,6 +120,28 @@ export default function DailyCustomers({
                   </td>
                   <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "inline-flex", gap: "6px" }}>
+                      {onOpenEditCustomer && (
+                        <button
+                          type="button"
+                          className="partnerActionBtn"
+                          style={{
+                            background: "#f0fdfa",
+                            color: "#0f766e",
+                            borderColor: "#99f6e4",
+                            borderWidth: "1px",
+                            borderStyle: "solid",
+                            borderRadius: "6px",
+                            padding: "3px 8px",
+                            fontSize: "11.5px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                          }}
+                          title="Edit all fields of customer & loan"
+                          onClick={() => onOpenEditCustomer(customer)}
+                        >
+                          Edit
+                        </button>
+                      )}
                       {isActive && onOpenIncreaseLoan && (
                         <button
                           type="button"

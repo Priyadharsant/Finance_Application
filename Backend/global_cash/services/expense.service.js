@@ -141,7 +141,20 @@ export async function recordExpense(client = pool, data) {
     createdBy || null,
   ]);
 
-  return res.rows[0];
+  const insertedRow = res.rows[0];
+  if (validCategory === 'DAILY') {
+    try {
+      await client.query(`
+        INSERT INTO daily_finance_expenses (expense_id, expense_date, amount, description)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (expense_id) DO UPDATE SET amount = EXCLUDED.amount, description = EXCLUDED.description
+      `, [insertedRow.id, dateVal, numAmount, description.trim()]);
+    } catch (e) {
+      console.warn("Could not sync to daily_finance_expenses:", e.message);
+    }
+  }
+
+  return insertedRow;
 }
 
 export async function getExpenses(client = pool, filters = {}) {
@@ -153,7 +166,7 @@ export async function getExpenses(client = pool, filters = {}) {
     from,
     to,
     search,
-    limit = 200,
+    limit = 10000,
     offset = 0,
   } = filters;
 
@@ -326,6 +339,11 @@ export async function deleteExpense(client = pool, id) {
   const res = await client.query('DELETE FROM expenses WHERE id = $1 RETURNING *', [id]);
   if (res.rowCount === 0) {
     throw new Error('Expense not found');
+  }
+  try {
+    await client.query('DELETE FROM daily_finance_expenses WHERE expense_id = $1', [id]);
+  } catch (e) {
+    // Ignore if not in daily_finance_expenses
   }
   return res.rows[0];
 }

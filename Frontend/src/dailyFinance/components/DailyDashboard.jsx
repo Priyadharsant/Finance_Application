@@ -66,8 +66,8 @@ export default function DailyDashboard({
         </div>
       </div>
       <div className="metricGroupHeading">
-        <h3>Loan portfolio &amp; returns</h3>
-        <p>Principal issued, agreed return, and interest deductions.</p>
+        <h3>Capital, Cash &amp; Accounts</h3>
+        <p>Total capital, liquid cash in hand (Kai Iruppu), expenses, and customer count.</p>
       </div>
       <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
         <Metric
@@ -81,14 +81,39 @@ export default function DailyDashboard({
           source="daily_finance_customers and daily_finance_accounts."
         />
         <Metric
-          title="Capital Invested (Principal)"
-          value={actualCapitalInvested}
+          title="Total Capital"
+          value={position.total_capital || 1000000}
           tone="blue"
-          explanation="Net principal still outside the business after collections."
-          formula="max(0, net amount disbursed - all collections)."
-          period="All non-cancelled accounts, lifetime to date."
-          source="Daily Finance dashboard position: net_capital_invested."
+          explanation="Total capital invested in the business."
+          formula="Total capital contributions from partners."
+          period="Lifetime to date."
+          source="partner_capital_transactions."
         />
+        <Metric
+          title="Kai Iruppu (Cash in Hand)"
+          value={position.kai_iruppu !== undefined ? position.kai_iruppu : position.in_hand}
+          tone="green"
+          explanation="Actual liquid cash available right now across the business."
+          formula="Total cash inflows (Capital + Collections) minus outflows (Disbursements + Expenses)."
+          period="Current available cash position."
+          source="global_cash_ledger and cash accounts."
+        />
+        <Metric
+          title="Expense on Daily Finance"
+          value={position.expenses || 0}
+          tone="orange"
+          explanation="Total operational expenses incurred in daily finance."
+          formula="Sum of daily_finance_expenses."
+          period="Lifetime to date."
+          source="daily_finance_expenses."
+        />
+      </div>
+
+      <div className="metricGroupHeading">
+        <h3>Loan Portfolio &amp; Collections</h3>
+        <p>Principal issued, upfront interest, disbursed amount, and collections.</p>
+      </div>
+      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
         <Metric
           title="Total Finance Given (Gross)"
           value={position.total_finance_amount}
@@ -100,7 +125,7 @@ export default function DailyDashboard({
         <Metric
           title="Interest"
           value={position.profit}
-          explanation="Upfront interest deductions recorded on daily finance accounts."
+          explanation="Upfront interest (pitipu) deductions recorded on daily finance accounts."
           formula="Sum of initial_deduction."
           period="All non-cancelled accounts, lifetime to date."
           source="daily_finance_accounts.initial_deduction."
@@ -114,30 +139,7 @@ export default function DailyDashboard({
           source="daily_finance_accounts.gross_finance_amount and initial_deduction."
         />
         <Metric
-          title="Total Return"
-          value={position.total_agreed_return ?? position.total_finance_amount}
-          explanation="Total amount borrowers agreed to repay across their accounts."
-          formula="Sum of agreed_total_payable."
-          period="All non-cancelled accounts, lifetime to date."
-          source="daily_finance_accounts.agreed_total_payable."
-        />
-        <Metric
-          title="Profit"
-          value={position.profit}
-          tone="green"
-          explanation="The dashboard reports the same upfront deduction total as the Interest card."
-          formula="Sum of initial_deduction; this duplicates the Interest card value."
-          period="All non-cancelled accounts, lifetime to date."
-          source="daily_finance_accounts.initial_deduction."
-        />
-      </div>
-      <div className="metricGroupHeading">
-        <h3>Collections &amp; cash outlook</h3>
-        <p>Amounts collected, remaining receivable, and the current estimate.</p>
-      </div>
-      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))" }}>
-        <Metric
-          title="Loan Balance Reductions"
+          title="Collection Amount"
           value={position.collected}
           tone="green"
           explanation="Total payments recorded against daily finance accounts."
@@ -153,24 +155,6 @@ export default function DailyDashboard({
           formula="Sum of agreed_total_payable minus all non-void payments."
           period="All non-cancelled accounts, lifetime to date."
           source="daily_finance_accounts and daily_finance_payments."
-        />
-        <Metric
-          title="Cash Received (Non-transfer)"
-          value={position.cash_collected}
-          tone="green"
-          explanation="Payments counted as cash receipts by the dashboard."
-          formula="Sum of non-void payments whose payment method is not TRANSFER."
-          period="All dates, lifetime to date."
-          source="daily_finance_payments.amount and payment_method."
-        />
-        <Metric
-          title="Next Month Projected Amount"
-          value={Number(position.cash_collected || 0) + Math.round(Number(position.receivable || 0) * 0.5)}
-          tone="orange"
-          explanation="A simple estimate that adds half of the current receivable to non-transfer cash collections."
-          formula="cash_collected + round(receivable × 50%)."
-          period="Projection for the next month, based on the current dashboard totals."
-          source="Daily Finance dashboard position; it is a fixed-ratio estimate, not an EMI schedule."
         />
       </div>
       <div className="dashboardGrid" style={{ gridTemplateColumns: "1fr" }}>

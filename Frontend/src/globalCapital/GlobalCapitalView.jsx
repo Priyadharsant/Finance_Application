@@ -105,6 +105,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     fundSourceType: "OWN", // 'OWN' or 'LEND'
     lenderName: "",
     interestRate: "",
+    targetModule: "DAILY",
   });
 
   const [showAddExpense, setShowAddExpense] = useState(false);
@@ -412,6 +413,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           fundSourceType: capitalFormData.fundSourceType,
           lenderName: capitalFormData.lenderName,
           interestRate: capitalFormData.interestRate,
+          targetModule: capitalFormData.targetModule || "DAILY",
         });
         setNotice({ type: "success", text: "Withdrawal recorded successfully" });
       } else {
@@ -423,6 +425,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
           fundSourceType: capitalFormData.fundSourceType,
           lenderName: capitalFormData.lenderName,
           interestRate: capitalFormData.interestRate,
+          targetModule: capitalFormData.targetModule || "DAILY",
         });
         setNotice({ type: "success", text: "Capital contribution added successfully" });
       }

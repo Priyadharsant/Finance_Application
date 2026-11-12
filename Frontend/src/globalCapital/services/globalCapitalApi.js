@@ -89,6 +89,7 @@ export const globalCapitalApi = {
     if (params.month) q.set("month", params.month);
     if (params.category && params.category !== "ALL") q.set("category", params.category);
     if (params.search) q.set("search", params.search);
+    q.set("limit", params.limit || "10000");
     const qs = q.toString() ? `?${q.toString()}` : "";
 
     const res = await fetch(`${API}/expenses${qs}`);
