@@ -207,24 +207,30 @@ export default function LedgerOverview({
         />
         <MetricTooltipCard
           title="Total Capital"
-          value={money(ledgerData.capital?.totalCapital || 1202000)}
+          value={money(ledgerData.capital?.totalCapital ?? 0)}
           tone="blue"
-          detail={
-            <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
-                Daily: {money(ledgerData.capital?.dailyCapital || 1202000)}
-              </span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: "700" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6" }} />
-                Auto: {money(ledgerData.capital?.autoCapital || 0)}
-              </span>
-            </div>
-          }
           definition="Total partner capital invested across Daily and Auto businesses."
           formula="Daily Capital + Auto Capital."
           period="Lifetime to date."
           source="partner_capital_transactions."
+        />
+        <MetricTooltipCard
+          title="Daily Capital"
+          value={money(ledgerData.capital?.dailyCapital ?? 0)}
+          tone="green"
+          definition="Partner capital allocated to Daily Finance."
+          formula="Daily contributions and deposits minus withdrawals and exits."
+          period="Lifetime to date."
+          source="partner_capital_transactions, allocated to Daily."
+        />
+        <MetricTooltipCard
+          title="Auto Capital"
+          value={money(ledgerData.capital?.autoCapital ?? 0)}
+          tone="blue"
+          definition="Partner capital allocated to Auto Finance."
+          formula="Auto contributions and deposits minus withdrawals and exits."
+          period="Lifetime to date."
+          source="partner_capital_transactions, allocated to Auto."
         />
         <MetricTooltipCard
           title="Kai Iruppu (Cash in Hand)"

@@ -253,6 +253,18 @@ export default function PartnerDetailsModal({ partner, close, onAddMoney, onWith
                 </strong>
               </div>
               <div className="txGridItem">
+                <span>Daily Capital</span>
+                <strong style={{ color: "#0f766e", fontSize: "15px", fontWeight: "800" }}>
+                  {money(stats.dailyCapital ?? p.daily_capital ?? 0)}
+                </strong>
+              </div>
+              <div className="txGridItem">
+                <span>Auto Capital</span>
+                <strong style={{ color: "#2563eb", fontSize: "15px", fontWeight: "800" }}>
+                  {money(stats.autoCapital ?? p.auto_capital ?? 0)}
+                </strong>
+              </div>
+              <div className="txGridItem">
                 <span>Total Contributed</span>
                 <strong style={{ color: "#059669", fontSize: "14.5px" }}>
                   +{money(stats.totalContributed || stats.baseCapital || 0)}

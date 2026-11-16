@@ -133,15 +133,23 @@ export async function getPartnerStats(client, partnerId) {
     SELECT 
       COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS total_contributed,
       COALESCE(SUM(CASE WHEN transaction_type = 'PROFIT_SHARE' THEN amount ELSE 0 END), 0) AS profit_from_tx,
-      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS total_withdrawn,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS total_withdrawn,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS daily_contributed,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS auto_contributed,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS daily_own_capital,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND fund_source_type = 'LEND' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND fund_source_type = 'LEND' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS daily_lend_capital,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS auto_own_capital,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND fund_source_type = 'LEND' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND fund_source_type = 'LEND' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS auto_lend_capital,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS daily_capital,
+      COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS auto_capital,
       
       -- Own Money
       COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) THEN amount ELSE 0 END), 0) AS own_contributed,
-      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) THEN amount ELSE 0 END), 0) AS own_withdrawn,
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND (fund_source_type = 'OWN' OR fund_source_type IS NULL) THEN amount ELSE 0 END), 0) AS own_withdrawn,
       
       -- Lend / Borrowed Money
       COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') AND fund_source_type = 'LEND' THEN amount ELSE 0 END), 0) AS lend_contributed,
-      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND fund_source_type = 'LEND' THEN amount ELSE 0 END), 0) AS lend_withdrawn
+      COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') AND fund_source_type = 'LEND' THEN amount ELSE 0 END), 0) AS lend_withdrawn
     FROM partner_capital_transactions
     WHERE partner_id = $1 AND status = 'COMPLETED';
   `;
@@ -175,6 +183,14 @@ export async function getPartnerStats(client, partnerId) {
   const totalContributed = ownContributed + lendContributed + totalProfitEarned;
   const totalWithdrawn = ownWithdrawn + lendWithdrawn;
   const currentCapital = availableOwnCapital + availableLendCapital;
+  const dailyContributed = parseFloat(row.daily_contributed || 0);
+  const autoContributed = parseFloat(row.auto_contributed || 0);
+  const dailyCapital = parseFloat(row.daily_capital || 0);
+  const autoCapital = parseFloat(row.auto_capital || 0);
+  const dailyOwnCapital = parseFloat(row.daily_own_capital || 0);
+  const dailyLendCapital = parseFloat(row.daily_lend_capital || 0);
+  const autoOwnCapital = parseFloat(row.auto_own_capital || 0);
+  const autoLendCapital = parseFloat(row.auto_lend_capital || 0);
 
   // Also fetch breakdown by individual lenders
   let lenderBreakdown = [];
@@ -182,18 +198,24 @@ export async function getPartnerStats(client, partnerId) {
     const lendersRes = await client.query(`
       SELECT 
         lender_name,
+        interest_rate,
         COALESCE(SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount ELSE 0 END), 0) AS contributed,
-        COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS withdrawn
+        COALESCE(SUM(CASE WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN amount ELSE 0 END), 0) AS withdrawn,
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS daily_capital,
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO' AND transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END), 0) AS auto_capital
       FROM partner_capital_transactions
       WHERE partner_id = $1 AND fund_source_type = 'LEND' AND status = 'COMPLETED' AND lender_name IS NOT NULL
-      GROUP BY lender_name;
+      GROUP BY lender_name, interest_rate;
     `, [partnerId]);
 
     lenderBreakdown = lendersRes.rows.map(l => ({
       lenderName: l.lender_name,
+      interestRate: parseFloat(l.interest_rate || 0),
       contributed: parseFloat(l.contributed),
       withdrawn: parseFloat(l.withdrawn),
-      available: Math.max(0, parseFloat(l.contributed) - parseFloat(l.withdrawn))
+      available: Math.max(0, parseFloat(l.contributed) - parseFloat(l.withdrawn)),
+      dailyCapital: parseFloat(l.daily_capital || 0),
+      autoCapital: parseFloat(l.auto_capital || 0)
     }));
   } catch (err) {
     console.error('Error fetching lender breakdown:', err);
@@ -205,6 +227,14 @@ export async function getPartnerStats(client, partnerId) {
     totalContributed,
     totalWithdrawn,
     currentCapital, // Total Available Capital
+    dailyContributed,
+    autoContributed,
+    dailyCapital,
+    autoCapital,
+    dailyOwnCapital,
+    dailyLendCapital,
+    autoOwnCapital,
+    autoLendCapital,
     ownContributed,
     ownWithdrawn,
     availableOwnCapital,

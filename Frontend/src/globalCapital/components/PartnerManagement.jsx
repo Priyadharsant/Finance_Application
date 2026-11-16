@@ -52,6 +52,8 @@ export default function PartnerManagement({
     (sum, p) => sum + Number(p.total_withdrawn || 0),
     0
   );
+  const totalDailyCapital = filteredPartners.reduce((sum, p) => sum + Number(p.daily_capital || 0), 0);
+  const totalAutoCapital = filteredPartners.reduce((sum, p) => sum + Number(p.auto_capital || 0), 0);
 
   return (
     <div className="financeFadeIn globalCapitalView">
@@ -104,6 +106,16 @@ export default function PartnerManagement({
             {money(totalAvailableCapital)}
           </strong>
           <small>Active partner balance</small>
+        </div>
+        <div>
+          <span>Daily Capital</span>
+          <strong style={{ color: "#0f766e" }}>{money(totalDailyCapital)}</strong>
+          <small>Current partner capital allocated to Daily</small>
+        </div>
+        <div>
+          <span>Auto Capital</span>
+          <strong style={{ color: "#2563eb" }}>{money(totalAutoCapital)}</strong>
+          <small>Current partner capital allocated to Auto</small>
         </div>
         <div>
           <span>Total Withdrawn</span>
@@ -211,7 +223,7 @@ export default function PartnerManagement({
                 <th style={{ width: "40px" }}></th>
                 <th>Partner</th>
                 <th>Contact</th>
-                <th style={{ textAlign: "right" }}>Current Capital</th>
+                <th style={{ textAlign: "right" }}>Current Capital (Daily / Auto)</th>
                 <th style={{ textAlign: "center", width: "230px" }}>Actions</th>
               </tr>
             </thead>
@@ -247,6 +259,10 @@ export default function PartnerManagement({
                     </td>
                     <td style={{ textAlign: "right", fontWeight: "700" }}>
                       <div>{money(p.current_capital)}</div>
+                      <div style={{ fontSize: "11px", fontWeight: "700", marginTop: "3px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                        <span style={{ color: "#0f766e", background: "#f0fdfa", padding: "1px 5px", borderRadius: "4px" }}>Daily: {money(p.daily_capital ?? 0)}</span>
+                        <span style={{ color: "#2563eb", background: "#eff6ff", padding: "1px 5px", borderRadius: "4px" }}>Auto: {money(p.auto_capital ?? 0)}</span>
+                      </div>
                       <div style={{ fontSize: "11px", fontWeight: "600", marginTop: "3px", display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
                         <span style={{ color: "#0d9488", background: "#f0fdfa", padding: "1px 5px", borderRadius: "4px" }}>
                           Own: {money(p.available_own_capital ?? p.own_capital ?? 0)}
@@ -304,13 +320,10 @@ export default function PartnerManagement({
                   {expandedPartnerId === p.id && (
                     <tr style={{ background: "#f8fafc" }}>
                       <td colSpan="5" style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>BASE CAPITAL</div>
-                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", marginTop: "2px" }}>
-                              {money(p.base_capital ?? p.initial_contribution ?? 0)}
-                            </div>
-                          </div>
+                        <div className="partnerCapitalAnalytics">
+                          <section className="partnerAnalyticsGroup">
+                            <h4>Contribution Summary</h4>
+                            <div className="partnerAnalyticsCards">
                           <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                             <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>TOTAL CONTRIBUTED</div>
                             <div style={{ fontSize: "15px", fontWeight: "700", color: "#059669", marginTop: "2px" }}>
@@ -319,28 +332,67 @@ export default function PartnerManagement({
                           </div>
                           <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                             <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>TOTAL WITHDRAWN</div>
-                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#dc2626", marginTop: "2px" }}>
-                              {money(p.total_withdrawn ?? 0)}
-                            </div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#dc2626", marginTop: "2px" }}>{money(p.total_withdrawn ?? 0)}</div>
                           </div>
                           <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                             <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>PROFIT EARNED</div>
-                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#2563eb", marginTop: "2px" }}>
-                              {money(p.profit_earned ?? 0)}
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#2563eb", marginTop: "2px" }}>{money(p.profit_earned ?? 0)}</div>
+                          </div>
+                            </div>
+                          </section>
+                          <section className="partnerAnalyticsGroup">
+                            <h4>Capital by Finance Business</h4>
+                            <div className="partnerAnalyticsCards">
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #99f6e4" }}>
+                            <div style={{ fontSize: "11px", color: "#0f766e", fontWeight: "600" }}>DAILY CONTRIBUTED</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f766e", marginTop: "2px" }}>
+                              {money(p.daily_contributed ?? 0)}
                             </div>
                           </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #bfdbfe" }}>
+                            <div style={{ fontSize: "11px", color: "#2563eb", fontWeight: "600" }}>AUTO CONTRIBUTED</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#2563eb", marginTop: "2px" }}>
+                              {money(p.auto_contributed ?? 0)}
+                            </div>
+                          </div>
+                            </div>
+                          </section>
+                          <section className="partnerAnalyticsGroup">
+                            <h4>Own and Lend Allocation</h4>
+                            <div className="partnerAnalyticsCards">
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #99f6e4" }}>
+                            <div style={{ fontSize: "11px", color: "#0f766e", fontWeight: "600" }}>DAILY OWN CAPITAL</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f766e", marginTop: "2px" }}>{money(p.daily_own_capital ?? 0)}</div>
+                          </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #ddd6fe" }}>
+                            <div style={{ fontSize: "11px", color: "#7c3aed", fontWeight: "600" }}>DAILY LEND CAPITAL</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#7c3aed", marginTop: "2px" }}>{money(p.daily_lend_capital ?? 0)}</div>
+                          </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #bfdbfe" }}>
+                            <div style={{ fontSize: "11px", color: "#2563eb", fontWeight: "600" }}>AUTO OWN CAPITAL</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#2563eb", marginTop: "2px" }}>{money(p.auto_own_capital ?? 0)}</div>
+                          </div>
+                          <div style={{ padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #ddd6fe" }}>
+                            <div style={{ fontSize: "11px", color: "#7c3aed", fontWeight: "600" }}>AUTO LEND CAPITAL</div>
+                            <div style={{ fontSize: "15px", fontWeight: "700", color: "#7c3aed", marginTop: "2px" }}>{money(p.auto_lend_capital ?? 0)}</div>
+                          </div>
+                            </div>
+                          </section>
                         </div>
 
                         {p.lender_breakdown && p.lender_breakdown.length > 0 && (
-                          <div style={{ marginTop: "12px", padding: "10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                          <div className="partnerLenderBreakdown">
                             <div style={{ fontSize: "11.5px", fontWeight: "700", color: "#7c3aed", marginBottom: "6px" }}>
                               BORROWED / LEND CAPITAL DETAILS
                             </div>
-                            <table style={{ width: "100%", fontSize: "12px" }}>
+                            <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", minWidth: "520px", fontSize: "12px" }}>
                               <thead>
                                 <tr style={{ color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>
                                   <th style={{ textAlign: "left", padding: "4px 0" }}>Lender</th>
-                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Amount</th>
+                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Total Balance</th>
+                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Daily</th>
+                                  <th style={{ textAlign: "right", padding: "4px 0" }}>Auto</th>
                                   <th style={{ textAlign: "right", padding: "4px 0" }}>Interest %</th>
                                 </tr>
                               </thead>
@@ -348,12 +400,15 @@ export default function PartnerManagement({
                                 {p.lender_breakdown.map((l, lIdx) => (
                                   <tr key={lIdx} style={{ borderBottom: "1px solid #f1f5f9" }}>
                                     <td style={{ padding: "4px 0", fontWeight: "600" }}>{l.lenderName || "—"}</td>
-                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{money(l.amount)}</td>
+                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{money(l.available)}</td>
+                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{money(l.dailyCapital)}</td>
+                                    <td style={{ textAlign: "right", padding: "4px 0" }}>{money(l.autoCapital)}</td>
                                     <td style={{ textAlign: "right", padding: "4px 0" }}>{l.interestRate ? `${l.interestRate}%` : "—"}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
+                            </div>
                           </div>
                         )}
                       </td>

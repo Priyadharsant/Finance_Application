@@ -590,6 +590,10 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                       <p className="text-2xl font-bold text-white mt-1">
                         {money(data.partners?.totalInvestment)}
                       </p>
+                      <div className="flex flex-wrap gap-3 mt-2 text-xs font-semibold">
+                        <span className="text-emerald-300">Daily: {money(data.partners?.totalDailyCapital)}</span>
+                        <span className="text-sky-300">Auto: {money(data.partners?.totalAutoCapital)}</span>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-slate-400">Total Partners Active</p>
@@ -606,6 +610,8 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                           <th className="py-3 px-4">#</th>
                           <th className="py-3 px-4">PARTNER NAME</th>
                           <th className="py-3 px-4 text-right">CURRENT CAPITAL</th>
+                          <th className="py-3 px-4 text-right">DAILY CAPITAL</th>
+                          <th className="py-3 px-4 text-right">AUTO CAPITAL</th>
                           <th className="py-3 px-4 text-right">TOTAL CONTRIBUTED</th>
                           <th className="py-3 px-4 text-right">TOTAL WITHDRAWN</th>
                           <th className="py-3 px-4 text-right">PROFIT EARNED</th>
@@ -618,6 +624,8 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                             <td className="py-3 px-4 text-slate-500">{idx + 1}</td>
                             <td className="py-3 px-4 font-sans font-semibold text-white">{p.name}</td>
                             <td className="py-3 px-4 text-right text-emerald-400 font-bold">{money(p.capital)}</td>
+                            <td className="py-3 px-4 text-right text-emerald-300">{money(p.dailyCapital)}</td>
+                            <td className="py-3 px-4 text-right text-sky-300">{money(p.autoCapital)}</td>
                             <td className="py-3 px-4 text-right text-cyan-300">{money(p.contributed)}</td>
                             <td className="py-3 px-4 text-right text-rose-300">{money(p.withdrawn)}</td>
                             <td className="py-3 px-4 text-right text-amber-300">{money(p.profit)}</td>
@@ -637,6 +645,8 @@ export default function DetailedBusinessLedgerModal({ isOpen, onClose }) {
                           <td className="py-3 px-4 text-right text-emerald-400">
                             {money(data.partners?.totalInvestment)}
                           </td>
+                          <td className="py-3 px-4 text-right text-emerald-300">{money(data.partners?.totalDailyCapital)}</td>
+                          <td className="py-3 px-4 text-right text-sky-300">{money(data.partners?.totalAutoCapital)}</td>
                           <td colSpan={4}></td>
                         </tr>
                       </tfoot>

@@ -391,6 +391,16 @@ export default function GlobalReportsTab({
           </small>
         </div>
         <div className="metric autoMetric green">
+          <span>Daily Capital</span>
+          <b>{money(ledgerData?.capital?.dailyCapital ?? 0)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>Allocated to Daily Finance</small>
+        </div>
+        <div className="metric autoMetric blue">
+          <span>Auto Capital</span>
+          <b>{money(ledgerData?.capital?.autoCapital ?? 0)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>Allocated to Auto Finance</small>
+        </div>
+        <div className="metric autoMetric green">
           <span>Period Net Profit</span>
           <b>{money(totalNetProfit)}</b>
           <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
@@ -529,6 +539,8 @@ export default function GlobalReportsTab({
                 <th>Phone</th>
                 <th>Base Contribution</th>
                 <th>Current Capital</th>
+                <th>Daily Capital</th>
+                <th>Auto Capital</th>
                 <th>Total Contributed</th>
                 <th>Total Withdrawn</th>
                 <th>Profit Credited</th>
@@ -547,6 +559,8 @@ export default function GlobalReportsTab({
                   <td className="greenText">
                     <b>{money(p.current_capital ?? p.capital ?? 0)}</b>
                   </td>
+                  <td style={{ color: "#0f766e" }}>{money(p.daily_capital ?? 0)}</td>
+                  <td style={{ color: "#2563eb" }}>{money(p.auto_capital ?? 0)}</td>
                   <td>{money(p.total_contributed ?? p.contributed ?? 0)}</td>
                   <td>{money(p.total_withdrawn ?? p.withdrawn ?? 0)}</td>
                   <td style={{ color: "#059669", fontWeight: 700 }}>

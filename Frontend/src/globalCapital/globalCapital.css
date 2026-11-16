@@ -59,8 +59,8 @@
 .statusPill { display: inline-block; padding: 5px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; }
 .statusPill.active { color: #047857; background: #dcfce7; }
 .statusPill.completed { color: #475569; background: #f1f5f9; }
-.modalOverlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .62); backdrop-filter: blur(7px); }
-.modalContent { width: min(520px, 100%); overflow: hidden; border: 1px solid #dbe5e8; border-radius: 16px; background: #fff; box-shadow: var(--shadow-lg); }
+.modalOverlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; overflow-y: auto; padding: 20px; background: rgba(15, 23, 42, .62); backdrop-filter: blur(7px); }
+.modalContent { width: min(520px, 100%); max-height: calc(100vh - 40px); overflow-x: hidden; overflow-y: auto; border: 1px solid #dbe5e8; border-radius: 16px; background: #fff; box-shadow: var(--shadow-lg); box-sizing: border-box; }
 .modalHeader { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid #e2e8f0; }
 .modalHeader h3 { margin: 0; font: 800 18px var(--font-heading); }
 .modalBody { padding: 20px; }
@@ -78,6 +78,18 @@
 .globalRecordGrid > div { min-width: 0; padding: 13px 14px; border: 1px solid #dbe5e8; border-radius: 10px; background: #f8fafc; }
 .globalRecordGrid span { display: block; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .55px; text-transform: uppercase; }
 .globalRecordGrid strong { display: block; margin-top: 7px; color: #0f172a; font-size: 13px; overflow-wrap: anywhere; }
+.partnerCapitalAnalytics { display: grid; gap: 14px; }
+.partnerAnalyticsGroup { min-width: 0; padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.partnerAnalyticsGroup h4 { margin: 0 0 10px; color: #334155; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.partnerAnalyticsCards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.partnerAnalyticsCards > div { min-width: 0; }
+.partnerAnalyticsGroup:first-child .partnerAnalyticsCards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.partnerAnalyticsGroup:nth-child(2) .partnerAnalyticsCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.partnerLenderBreakdown { margin-top: 14px; padding: 14px; border: 1px solid #ddd6fe; border-radius: 12px; background: #fff; }
+.partnerLenderBreakdown table { border-collapse: collapse; }
+.partnerLenderBreakdown th, .partnerLenderBreakdown td { padding: 8px 10px !important; }
+@media (max-width: 760px) { .partnerAnalyticsCards, .partnerAnalyticsGroup:first-child .partnerAnalyticsCards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .partnerAnalyticsCards, .partnerAnalyticsGroup:first-child .partnerAnalyticsCards, .partnerAnalyticsGroup:nth-child(2) .partnerAnalyticsCards { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .globalCapitalView { padding: 28px 20px; } .globalCapitalStats { grid-template-columns: 1fr; } .globalRecordGrid { grid-template-columns: 1fr; padding: 16px; } }
 
 /* Global Capital Expenses & 4-Col / 6-Col Stats */

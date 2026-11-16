@@ -323,10 +323,20 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
       p.name,
       p.status,
       COALESCE((
-        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END)
+        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'CAPITAL_WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT') THEN -amount ELSE 0 END)
         FROM partner_capital_transactions
         WHERE partner_id = p.id AND status = 'COMPLETED'
       ), 0) as current_capital,
+      COALESCE((
+        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT', 'CAPITAL_WITHDRAWAL') THEN -amount ELSE 0 END)
+        FROM partner_capital_transactions
+        WHERE partner_id = p.id AND status = 'COMPLETED' AND UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY'
+      ), 0) as daily_capital,
+      COALESCE((
+        SELECT SUM(CASE WHEN transaction_type IN ('CONTRIBUTION', 'ADJUSTMENT_INCREASE', 'CAPITAL_DEPOSIT') THEN amount WHEN transaction_type IN ('WITHDRAWAL', 'ADJUSTMENT_DECREASE', 'CAPITAL_EXIT', 'CAPITAL_WITHDRAWAL') THEN -amount ELSE 0 END)
+        FROM partner_capital_transactions
+        WHERE partner_id = p.id AND status = 'COMPLETED' AND UPPER(COALESCE(target_module, 'DAILY')) = 'AUTO'
+      ), 0) as auto_capital,
       COALESCE((
         SELECT SUM(amount) FROM partner_capital_transactions
         WHERE partner_id = p.id AND transaction_type = 'CONTRIBUTION' AND status = 'COMPLETED'
@@ -348,12 +358,16 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     id: p.id,
     name: p.name,
     capital: Number(p.current_capital || 0),
+    dailyCapital: Number(p.daily_capital || 0),
+    autoCapital: Number(p.auto_capital || 0),
     contributed: Number(p.total_contributed || 0),
     withdrawn: Number(p.total_withdrawn || 0),
     profit: Number(p.profit_earned || 0),
     status: p.status
   }));
   const totalInvestment = partnersList.reduce((sum, p) => sum + p.capital, 0);
+  const totalDailyCapital = partnersList.reduce((sum, p) => sum + p.dailyCapital, 0);
+  const totalAutoCapital = partnersList.reduce((sum, p) => sum + p.autoCapital, 0);
 
   // 4. FETCH EXPENSES (SELAVU)
   const expensesQuery = `
@@ -468,7 +482,9 @@ export async function getMasterBusinessLedger(client = pool, options = {}) {
     },
     partners: {
       list: partnersList,
-      totalInvestment: totalInvestment
+      totalInvestment: totalInvestment,
+      totalDailyCapital,
+      totalAutoCapital
     },
     expenses: {
       items: expensesList,
