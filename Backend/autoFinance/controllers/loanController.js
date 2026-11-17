@@ -25,6 +25,18 @@ export async function addLoan(req, res) {
     return res.status(201).json({ success: true, data: newLoan });
   } catch (error) {
     console.error("Error creating loan:", error);
+    const duplicateIdentifierMessages = {
+      autofinance_vehicles_chassis_number_key: "This chassis number is already registered on another vehicle.",
+      autofinance_vehicles_engine_number_key: "This engine number is already registered on another vehicle.",
+      autofinance_vehicles_registration_number_key: "This registration number is already registered on another vehicle.",
+    };
+    if (error.code === "23505" && duplicateIdentifierMessages[error.constraint]) {
+      return res.status(409).json({
+        success: false,
+        message: duplicateIdentifierMessages[error.constraint],
+        field: error.constraint.replace("autofinance_vehicles_", "").replace("_key", ""),
+      });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 }

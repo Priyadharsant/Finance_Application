@@ -175,6 +175,10 @@ export async function createLoanWithVehicle(data) {
     // 2. Insert Vehicle (if vehicle details provided)
     let vehicle = null;
     if (make || model || registrationNumber) {
+      // These columns are unique. Store missing optional identifiers as NULL
+      // (which PostgreSQL permits more than once), not as a shared empty string.
+      const normalizedChassisNumber = String(chassisNumber ?? "").trim() || null;
+      const normalizedEngineNumber = String(engineNumber ?? "").trim() || null;
       const vehicleQuery = `
         INSERT INTO autofinance_vehicles (
           loan_id, vehicle_type, make, model, year, registration_number, chassis_number, engine_number, insurance_details
@@ -189,8 +193,8 @@ export async function createLoanWithVehicle(data) {
         model || '',
         year ? parseInt(year) : new Date().getFullYear(),
         registrationNumber || `REG-${Date.now().toString().slice(-6)}`,
-        chassisNumber || '',
-        engineNumber || '',
+        normalizedChassisNumber,
+        normalizedEngineNumber,
         insuranceDetails || ''
       ]);
       vehicle = vehicleRes.rows[0];
