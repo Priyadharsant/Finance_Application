@@ -24,6 +24,13 @@ import AutoCustomers from "./components/AutoCustomers";
 import AutoLoanSchemes from "./components/AutoLoanSchemes";
 import AutoVehicleLoans from "./components/AutoVehicleLoans";
 
+const getLocalDateInputValue = () => {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${month}-${day}`;
+};
+
 export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [dashboardData, setDashboardData] = useState({
     overview: {},
@@ -34,6 +41,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const [loans, setLoans] = useState([]);
   const [partners, setPartners] = useState([]);
   const [selectedLoan, setSelectedLoan] = useState(null);
+  const [createLoanUploadProgress, setCreateLoanUploadProgress] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingLoanId, setLoadingLoanId] = useState(null);
@@ -144,8 +152,11 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
   const [payForm, setPayForm] = useState({
     amountPaid: "",
+    fineAmount: "0",
+    collectedDate: getLocalDateInputValue(),
     paymentMethod: "CASH",
     referenceNumber: "",
+    receiptNumber: "",
   });
 
   // Filters
@@ -238,32 +249,39 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       const newLoanId = createRes.data?.id || createRes.id; // Depending on API response
 
       // 2. Upload documents if any were selected
-      if (newLoanId && loanForm.documents) {
-        for (const docType of Object.keys(loanForm.documents)) {
-          const file = loanForm.documents[docType];
-          if (file) {
+      const documentsToUpload = Object.entries(loanForm.documents || {}).filter(([, file]) => Boolean(file));
+      const failedUploads = [];
+      if (newLoanId && documentsToUpload.length) {
+        for (const [index, [docType, file]] of documentsToUpload.entries()) {
+          setCreateLoanUploadProgress({ docType, current: index + 1, total: documentsToUpload.length, fileName: file.name });
             const formData = new FormData();
             formData.append("file", file);
             formData.append("docType", docType);
 
             try {
-              await fetch(`${API_BASE}/loans/${newLoanId}/documents`, {
+              const uploadRes = await fetch(`${API_BASE}/loans/${newLoanId}/documents`, {
                 method: "POST",
                 headers: {
                   Authorization: `Bearer ${localStorage.getItem("token") || ""}`
                 },
                 body: formData,
               });
+              const uploadData = await uploadRes.json();
+              if (!uploadRes.ok) throw new Error(uploadData.message || "Upload failed");
             } catch (err) {
               console.error(`Failed to upload ${docType}:`, err);
+              failedUploads.push(docType);
             }
-          }
         }
       }
 
+      setCreateLoanUploadProgress(null);
+
       setNotice?.({
         type: "success",
-        text: "Vehicle Loan created with EMI schedule and documents!",
+        text: failedUploads.length
+          ? `Vehicle loan created. Upload failed for: ${failedUploads.join(", ")}. You can add them from loan details.`
+          : "Vehicle loan created with EMI schedule and documents!",
       });
       setShowCreateLoan(false);
       setLoanForm({
@@ -320,6 +338,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       setActionLoading(null);
       loadData(false);
     } catch (err) {
+      setCreateLoanUploadProgress(null);
       setNotice?.({ type: "error", text: err.message });
       setActionLoading(null);
     }
@@ -336,16 +355,22 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           loanId: payEmiModal.loanId,
           emiId: payEmiModal.emiId,
           amountPaid: payForm.amountPaid,
+          fineAmount: payForm.fineAmount,
+          collectedDate: payForm.collectedDate,
           paymentMethod: payForm.paymentMethod,
           referenceNumber: payForm.referenceNumber,
+          receiptNumber: payForm.receiptNumber,
         }),
       });
       setNotice?.({ type: "success", text: "EMI Payment recorded!" });
       setPayEmiModal(null);
       setPayForm({
         amountPaid: "",
+        fineAmount: "0",
+        collectedDate: getLocalDateInputValue(),
         paymentMethod: "CASH",
         referenceNumber: "",
+        receiptNumber: "",
       });
       setActionLoading(null);
       if (selectedLoan) {
@@ -478,15 +503,17 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       });
       setNotice?.({ type: "success", text: "Vehicle details updated successfully!" });
       loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
-      openLoanDetails(selectedLoan.loan.id); // Refresh
+      await openLoanDetails(selectedLoan.loan.id); // Refresh
       loadData(false);
+      return true;
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+      return false;
     }
   };
 
   const handleUploadDocument = async (docType, file) => {
-    if (!selectedLoan || !file) return;
+    if (!selectedLoan || !file) return false;
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -504,15 +531,16 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       
       setNotice?.({ type: "success", text: "Document uploaded successfully!" });
       loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
-      openLoanDetails(selectedLoan.loan.id); // Refresh
+      await openLoanDetails(selectedLoan.loan.id); // Refresh
+      return true;
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+      return false;
     }
   };
 
   const handleDeleteDocument = async (filename) => {
     if (!selectedLoan || !filename) return;
-    if (!window.confirm("Are you sure you want to delete this document?")) return;
     try {
       const res = await fetch(`${API_BASE}/loans/${selectedLoan.loan.id}/documents/${encodeURIComponent(filename)}`, {
         method: "DELETE",
@@ -549,8 +577,10 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           Vehicle: `${p.make} ${p.model} (${p.registration_number})`,
           "Inst #": p.installment_number,
           "Amount Paid": Number(p.amount_paid),
+          "Fine Amount": Number(p.fine_amount || 0),
           "Payment Method": p.payment_method,
           "Reference No": p.reference_number || "",
+          "Receipt No": p.receipt_number || "",
         }));
         exportToExcel(exportData, `Monthly_Collections_${reportMonth}`);
         setNotice?.({
@@ -826,6 +856,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         handleCreateLoan={handleCreateLoan}
         partners={partners}
         submitting={Boolean(actionLoading)}
+        uploadProgress={createLoanUploadProgress}
       />
 
       {/* MODAL: LOAN DETAILS & EMI SCHEDULE TABLE */}

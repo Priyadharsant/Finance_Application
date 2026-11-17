@@ -5,6 +5,7 @@ import {
   getAutoFinanceOverview,
   getDueInstallments,
   rescheduleFutureEMIs,
+  ensureAutoPaymentColumns,
 } from "../services/loanService.js";
 import { pool } from "../config/db.js";
 import { createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
@@ -25,6 +26,9 @@ export async function addLoan(req, res) {
     return res.status(201).json({ success: true, data: newLoan });
   } catch (error) {
     console.error("Error creating loan:", error);
+    if (error.message?.startsWith("Insufficient Auto Finance balance.")) {
+      return res.status(409).json({ success: false, message: error.message });
+    }
     const duplicateIdentifierMessages = {
       autofinance_vehicles_chassis_number_key: "This chassis number is already registered on another vehicle.",
       autofinance_vehicles_engine_number_key: "This engine number is already registered on another vehicle.",
@@ -86,17 +90,25 @@ export async function recordEmiPayment(req, res) {
   const client = await pool.connect();
 
   try {
+    await ensureAutoPaymentColumns();
     await client.query("BEGIN");
 
     const {
       loanId,
       emiId,
       amountPaid,
+      fineAmount: rawFineAmount = 0,
+      collectedDate,
       paymentMethod,
       referenceNumber,
+      receiptNumber,
     } = req.body;
 
     const paidAmount = Number(amountPaid);
+    const fineAmount = Number(rawFineAmount);
+    const validCollectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(collectedDate || ""))
+      && !Number.isNaN(Date.parse(`${collectedDate}T00:00:00Z`))
+      && new Date(`${collectedDate}T00:00:00Z`).toISOString().slice(0, 10) === collectedDate;
 
     if (
       !loanId ||
@@ -107,6 +119,15 @@ export async function recordEmiPayment(req, res) {
       throw new Error(
         "loanId, emiId and a valid positive amountPaid are required"
       );
+    }
+    if (!Number.isFinite(fineAmount) || fineAmount < 0) {
+      throw new Error("Fine amount must be zero or greater");
+    }
+    if (!validCollectedDate) {
+      throw new Error("A valid collected date is required");
+    }
+    if (String(receiptNumber || "").length > 100) {
+      throw new Error("Receipt number must be 100 characters or fewer");
     }
 
     // =====================================================
@@ -427,26 +448,31 @@ export async function recordEmiPayment(req, res) {
         emi_id,
         payment_date,
         amount_paid,
+        fine_amount,
         principal_paid,
         interest_paid,
         extra_principal_paid,
         payment_method,
-        reference_number
+        reference_number,
+        receipt_number
       )
       VALUES (
-        $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8
+        $1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11
       )
       RETURNING *
       `,
       [
         loanId,
         emiId,
+        collectedDate,
         paidAmount,
+        fineAmount,
         principalPaidCurrent,
         interestPaidNow,
         extraPrincipalPaymentNow,
         paymentMethod || "CASH",
         referenceNumber || "",
+        String(receiptNumber || "").trim() || null,
       ],
     );
 
@@ -457,13 +483,14 @@ export async function recordEmiPayment(req, res) {
     // =====================================================
 
     await createLedgerEntry(client, {
+      effectiveDate: collectedDate,
       type: "AUTO_COLLECTION",
-      amount: paidAmount,
+      amount: paidAmount + fineAmount,
       direction: "CREDIT",
       sourceModule: "AUTO",
       referenceType: "AUTO_PAYMENT",
       referenceId: payment.id,
-      notes: `Auto Loan EMI Collection for Loan ${loanId}`,
+      notes: `Auto Loan EMI Collection for Loan ${loanId}${fineAmount > 0 ? ` (Fine: ${fineAmount.toFixed(2)})` : ""}${receiptNumber ? ` (Receipt: ${String(receiptNumber).trim()})` : ""}`,
     });
 
     // =====================================================
@@ -498,16 +525,21 @@ export async function recordEmiPayment(req, res) {
   export async function getMonthlyReport(req, res) {
     const client = await pool.connect();
     try {
+      await ensureAutoPaymentColumns();
       const monthParam = req.query.month; // Expected format: 'YYYY-MM'
       const targetDate = monthParam ? `${monthParam}-01` : new Date().toISOString();
   
       const query = `
         SELECT 
           p.id as payment_id,
+          p.loan_id,
+          p.payment_date,
           p.amount_paid,
+          p.fine_amount,
           p.payment_method,
           p.reference_number,
-          p.created_at as payment_date,
+          p.receipt_number,
+          p.created_at,
           COALESCE(s.installment_number, 0) as installment_number,
           COALESCE(s.total_emi, p.amount_paid) as expected_emi,
           l.loan_amount,
@@ -524,7 +556,7 @@ export async function recordEmiPayment(req, res) {
         JOIN autofinance_loans l ON p.loan_id = l.id
         JOIN autofinance_customers c ON l.customer_id = c.id
         LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
-        WHERE date_trunc('month', p.created_at) = date_trunc('month', $1::timestamp)
+        WHERE date_trunc('month', p.payment_date::timestamp) = date_trunc('month', $1::timestamp)
         ORDER BY p.payment_date ASC, p.created_at ASC;
       `;
       const result = await client.query(query, [targetDate]);
@@ -690,23 +722,32 @@ export async function updateVehicle(req, res) {
   try {
     const { id: loanId } = req.params;
     const { vehicleType, make, model, year, registrationNumber, chassisNumber, engineNumber, insuranceDetails } = req.body;
+    const parsedYear = year === undefined || year === null || String(year).trim() === ""
+      ? null
+      : Number.parseInt(year, 10);
+    if (parsedYear !== null && (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2200)) {
+      return res.status(400).json({ success: false, message: "Enter a valid vehicle year." });
+    }
     const result = await pool.query(
-      `UPDATE autofinance_vehicles
-       SET vehicle_type = COALESCE($1, vehicle_type),
-           make = COALESCE($2, make),
-           model = COALESCE($3, model),
-           year = COALESCE($4, year),
-           registration_number = COALESCE($5, registration_number),
-           chassis_number = COALESCE($6, chassis_number),
-           engine_number = COALESCE($7, engine_number),
-           insurance_details = COALESCE($8, insurance_details)
-       WHERE loan_id = $9
+      `INSERT INTO autofinance_vehicles (
+         loan_id, vehicle_type, make, model, year, registration_number,
+         chassis_number, engine_number, insurance_details
+       )
+       VALUES ($1, COALESCE($2, 'TWO_WHEELER'), $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (loan_id) DO UPDATE SET
+         vehicle_type = COALESCE(EXCLUDED.vehicle_type, autofinance_vehicles.vehicle_type),
+         make = COALESCE(EXCLUDED.make, autofinance_vehicles.make),
+         model = COALESCE(EXCLUDED.model, autofinance_vehicles.model),
+         year = COALESCE(EXCLUDED.year, autofinance_vehicles.year),
+         registration_number = COALESCE(EXCLUDED.registration_number, autofinance_vehicles.registration_number),
+         chassis_number = COALESCE(EXCLUDED.chassis_number, autofinance_vehicles.chassis_number),
+         engine_number = COALESCE(EXCLUDED.engine_number, autofinance_vehicles.engine_number),
+         insurance_details = COALESCE(EXCLUDED.insurance_details, autofinance_vehicles.insurance_details)
        RETURNING *`,
-      [vehicleType || null, make || null, model || null, year ? parseInt(year) : null,
-       registrationNumber || null, chassisNumber || null, engineNumber || null,
-       insuranceDetails || null, loanId]
+      [loanId, vehicleType || null, make?.trim() || null, model?.trim() || null, parsedYear,
+       registrationNumber?.trim() || null, chassisNumber?.trim() || null, engineNumber?.trim() || null,
+       insuranceDetails?.trim() || null]
     );
-    if (!result.rows[0]) return res.status(404).json({ success: false, message: "Vehicle not found" });
     return res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error("Error updating vehicle:", error);

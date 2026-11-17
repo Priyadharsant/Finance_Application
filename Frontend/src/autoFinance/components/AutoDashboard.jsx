@@ -53,8 +53,16 @@ export default function AutoDashboard({
   const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter);
 
   const dashDisbursed = dashboardLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
-  const dashCollected = dashboardLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
-  const dashRemaining = Math.max(0, dashDisbursed - dashCollected);
+  const dashLoanRepayments = dashboardLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const dashFineCollected = dashboardLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
+  const dashCollected = dashLoanRepayments + dashFineCollected;
+  const dashRemaining = Math.max(0, dashDisbursed - dashLoanRepayments);
+  const displayFineCollected = isDashboardFiltered
+    ? dashFineCollected
+    : Number(overview.total_fine_collected ?? dashFineCollected);
+  const displayCashCollected = isDashboardFiltered
+    ? dashCollected
+    : Number(overview.total_collected ?? dashCollected);
   const dashOverdueCount = dashboardLoans.filter((l) => {
     const todayStr = new Date().toISOString().slice(0, 10);
     return l.next_due_date && new Date(l.next_due_date) < new Date(todayStr);
@@ -64,7 +72,7 @@ export default function AutoDashboard({
     const dueStr = l.next_due_date ? new Date(l.next_due_date).toISOString().slice(0, 10) : "";
     return dueStr === todayStr;
   }).length;
-  const dashRecoveryRate = dashDisbursed > 0 ? Math.round((dashCollected / dashDisbursed) * 100) : 0;
+  const dashRecoveryRate = dashDisbursed > 0 ? Math.round((dashLoanRepayments / dashDisbursed) * 100) : 0;
   const dashExpectedReturn = dashboardLoans.reduce(
     (sum, loan) => sum + Number(
       loan.agreed_total_payable ?? loan.total_payable ??
@@ -79,8 +87,8 @@ export default function AutoDashboard({
     ), 0);
 
   return (
-    <section className="content">
-      <div className="intro">
+    <section className="content autoModulePage autoDashboardPage">
+      <div className="intro autoModuleHero">
         <div>
           <span className="overline autoBadgeTag">
             AUTO FINANCE ANALYTICS
@@ -90,7 +98,7 @@ export default function AutoDashboard({
             Real-time loan position, loans given, EMI collections, and vehicle details.
           </p>
         </div>
-        <div className="actionGroup" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="actionGroup autoModuleHeroActions">
           <button
             type="button"
             className="unifiedReportBtn"
@@ -190,11 +198,21 @@ export default function AutoDashboard({
         />
         <MetricTooltipCard
           title="Collection Amount"
-          value={money(dashCollected || overview.total_collected || 0)}
+          value={money(displayCashCollected)}
           tone="autoMetric green"
-          detail={`${dashRecoveryRate}% collected`}
-          definition="Total EMI payments collected on auto loans."
-          formula="Sum of amount_paid from autofinance_payments."
+          detail={`${dashRecoveryRate}% EMI recovery${displayFineCollected > 0 ? ` · ${money(displayFineCollected)} fine included` : ""}`}
+          definition="Total cash received from EMI payments and fines on auto loans."
+          formula="Sum of EMI payments and fine amounts received."
+          period="Lifetime to date."
+          source="autofinance_payments."
+        />
+        <MetricTooltipCard
+          title="Fine Collected"
+          value={money(displayFineCollected)}
+          tone="autoMetric teal"
+          detail="Auto Finance fines received"
+          definition="Fine amounts recorded with Auto Finance collections."
+          formula="Sum of fine_amount from Auto Finance payments."
           period="Lifetime to date."
           source="autofinance_payments."
         />
@@ -306,7 +324,7 @@ export default function AutoDashboard({
             </div>
           </div>
         </div>
-        <table>
+        <table className="autoDashboardLoansTable">
           <thead>
             <tr>
               <th style={{ width: "50px" }}>S.No</th>
@@ -428,23 +446,22 @@ export default function AutoDashboard({
                   </td>
                   <td>
                     <b>{money(l.loan_amount)}</b>
-                    <small
-                      style={{
-                        display: "block",
-                        color: "#64748b",
-                        marginTop: "2px",
-                      }}
-                    >
-                      {l.interest_rate}% ({l.interest_type || "FLAT"}) •{" "}
-                      {l.tenure_months} Mo
-                    </small>
-                    <small style={{ display: "block", color: "#64748b", marginTop: "3px" }}>
-                      Interest amount: {money(l.total_interest)}
-                    </small>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", marginTop: "3px" }}>
+                      <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                        {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
+                      </small>
+                      <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                        Interest amount: {money(l.total_interest)}
+                      </small>
+                    </div>
                   </td>
                   <td>
-                    <b className="greenText">{money(l.total_paid)}</b>
-                    <small style={{ display: "block", marginTop: "2px" }}>
+                    <b className="greenText">{money(Number(l.total_paid || 0) + Number(l.total_fine_paid || 0))}</b>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: "7px", rowGap: "1px", marginTop: "2px", fontSize: "10.5px", lineHeight: 1.2 }}>
+                      {Number(l.total_fine_paid || 0) > 0 && <span style={{ color: "#a16207", fontWeight: 650 }}>Fine: {money(l.total_fine_paid)}</span>}
+                      <span style={{ color: "#64748b" }}>Last: {l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</span>
+                    </div>
+                    <small style={{ display: "block", marginTop: "1px", lineHeight: 1.15 }}>
                       <span
                         style={{
                           color:
@@ -593,8 +610,11 @@ export default function AutoDashboard({
                           });
                           setPayForm({
                             amountPaid: monthlyDueAmount,
+                            fineAmount: "0",
+                            collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                             paymentMethod: "CASH",
                             referenceNumber: "",
+                            receiptNumber: "",
                           });
                         }}
                       >

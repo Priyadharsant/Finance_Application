@@ -11,6 +11,17 @@ export default function AddExpenseModal({
 }) {
   if (!show) return null;
 
+  const setExpenseCategory = (category) => {
+    setExpenseFormData((current) => ({
+      ...current,
+      category,
+      expenseType:
+        category !== "AUTO" && ["INTEREST", "INSURANCE"].includes(current.expenseType)
+          ? "OFFICE_EXPENSE"
+          : current.expenseType,
+    }));
+  };
+
   return (
     <div
       className="modalOverlay"
@@ -91,6 +102,7 @@ export default function AddExpenseModal({
               <div className="quickTagsContainer">
                 {[
                   "Interest Paid",
+                  "Insurance Payment",
                   "Tea & Snacks",
                   "Office Rent",
                   "Electricity Bill",
@@ -100,7 +112,7 @@ export default function AddExpenseModal({
                   "Fuel & Travel",
                   "Legal & CA Charges",
                   "Brokerage Cash Payout",
-                ].map((tag) => (
+                ].filter((tag) => !["Interest Paid", "Insurance Payment"].includes(tag) || expenseFormData.category === "AUTO").map((tag) => (
                   <button
                     type="button"
                     key={tag}
@@ -112,6 +124,8 @@ export default function AddExpenseModal({
                         expenseType:
                           tag === "Interest Paid"
                             ? "INTEREST"
+                            : tag === "Insurance Payment"
+                            ? "INSURANCE"
                             : tag === "Brokerage Cash Payout"
                             ? "BROKERAGE_HAND"
                             : tag === "Tea & Snacks"
@@ -146,9 +160,7 @@ export default function AddExpenseModal({
                   className={`categoryOptionCard ${
                     expenseFormData.category === "GENERAL" ? "selected" : ""
                   }`}
-                  onClick={() =>
-                    setExpenseFormData({ ...expenseFormData, category: "GENERAL" })
-                  }
+                  onClick={() => setExpenseCategory("GENERAL")}
                 >
                   <Building size={20} color="#7c3aed" />
                   <span>General</span>
@@ -159,9 +171,7 @@ export default function AddExpenseModal({
                   className={`categoryOptionCard ${
                     expenseFormData.category === "AUTO" ? "selected" : ""
                   }`}
-                  onClick={() =>
-                    setExpenseFormData({ ...expenseFormData, category: "AUTO" })
-                  }
+                  onClick={() => setExpenseCategory("AUTO")}
                 >
                   <CarFront size={20} color="#2563eb" />
                   <span>Auto Finance</span>
@@ -172,9 +182,7 @@ export default function AddExpenseModal({
                   className={`categoryOptionCard ${
                     expenseFormData.category === "DAILY" ? "selected" : ""
                   }`}
-                  onClick={() =>
-                    setExpenseFormData({ ...expenseFormData, category: "DAILY" })
-                  }
+                  onClick={() => setExpenseCategory("DAILY")}
                 >
                   <Activity size={20} color="#059669" />
                   <span>Daily Finance</span>
@@ -197,7 +205,12 @@ export default function AddExpenseModal({
                   }
                 >
                   <option value="OFFICE_EXPENSE">Office & Administrative</option>
-                  <option value="INTEREST">Interest Paid (Vatti)</option>
+                  {expenseFormData.category === "AUTO" && (
+                    <>
+                      <option value="INTEREST">Interest Paid (Vatti)</option>
+                      <option value="INSURANCE">Insurance</option>
+                    </>
+                  )}
                   <option value="TEA_SNACKS">Tea, Snacks & Refreshments</option>
                   <option value="UTILITY">Utility & Internet Bills</option>
                   <option value="SALARY">Salary & Staff Dues</option>

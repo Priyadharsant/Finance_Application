@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw, FileSpreadsheet } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
-import { money } from "../services/autoFinanceApi";
+import { apiCall, money, dateLabel } from "../services/autoFinanceApi";
 import { exportAutoMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils";
-import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi";
 import MonthFilterModal from "../../components/MonthFilterModal";
 
 export default function AutoVehicleLoans({
@@ -25,7 +24,17 @@ export default function AutoVehicleLoans({
   const [showMonthModal, setShowMonthModal] = useState(false);
 
   const handleExportMonthlyCollections = async (selectedMonth) => {
-    const reportData = await globalCapitalApi.getMasterBusinessLedger();
+    const response = await apiCall(`/loans/reports/monthly?month=${encodeURIComponent(selectedMonth)}`);
+    const reportData = {
+      autoFinance: {
+        loans,
+        collections: (response.data || []).map((payment) => ({
+          ...payment,
+          amount: payment.amount_paid,
+          amount_paid: payment.amount_paid,
+        })),
+      },
+    };
     exportAutoMonthlyCollectionReport(reportData, {}, selectedMonth);
   };
 
@@ -43,16 +52,18 @@ export default function AutoVehicleLoans({
   };
 
   const filteredDisbursed = vehiclePageLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
-  const filteredCollected = vehiclePageLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const filteredLoanRepayments = vehiclePageLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+  const filteredFineCollected = vehiclePageLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
+  const filteredCollected = filteredLoanRepayments + filteredFineCollected;
   const filteredActiveCount = vehiclePageLoans.filter((l) => l.status === "ACTIVE").length;
   const filteredCompletedCount = vehiclePageLoans.filter((l) => l.status === "COMPLETED").length;
-  const filteredRecoveryRate = filteredDisbursed > 0 ? Math.round((filteredCollected / filteredDisbursed) * 100) : 0;
-  const filteredRemaining = Math.max(0, filteredDisbursed - filteredCollected);
+  const filteredRecoveryRate = filteredDisbursed > 0 ? Math.round((filteredLoanRepayments / filteredDisbursed) * 100) : 0;
+  const filteredRemaining = Math.max(0, filteredDisbursed - filteredLoanRepayments);
 
 
   return (
-    <section className="content">
-      <div className="intro">
+    <section className="content autoModulePage autoVehicleLoansPage">
+      <div className="autoModuleHero">
         <div>
           <span className="overline autoBadgeTag">VEHICLE LOANS</span>
           <h2>Vehicle Loans</h2>
@@ -60,7 +71,7 @@ export default function AutoVehicleLoans({
             All active and completed vehicle loans and repayment details.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+        <div className="autoModuleHeroActions">
           <button
             type="button"
             className="unifiedReportBtn"
@@ -79,7 +90,7 @@ export default function AutoVehicleLoans({
       </div>
 
       {/* DYNAMIC GRID ANALYTICS CARDS (BASED ON ACTIVE FILTERS) */}
-      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "22px" }}>
+      <div className="metricGrid autoVehicleMetrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "22px" }}>
         <div className="metric autoMetric blue">
           <span>{isFiltered ? "Filtered Disbursed" : "Total Disbursed"}</span>
           <b>{money(filteredDisbursed)}</b>
@@ -101,11 +112,21 @@ export default function AutoVehicleLoans({
             {isFiltered ? `${filteredCompletedCount} of ${vehiclePageLoans.length} filtered` : "Fully Settled"}
           </small>
         </div>
-        <div className="metric autoMetric orange">
-          <span>{isFiltered ? "Filtered Collected" : "Total EMI Collected"}</span>
+        <div className="metric autoMetric green">
+          <span>{isFiltered ? "Filtered Collected" : "Total Collected"}</span>
           <b>{money(filteredCollected)}</b>
-          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+          <small style={{ color: "#047857", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
             {filteredRecoveryRate}% Recovered
+          </small>
+          {filteredFineCollected > 0 && <small style={{ color: "#0f766e", fontSize: "11px", fontWeight: 650, display: "block", marginTop: "3px" }}>
+            Includes {money(filteredFineCollected)} in fines
+          </small>}
+        </div>
+        <div className="metric autoMetric teal">
+          <span>Fine Collected</span>
+          <b>{money(filteredFineCollected)}</b>
+          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
+            {vehiclePageLoans.filter((loan) => Number(loan.total_fine_paid || 0) > 0).length} loans with fines
           </small>
         </div>
         <div className="metric autoMetric red">
@@ -118,59 +139,29 @@ export default function AutoVehicleLoans({
       </div>
 
       {/* ORGANIZED FILTER BAR: TABS + MONTH CALENDAR + SEARCH + VEHICLE TYPE */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+      <div className="autoLoansToolbar">
         {/* Left: Status Switcher Tabs */}
-        <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", padding: "4px", borderRadius: "10px" }}>
+        <div className="autoLoanTabs" role="tablist" aria-label="Filter vehicle loans by status">
           <button
             type="button"
-            style={{
-              padding: "7px 16px",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "12.5px",
-              cursor: "pointer",
-              background: loanTabFilter === "ALL" ? "#ffffff" : "transparent",
-              color: loanTabFilter === "ALL" ? "#0f172a" : "#64748b",
-              boxShadow: loanTabFilter === "ALL" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              transition: "all 0.15s ease"
-            }}
+            className={loanTabFilter === "ALL" ? "active" : ""}
+            role="tab" aria-selected={loanTabFilter === "ALL"}
             onClick={() => setLoanTabFilter("ALL")}
           >
             All Loans ({loans.length})
           </button>
           <button
             type="button"
-            style={{
-              padding: "7px 16px",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "12.5px",
-              cursor: "pointer",
-              background: loanTabFilter === "ACTIVE" ? "#ffffff" : "transparent",
-              color: loanTabFilter === "ACTIVE" ? "#059669" : "#64748b",
-              boxShadow: loanTabFilter === "ACTIVE" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              transition: "all 0.15s ease"
-            }}
+            className={loanTabFilter === "ACTIVE" ? "active" : ""}
+            role="tab" aria-selected={loanTabFilter === "ACTIVE"}
             onClick={() => setLoanTabFilter("ACTIVE")}
           >
             Active ({loans.filter(l => l.status === "ACTIVE").length})
           </button>
           <button
             type="button"
-            style={{
-              padding: "7px 16px",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "12.5px",
-              cursor: "pointer",
-              background: loanTabFilter === "COMPLETED" ? "#ffffff" : "transparent",
-              color: loanTabFilter === "COMPLETED" ? "#2563eb" : "#64748b",
-              boxShadow: loanTabFilter === "COMPLETED" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              transition: "all 0.15s ease"
-            }}
+            className={loanTabFilter === "COMPLETED" ? "active" : ""}
+            role="tab" aria-selected={loanTabFilter === "COMPLETED"}
             onClick={() => setLoanTabFilter("COMPLETED")}
           >
             Completed ({loans.filter(l => l.status === "COMPLETED").length})
@@ -178,18 +169,10 @@ export default function AutoVehicleLoans({
         </div>
 
         {/* Right: Month Calendar, Search, Vehicle Type, Reset */}
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="autoLoanFilters">
           {/* Month Calendar Picker */}
           <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "#ffffff",
-              padding: "4px 10px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
+            className="autoLoanMonth"
             title="Filter by Start Month Calendar"
           >
             <Calendar size={15} color="#0f766e" />
@@ -197,28 +180,14 @@ export default function AutoVehicleLoans({
               type="month"
               value={loanMonthFilter}
               onChange={(e) => setLoanMonthFilter(e.target.value)}
-              style={{
-                border: "none",
-                outline: "none",
-                fontSize: "12.5px",
-                color: "#1e293b",
-                fontWeight: "500",
-                background: "transparent",
-                cursor: "pointer",
-              }}
+              className="autoLoanMonthInput"
               title="Click calendar icon to filter by loan start month"
             />
             {loanMonthFilter && (
               <button
                 type="button"
                 onClick={() => setLoanMonthFilter("")}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "#94a3b8",
-                  cursor: "pointer",
-                  padding: "0 2px",
-                }}
+                className="autoClearIconBtn"
                 title="Clear Month Filter"
               >
                 <X size={13} />
@@ -226,31 +195,37 @@ export default function AutoVehicleLoans({
             )}
           </div>
 
-          <div style={{ minWidth: "220px", maxWidth: "340px", flex: 1 }}>
+          <div className="autoLoanSearchWrap">
             <input
               placeholder="Search name, phone, customer/loan ID, vehicle, reg no, date..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "100%", padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", outline: "none" }}
+              className="autoLoanSearchInput"
             />
           </div>
 
           <select
             value={vehicleTypeFilter}
             onChange={(e) => setVehicleTypeFilter(e.target.value)}
-            style={{ padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", background: "#ffffff", fontWeight: 600, color: "#334155" }}
+            className="autoLoanTypeSelect"
           >
             <option value="ALL">All Vehicle Types</option>
             <option value="TWO_WHEELER">Two Wheeler</option>
+            <option value="THREE_WHEELER">Three Wheeler</option>
             <option value="CAR">Car</option>
             <option value="COMMERCIAL">Commercial</option>
+            <option value="PICKUP">Pickup</option>
+            <option value="TRUCK">Truck</option>
+            <option value="BUS">Bus</option>
+            <option value="TRACTOR">Tractor</option>
+            <option value="VAN">Van / Minibus</option>
+            <option value="OTHER">Other</option>
           </select>
 
           {isFiltered && (
             <button
               type="button"
-              className="secondary autoBtn"
-              style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              className="autoSecondaryBtn"
               onClick={handleResetFilters}
               title="Reset all filters"
             >
@@ -260,7 +235,7 @@ export default function AutoVehicleLoans({
         </div>
       </div>
 
-      <div className="card tableWrap">
+      <div className="card tableWrap autoLoansTableCard">
         <table>
           <thead>
             <tr>
@@ -310,45 +285,28 @@ export default function AutoVehicleLoans({
                 </td>
                 <td>
                   <b>{money(l.loan_amount)}</b>
-                  <small style={{ display: "block", color: "#64748b", marginTop: "2px" }}>
-                    {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
-                  </small>
-                  <small style={{ display: "block", color: "#64748b", marginTop: "3px" }}>
-                    Interest amount: {money(l.total_interest)}
-                  </small>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", marginTop: "3px" }}>
+                    <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                      {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
+                    </small>
+                    <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                      Interest amount: {money(l.total_interest)}
+                    </small>
+                  </div>
                 </td>
                 <td>
-                  <b className="greenText">{money(l.total_paid)}</b>
-                  <small style={{ display: "block", marginTop: "3px" }}>
-                    <span
-                      className="tag"
-                      style={{
-                        fontSize: "10.5px",
-                        padding: "2px 6px",
-                        background:
-                          l.status === "COMPLETED"
-                            ? "#ecfdf5"
-                            : Number(l.pending_dues_count || 0) > 0
-                              ? "#fff7ed"
-                              : "#ecfdf5",
-                        color:
-                          l.status === "COMPLETED"
-                            ? "#047857"
-                            : Number(l.pending_dues_count || 0) > 0
-                              ? "#c2410c"
-                              : "#047857",
-                        border:
-                          l.status === "COMPLETED"
-                            ? "1px solid #d1fae5"
-                            : Number(l.pending_dues_count || 0) > 0
-                              ? "1px solid #ffedd5"
-                              : "1px solid #d1fae5",
-                      }}
-                    >
-                      <Clock3 size={11} style={{ verticalAlign: "middle", marginRight: "2px" }} />
-                      {l.paid_dues_count || 0} / {l.total_dues_count || l.tenure_months} Paid
-                    </span>
-                  </small>
+                  <b className="greenText">{money(Number(l.total_paid || 0) + Number(l.total_fine_paid || 0))}</b>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px", marginTop: "5px" }}>
+                    <small style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                      {Number(l.total_fine_paid || 0) > 0 && <span style={{ color: "#a16207", fontWeight: 650 }}>Fine: {money(l.total_fine_paid)}</span>}
+                      <span>Last collected: {l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</span>
+                    </small>
+                    <small style={{ color: "#64748b", lineHeight: 1.2 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 7px", borderRadius: "6px", background: Number(l.pending_dues_count || 0) > 0 ? "#fff7ed" : "#ecfdf5", color: Number(l.pending_dues_count || 0) > 0 ? "#c2410c" : "#047857", fontWeight: 700 }}>
+                        <Clock3 size={11} /> {l.pending_dues_count || 0} Pending
+                      </span>
+                    </small>
+                  </div>
                 </td>
                 <td>
                   <span

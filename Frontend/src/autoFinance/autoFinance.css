@@ -1,7 +1,12 @@
 /* === AUTO FINANCE SPECIFIC ACCENTS === */
 .autoBadgeTag { background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 6px; font-weight: 800; }
 .autoMetric { border-top-color: #0284c7 !important; }
-.autoBtn { background: linear-gradient(135deg, #0d9488, #0284c7) !important; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3) !important; }
+.autoBtn { background: linear-gradient(135deg, #087e8b, #1167a7) !important; border: 1px solid transparent !important; box-shadow: 0 5px 14px rgba(17, 103, 167, 0.2) !important; transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
+.autoBtn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); box-shadow: 0 8px 18px rgba(17, 103, 167, 0.26) !important; }
+.autoBtn:focus-visible, .autoSecondaryBtn:focus-visible, .autoCustomerRow:focus-visible { outline: 3px solid rgba(2, 132, 199, .32); outline-offset: 2px; }
+.autoBtn:disabled { cursor: not-allowed; opacity: .62; }
+.secondary.autoBtn { background: #fff !important; color: #334155 !important; border: 1px solid #d9e2ec !important; box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important; }
+.secondary.autoBtn:hover:not(:disabled) { background: #f8fafc !important; color: #075985 !important; border-color: #b6d4e5 !important; box-shadow: 0 3px 8px rgba(15, 23, 42, .08) !important; }
 .autoTag { background: #e0f2fe !important; color: #0369a1 !important; }
 .autoRegNo { background: #f1f5f9; padding: 4px 10px; border-radius: 6px; letter-spacing: .6px; font-family: monospace; font-size: 13px; color: #0f172a; border: 1px solid #e2e8f0; }
 .customerProfileCard { width: min(620px, 100%); }
@@ -31,6 +36,141 @@
 .customerLoanMeta > span { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: #64748b; font-size: 10px; font-weight: 700; }
 .customerLoanMeta strong { width: 100%; padding-left: 19px; color: #0f172a; font-size: 12px; }
 .customerLoanEmpty { padding: 16px; border: 1px dashed #cbd5e1; border-radius: 10px; color: #64748b; font-size: 12px; text-align: center; }
+
+/* Auto customer profile dialog */
+.autoCustomerModal { z-index: 1200; padding: 22px; background: rgba(9, 24, 39, .62); backdrop-filter: blur(7px); }
+.autoCustomerDialog { display: flex; flex-direction: column; width: min(1020px, 96vw); max-height: min(900px, 92vh); overflow: hidden; border: 1px solid rgba(220, 233, 242, .9); border-radius: 20px; background: #f5f8fb; box-shadow: 0 30px 85px rgba(4, 17, 31, .34); animation: autoScaleIn .2s cubic-bezier(.16, 1, .3, 1); }
+.autoCustomerDialogHero { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 23px 27px; color: #fff; background: radial-gradient(ellipse at 80% 0%, rgba(77, 190, 206, .26), transparent 38%), linear-gradient(115deg, #122f4b, #145570); }
+.autoCustomerDialogIdentity { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.autoCustomerDialogAvatar { display: grid; flex: 0 0 auto; place-items: center; width: 52px; height: 52px; border: 1px solid rgba(177, 227, 234, .35); border-radius: 16px; background: rgba(255, 255, 255, .11); color: #bcf2f0; }
+.autoCustomerDialogTitle > span { color: #9fd8df; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; }
+.autoCustomerDialogTitle h2 { margin: 3px 0 2px; color: #fff; font: 800 23px var(--font-heading); letter-spacing: -.4px; }
+.autoCustomerDialogTitle small { color: #c0d5df; font-size: 11px; }
+.autoCustomerDialogClose { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(226, 241, 247, .2); border-radius: 10px; background: rgba(255, 255, 255, .08); color: #e7f5f8; cursor: pointer; transition: all .15s ease; }
+.autoCustomerDialogClose:hover { border-color: rgba(255, 255, 255, .4); background: rgba(255, 255, 255, .16); }
+.autoCustomerDialogBody { overflow: auto; padding: 22px 26px 28px; }
+.autoCustomerInfoSection, .autoCustomerLoansSection { margin-bottom: 22px; }
+.autoCustomerSectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.autoCustomerSectionHeading > div > span { color: #13839a; font-size: 8.5px; font-weight: 800; letter-spacing: 1.2px; }
+.autoCustomerSectionHeading h3 { margin: 2px 0 0; color: #1a354e; font: 800 16px var(--font-heading); }
+.autoCustomerSectionCount { padding: 5px 9px; border: 1px solid #dce7ee; border-radius: 999px; background: #fff; color: #678093; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.autoCustomerInfoGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.autoCustomerInfoItem { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 12px; border: 1px solid #e1e9ef; border-radius: 12px; background: #fff; box-shadow: 0 2px 7px rgba(21, 49, 72, .025); }
+.autoCustomerInfoIcon { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #edf7f9; color: #16849a; }
+.autoCustomerInfoText { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.autoCustomerInfoText small { color: #8798a7; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+.autoCustomerInfoText strong, .autoCustomerInfoText a { overflow-wrap: anywhere; color: #2a455c; font-size: 11.5px; font-weight: 650; text-decoration: none; }
+.autoCustomerInfoText a:hover { color: #087c98; text-decoration: underline; }
+.autoCustomerLoanList { display: grid; gap: 13px; }
+.autoCustomerLoanCard { overflow: hidden; border: 1px solid #dfe8ee; border-radius: 15px; background: #fff; box-shadow: 0 5px 16px rgba(21, 49, 72, .045); }
+.autoCustomerLoanCardHead { display: flex; align-items: center; gap: 12px; padding: 15px 17px; border-bottom: 1px solid #eaf0f4; background: linear-gradient(100deg, #fff, #f8fbfd); }
+.autoCustomerLoanIcon { display: grid; flex: 0 0 auto; place-items: center; width: 39px; height: 39px; border: 1px solid #d7eaf0; border-radius: 12px; background: #eef8fa; color: #117f96; }
+.autoCustomerVehicle { flex: 1; min-width: 0; }
+.autoCustomerVehicle > span { color: #8b9ba9; font-size: 8px; font-weight: 800; letter-spacing: 1px; }
+.autoCustomerVehicle h4 { margin: 1px 0 2px; overflow: hidden; color: #19364f; font: 800 14px var(--font-heading); text-overflow: ellipsis; white-space: nowrap; }
+.autoCustomerVehicle small { color: #71879a; font-size: 10px; }
+.autoCustomerStatus { padding: 5px 9px; border: 1px solid #c8ead7; border-radius: 999px; background: #effaf4; color: #248452; font-size: 9px; font-weight: 800; letter-spacing: .4px; }
+.autoCustomerStatus.completed, .autoCustomerStatus.closed { border-color: #dce4ea; background: #f2f5f7; color: #667b8b; }
+.autoCustomerLoanStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 13px 16px 0; }
+.autoCustomerLoanMetric { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 10px; border: 1px solid #e8eef2; border-radius: 10px; background: #fbfcfd; }
+.autoCustomerLoanMetric > span { display: flex; align-items: center; gap: 5px; color: #8294a3; font-size: 9px; font-weight: 700; }
+.autoCustomerLoanMetric > span svg { color: #14849a; }
+.autoCustomerLoanMetric > strong { overflow: hidden; color: #213e56; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.autoCustomerLoanMeta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 12px 16px 15px; }
+.autoCustomerLoanMeta > span, .autoCustomerFeeGrid > span, .autoCustomerPeopleGrid > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.autoCustomerLoanMeta small, .autoCustomerFeeGrid small, .autoCustomerPeopleGrid small { color: #8c9ba8; font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .25px; }
+.autoCustomerLoanMeta strong, .autoCustomerFeeGrid strong, .autoCustomerPeopleGrid strong { overflow-wrap: anywhere; color: #40596e; font-size: 10.5px; font-weight: 700; }
+.autoCustomerLoanDetails { border-top: 1px solid #eaf0f4; background: #fbfcfd; }
+.autoCustomerLoanDetails summary { padding: 11px 16px; color: #147a91; font-size: 10.5px; font-weight: 750; cursor: pointer; list-style-position: inside; }
+.autoCustomerLoanDetails summary:hover { background: #f1f8fa; }
+.autoCustomerExpandedContent { display: grid; gap: 8px; padding: 2px 16px 16px; }
+.autoCustomerExpandedContent h5 { display: flex; align-items: center; gap: 7px; margin: 8px 0 2px; color: #26435a; font: 750 11px var(--font-heading); }
+.autoCustomerExpandedContent h5 > span { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px; border-radius: 6px; background: #eaf3f7; color: #557286; font: 700 9px var(--font-main); }
+.autoCustomerFeeGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.autoCustomerFeeGrid > span, .autoCustomerPeopleGrid > span { padding: 9px; border: 1px solid #e7edf1; border-radius: 9px; background: #fff; }
+.autoCustomerPeopleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.autoCustomerDocumentList { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.autoCustomerDocumentList a { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px; border: 1px solid #e1eaf0; border-radius: 9px; background: #fff; color: #16809a; text-decoration: none; }
+.autoCustomerDocumentList a:hover { border-color: #b7d7e2; background: #f2f9fb; }
+.autoCustomerDocumentList a > span { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.autoCustomerDocumentList a strong { color: #2e4b62; font-size: 10px; }
+.autoCustomerDocumentList a small { overflow: hidden; color: #8495a3; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.autoCustomerDataTableWrap { overflow-x: auto; border: 1px solid #e2eaf0; border-radius: 10px; background: #fff; }
+.autoCustomerDataTable { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 10px; }
+.autoCustomerDataTable th { padding: 9px 10px; background: #f3f7f9; color: #718698; text-align: left; font-size: 8px; letter-spacing: .4px; text-transform: uppercase; }
+.autoCustomerDataTable td { padding: 8px 10px; border-top: 1px solid #edf1f4; color: #415a6e; white-space: nowrap; }
+.autoCustomerSubtle { margin: 0; color: #8797a5; font-size: 10px; }
+.autoCustomerLoading, .autoCustomerNoLoans { display: flex; align-items: center; justify-content: center; gap: 9px; padding: 22px; border: 1px dashed #d2e0e8; border-radius: 12px; background: #fff; color: #718698; font-size: 11px; }
+.autoCustomerNoLoans { flex-direction: column; gap: 5px; color: #7f93a3; }
+.autoCustomerNoLoans svg { color: #16849a; }
+.autoCustomerNoLoans strong { color: #37556c; font-size: 12px; }
+.autoCustomerNoLoans span { font-size: 10px; }
+.autoCustomerLoadingSpinner { width: 15px; height: 15px; border: 2px solid #d9e8ee; border-top-color: #16849a; border-radius: 50%; animation: autoSpin .7s linear infinite; }
+@media (max-width: 720px) {
+  .autoCustomerModal { padding: 8px; }
+  .autoCustomerDialog { width: 100%; max-height: 96vh; border-radius: 15px; }
+  .autoCustomerDialogHero { padding: 17px; }
+  .autoCustomerDialogBody { padding: 16px 13px 20px; }
+  .autoCustomerInfoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoCustomerLoanStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoCustomerLoanMeta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoCustomerFeeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoCustomerPeopleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Larger, always-visible Auto customer loan details */
+.autoCustomerDialog { width: min(1120px, 97vw); max-height: 95vh; }
+.autoCustomerDialogHero { padding: 26px 30px; }
+.autoCustomerDialogAvatar { width: 58px; height: 58px; }
+.autoCustomerDialogTitle > span { font-size: 10px; }
+.autoCustomerDialogTitle h2 { font-size: 27px; }
+.autoCustomerDialogTitle small { font-size: 13px; }
+.autoCustomerDialogBody { padding: 26px 30px 34px; }
+.autoCustomerSectionHeading > div > span { font-size: 10px; }
+.autoCustomerSectionHeading h3 { font-size: 19px; }
+.autoCustomerSectionCount { font-size: 12px; }
+.autoCustomerInfoGrid { gap: 11px; }
+.autoCustomerInfoItem { padding: 14px; }
+.autoCustomerInfoIcon { width: 34px; height: 34px; }
+.autoCustomerInfoText small { font-size: 10px; }
+.autoCustomerInfoText strong, .autoCustomerInfoText a { font-size: 13px; }
+.autoCustomerLoanCardHead { padding: 18px 20px; }
+.autoCustomerLoanIcon { width: 44px; height: 44px; }
+.autoCustomerVehicle > span { font-size: 9px; }
+.autoCustomerVehicle h4 { font-size: 17px; }
+.autoCustomerVehicle small { font-size: 12px; }
+.autoCustomerStatus { font-size: 10px; }
+.autoCustomerLoanStats { gap: 10px; padding: 16px 19px 0; }
+.autoCustomerLoanMetric { gap: 7px; padding: 13px; }
+.autoCustomerLoanMetric > span { font-size: 11px; }
+.autoCustomerLoanMetric > strong { font-size: 15px; }
+.autoCustomerLoanMeta { gap: 13px; padding: 15px 19px 18px; }
+.autoCustomerLoanMeta small, .autoCustomerFeeGrid small, .autoCustomerPeopleGrid small { font-size: 10px; }
+.autoCustomerLoanMeta strong, .autoCustomerFeeGrid strong, .autoCustomerPeopleGrid strong { font-size: 12px; }
+.autoCustomerLoanDetails { border-top: 0; background: #fff; }
+.autoCustomerExpandedContent { gap: 10px; padding: 12px 19px 20px; border-top: 1px solid #eaf0f4; }
+.autoCustomerExpandedContent h5 { margin-top: 11px; font-size: 13px; }
+.autoCustomerExpandedContent h5 > span { min-width: 22px; height: 20px; font-size: 10px; }
+.autoCustomerFeeGrid, .autoCustomerPeopleGrid { gap: 9px; }
+.autoCustomerFeeGrid > span, .autoCustomerPeopleGrid > span { padding: 11px; }
+.autoCustomerDocumentList a { padding: 12px; }
+.autoCustomerDocumentList a strong { font-size: 12px; }
+.autoCustomerDocumentList a small { font-size: 11px; }
+.autoCustomerDataTable { font-size: 12px; }
+.autoCustomerDataTable th { padding: 11px 12px; font-size: 9px; }
+.autoCustomerDataTable td { padding: 10px 12px; font-size: 11px; }
+.autoCustomerSubtle, .autoCustomerLoading { font-size: 12px; }
+.autoCustomerNoLoans strong { font-size: 14px; }
+.autoCustomerNoLoans span { font-size: 12px; }
+@media (max-width: 720px) {
+  .autoCustomerDialogHero { padding: 18px; }
+  .autoCustomerDialogBody { padding: 18px 14px 22px; }
+  .autoCustomerDialogTitle h2 { font-size: 23px; }
+  .autoCustomerInfoText strong, .autoCustomerInfoText a { font-size: 12px; }
+  .autoCustomerLoanMeta { gap: 10px; padding-right: 14px; padding-left: 14px; }
+  .autoCustomerLoanStats { padding-right: 14px; padding-left: 14px; }
+  .autoCustomerExpandedContent { padding-right: 14px; padding-left: 14px; }
+}
 
 /* === CLOSE LOAN EARLY MODAL (MODERN & SIMPLE) === */
 .closeLoanOverlay {
@@ -348,6 +488,181 @@
   box-sizing: border-box;
 }
 
+.detailsCard.autoLoanDossier {
+  width: min(94vw, 1120px) !important;
+  max-width: 1120px !important;
+  max-height: 92vh;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "identity identity"
+    "summary summary"
+    "vehicle documents"
+    "broker broker"
+    "schedule schedule";
+  align-content: start;
+  gap: 14px 18px;
+  padding: 22px;
+  border: 1px solid #d8e2e9;
+  border-radius: 22px;
+  background: #f3f7f9;
+  box-shadow: 0 30px 90px rgba(8, 24, 39, .32);
+}
+.detailsCard.autoLoanDossier > button.close { position: absolute; top: 12px; right: 12px; z-index: 3; width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid #dce6eb; border-radius: 9px; background: #fff; color: #4e6474; cursor: pointer; }
+.autoLoanAgreementHeader {
+  grid-area: identity;
+  position: relative;
+  display: flex;
+  min-height: 166px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 27px 30px;
+  margin: 0;
+  border: 1px solid #d8e5eb;
+  border-radius: 19px;
+  background: radial-gradient(circle at 94% 0%, rgba(181, 226, 221, .42), transparent 30%), linear-gradient(112deg, #edf4fb 0%, #f3f8fc 55%, #e9f6f3 100%);
+  color: #20394d;
+  box-shadow: 0 8px 22px rgba(15, 42, 66, .08);
+}
+.autoLoanAgreementIdentity { min-width: 0; padding-top: 0; }
+.autoLoanAgreementIdentity .autoBadgeTag {
+  color: #087e8b;
+  background: #dff3f5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+}
+.autoLoanAgreementIdentity h2 {
+  margin: 8px 0 14px;
+  color: #18334d;
+  font-size: clamp(24px, 2.5vw, 32px);
+  line-height: 1.08;
+  letter-spacing: -.7px;
+  overflow-wrap: anywhere;
+}
+.autoLoanBorrowerMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.autoLoanBorrowerMeta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid #dce7ed;
+  border-radius: 9px;
+  background: rgba(255,255,255,.78);
+  color: #607789;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.autoLoanBorrowerMeta svg, .autoLoanBorrowerAddress svg { color: #16858a; flex: 0 0 auto; }
+.autoLoanBorrowerMeta b, .autoLoanBorrowerMeta a { color: #1d4057; }
+.autoLoanBorrowerAddress { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; color: #607789; font-size: 11px; line-height: 1.5; }
+.autoLoanAgreementStatus {
+  flex: 0 0 auto;
+  position: static;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 7px 11px;
+  border: 1px solid #b9e7d3;
+  border-radius: 999px;
+  background: #e5f8ee;
+  color: #13734e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .55px;
+}
+.autoLoanDossier .loanSummaryGrid {
+  grid-area: summary;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+.autoLoanDossier .loanSummaryMetric {
+  min-width: 0;
+  padding: 13px 12px;
+  border: 1px solid #e2eaf0;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff, #f8fbfd);
+  box-shadow: 0 3px 10px rgba(15, 42, 66, .035);
+}
+.autoLoanDossier .loanSummaryMetric.principalMetric { border-top: 3px solid #3d76b5; }
+.autoLoanDossier .loanSummaryMetric.rateMetric { border-top: 3px solid #8b72c7; }
+.autoLoanDossier .loanSummaryMetric.interestMetric { border-top: 3px solid #378f9a; }
+.autoLoanDossier .loanSummaryMetric.tenureMetric { border-top: 3px solid #71869a; }
+.autoLoanDossier .loanSummaryLabel { color: #687d8f; font-size: 11px; font-weight: 700; }
+.autoLoanDossier .loanSummaryMetric strong { display: block; margin-top: 8px; color: #18334d; font-size: clamp(15px, 1.45vw, 20px); line-height: 1.15; overflow-wrap: anywhere; }
+.autoLoanDossier .loanSummaryMetric small { display: block; margin-top: 4px; color: #8493a1; font-size: 10px; }
+.autoLoanDossier .loanSummaryMetric.collected { border-color: #bde8d4; background: linear-gradient(145deg, #fff, #f0fbf5); }
+.autoLoanDossier .loanSummaryMetric.collected strong { color: #14805b; }
+.autoLoanDossier .loanSummaryMetric.remaining { border-color: #f1dfc4; background: linear-gradient(145deg, #fff, #fffaf2); }
+.autoLoanDossier .loanSummaryMetric.remaining strong { color: #a16207; }
+.autoLoanDossier .loanSummaryLabel > span { color: #16858a; }
+.autoLoanDossier .autoLoanBrokerSection { grid-area: broker; margin: 0; }
+.autoLoanDossier .autoLoanVehicleSection { grid-area: vehicle; margin: 0; }
+.autoLoanDossier .autoLoanDocumentsSection { grid-area: documents; margin: 0; }
+.autoLoanSection {
+  margin: 13px 0;
+  padding: 17px 18px;
+  border: 1px solid #e1e9ef;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 42, 66, .035);
+}
+.autoLoanSectionHeader { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; }
+.autoLoanSectionHeader h4 { display: flex; align-items: center; gap: 8px; margin: 3px 0 0; color: #18334d; font-size: 15px; }
+.autoLoanSectionHeader h4 svg { color: #16858a; }
+.autoLoanSectionEyebrow { color: #8294a3; font-size: 9px; font-weight: 800; letter-spacing: .95px; }
+.autoLoanVehicleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.autoVehicleEditForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.autoVehicleEditForm > label { display: flex; min-width: 0; flex-direction: column; gap: 6px; color: #627789; font-size: 10px; font-weight: 750; letter-spacing: .35px; text-transform: uppercase; }
+.autoVehicleEditForm > label .autoInput { width: 100%; min-height: 40px; box-sizing: border-box; margin: 0; padding: 9px 11px; border: 1px solid #d5e0e7; border-radius: 9px; background: #fff; color: #1e3448; font-size: 12px; box-shadow: inset 0 1px 2px rgba(19, 48, 70, .025); }
+.autoVehicleEditForm > label .autoInput:focus { border-color: #5caeb2; outline: 0; box-shadow: 0 0 0 3px rgba(22, 133, 138, .12); }
+.autoVehicleEditActions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 3px; border-top: 1px solid #edf1f4; }
+.autoVehicleEditActions .autoBtn { min-height: 36px; border-radius: 8px; padding: 7px 12px; font-size: 11px; }
+.autoLoanVehicleItem {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid #e7edf1;
+  border-radius: 10px;
+  background: #f8fafb;
+}
+.autoLoanVehicleItem > span { display: inline-flex; align-items: center; gap: 6px; color: #718596; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px; }
+.autoLoanVehicleItem > span svg { color: #16858a; }
+.autoLoanVehicleItem > b { overflow-wrap: anywhere; color: #233d51; font-size: 12px; }
+.autoLoanDocumentsHeader { margin-bottom: 12px; }
+.autoLoanDocumentCount { padding: 5px 9px; border-radius: 999px; background: #eef4f7; color: #647789; font-size: 10px; font-weight: 750; }
+.autoLoanUploadActions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.autoLoanUploadActions label { min-height: 34px; border-radius: 8px; }
+.autoLoanUploadActions label.isUploading { border-color: #8ac9c5; background: #eefafa; color: #116f76; }
+.loanUploadProgressNotice { display: flex; align-items: center; gap: 8px; margin: -3px 0 10px; padding: 9px 11px; border: 1px solid #cce5e5; border-radius: 9px; background: #f0fafa; color: #276b74; font-size: 11px; font-weight: 650; }
+.autoUploadSpinner { flex: 0 0 auto; animation: autoUploadSpin .9s linear infinite; }
+@keyframes autoUploadSpin { to { transform: rotate(360deg); } }
+.autoLoanEmptyDocuments {
+  display: flex;
+  min-height: 88px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px dashed #cbd8e0;
+  border-radius: 11px;
+  background: #f9fbfc;
+  color: #526779;
+  font-size: 12px;
+  font-weight: 650;
+}
+.autoLoanEmptyDocuments svg { color: #8ba0ae; }
+.autoLoanEmptyDocuments small { color: #8a9aa7; font-size: 10px; font-weight: 450; }
+.autoLoanDocumentsSection > div[style*="grid-template-columns"] > div { border-color: #e2eaf0 !important; border-radius: 10px !important; }
+.autoLoanDossier > .card.tableWrap { grid-area: schedule; min-width: 0; overflow: auto; margin-top: 0 !important; border: 1px solid #e0e8ee; border-radius: 14px; box-shadow: none; }
+
 .autoFinanceContainer .detailsCard > .tableWrap {
   width: 100%;
   max-width: 100%;
@@ -412,6 +727,69 @@
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
 }
 
+.autoNewLoanForm {
+  width: min(960px, 94vw) !important;
+  max-width: 960px !important;
+  max-height: 92vh;
+  padding: 0 28px 18px;
+  overflow: auto;
+  border: 1px solid #d8e4eb;
+  border-top: 0;
+  border-radius: 18px;
+  background: #f7f9fb;
+}
+.autoNewLoanTitle {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -28px 20px;
+  padding: 25px 64px 20px 28px;
+  border: 0;
+  border-bottom: 1px solid #dce7ec;
+  background: linear-gradient(110deg, #eaf3fa 0%, #f1f7fb 58%, #e7f5f1 100%);
+}
+.autoNewLoanTitle .autoBadgeTag { color: #087e8b; background: #d9eff1; }
+.autoNewLoanTitle h2 { margin: 6px 0 3px; color: #17354c; font-size: 24px; }
+.autoNewLoanTitle p { color: #647a8b; font-size: 12px; }
+.autoNewLoanForm .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 16px; }
+.autoNewLoanForm .formGrid > .formSectionHeader { grid-column: 1 / -1; margin: 10px 0 0; padding: 9px 12px; border: 1px solid #e2eaf0; border-left: 3px solid #17868a; border-radius: 9px; background: #fff; color: #28465b; font-size: 12px; }
+.autoNewLoanForm .formGrid > label { display: flex; min-width: 0; flex-direction: column; gap: 6px; color: #526a7c; font-size: 11px; font-weight: 700; }
+.autoNewLoanForm .formGrid > label > input,
+.autoNewLoanForm .formGrid > label > select,
+.autoNewLoanForm .formGrid > label > textarea { width: 100%; min-height: 42px; box-sizing: border-box; border: 1px solid #d4e0e7; border-radius: 9px; background: #fff; color: #1f384c; font-size: 12px; }
+.autoNewLoanForm .formGrid > label > textarea { min-height: 76px; }
+.autoNewLoanForm .formGrid > .wide { grid-column: 1 / -1; }
+.loanCustomerPicker, .loanSubFormGrid, .loanFeesGrid, .loanDocumentPickerGrid, .loanDisbursementPreview, .loanEmiPreview { grid-column: 1 / -1; min-width: 0; }
+.loanSubFormGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.loanSubFormGrid > label, .loanFeesGrid > label { display: flex; min-width: 0; flex-direction: column; gap: 6px; color: #5b7182; font-size: 10px; font-weight: 700; }
+.loanSubFormGrid input, .loanFeesGrid input { width: 100%; min-height: 39px; box-sizing: border-box; border: 1px solid #d7e2e8; border-radius: 8px; padding: 8px 10px; background: #fff; color: #1e3448; font-size: 12px; }
+.loanFeesGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; padding: 14px; border: 1px solid #e2eaf0; border-radius: 12px; background: #fff; }
+.loanDocumentPickerGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; border: 1px solid #e2eaf0; border-radius: 12px; background: #fff; }
+.loanDocumentUploadCard { display: flex; min-width: 0; flex-direction: column; gap: 7px; padding: 11px; border: 1px solid #e4ebef; border-radius: 10px; background: #fbfcfd; }
+.loanDocumentUploadLabel { color: #516a7c; font-size: 10px; font-weight: 750; letter-spacing: .25px; text-transform: none; }
+.loanDocumentUploadButton { position: relative; display: flex; min-width: 0; min-height: 38px; align-items: center; gap: 8px; overflow: hidden; padding: 0 10px; border: 1px solid #cbdde5; border-radius: 8px; background: #fff; color: #14758a; cursor: pointer; text-transform: none; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+.loanDocumentUploadButton:hover { border-color: #62aeb5; background: #f3fbfb; box-shadow: 0 3px 9px rgba(20, 117, 138, .09); }
+.loanDocumentUploadButton > svg { flex: 0 0 auto; }
+.loanDocumentUploadButton > span { overflow: hidden; color: #446073; font-size: 10.5px; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.loanDocumentUploadButton.hasFile { border-color: #aadbc4; background: #f1fbf5; color: #16805a; }
+.loanDocumentUploadButton.hasFile > span { color: #176847; font-weight: 650; }
+.loanDocumentUploadButton input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.loanDocumentUploadButton:focus-within { outline: 3px solid rgba(22, 133, 138, .15); border-color: #16858a; }
+.autoNewLoanForm .formGrid .loanDocumentUploadButton { display: flex !important; align-items: center; justify-content: flex-start; text-align: left; text-transform: none !important; font: 600 11px/1.2 var(--font-main); }
+.autoNewLoanForm .formGrid .loanDocumentUploadButton > span { display: block; flex: 1; min-width: 0; margin: 0; text-align: left; text-transform: none !important; }
+.autoNewLoanForm .formGrid .loanDocumentUploadButton > svg { display: block; margin: 0; }
+.autoNewLoanForm .formGrid .loanDocumentUploadButton input[type="file"] { display: block; z-index: 2; margin: 0; padding: 0; border: 0; background: transparent; }
+.loanDisbursementPreview { padding: 15px; border: 1px solid #dce8ed; border-radius: 12px; background: linear-gradient(120deg, #fff, #f2f8fb); }
+.autoNewLoanForm .loanEmiPreview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.autoNewLoanForm > button[type="submit"] { position: sticky; bottom: 0; z-index: 4; min-height: 48px; margin-top: 16px; border-radius: 10px; box-shadow: 0 -8px 20px #f7f9fb, 0 6px 14px rgba(2, 132, 199, .16); }
+@media (max-width: 680px) {
+  .autoNewLoanForm { padding: 0 16px 14px; }
+  .autoNewLoanTitle { margin: 0 -16px 16px; padding: 22px 52px 17px 16px; }
+  .autoNewLoanForm .formGrid, .loanSubFormGrid { grid-template-columns: 1fr; }
+  .loanFeesGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoNewLoanForm .loanEmiPreview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .metric.autoMetric {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   border-radius: 12px;
@@ -471,6 +849,225 @@
   animation: autoSpin 0.65s linear infinite;
   display: inline-block;
   vertical-align: middle;
+}
+
+/* Customer directory */
+.autoCustomersHero { position: relative; isolation: isolate; display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 22px; padding: 30px 34px; overflow: hidden; border: 1px solid #dce9f3; border-radius: 20px; background: radial-gradient(ellipse at 88% 10%, rgba(56, 189, 248, .17), transparent 35%), linear-gradient(120deg, #f8fbff, #eff7fb 65%, #edf8f8); box-shadow: 0 10px 28px rgba(15, 42, 66, .06); }
+.autoCustomersHero::after { position: absolute; z-index: -1; content: ""; width: 210px; height: 210px; right: 10%; top: -145px; border: 1px solid rgba(2, 132, 199, .12); border-radius: 50%; box-shadow: 0 0 0 24px rgba(2, 132, 199, .025), 0 0 0 48px rgba(2, 132, 199, .02); }
+.autoCustomersHeroCopy h2 { margin: 9px 0 6px; color: #102b46; font: 800 clamp(25px, 2.3vw, 32px) var(--font-heading); letter-spacing: -.8px; }
+.autoCustomersHeroCopy p { max-width: 560px; margin: 0; color: #62768a; font-size: 13.5px; line-height: 1.6; }
+.autoCustomersHero .autoBadgeTag { padding: 6px 10px; border: 1px solid #cde9f5; border-radius: 999px; background: #e8f6fc; color: #087e9b; font-size: 9.5px; letter-spacing: 1px; }
+.autoCustomersTotal { display: flex; align-items: center; gap: 12px; min-width: 174px; padding: 14px 17px; border: 1px solid rgba(195, 220, 234, .85); border-radius: 14px; background: rgba(255, 255, 255, .78); box-shadow: 0 4px 14px rgba(27, 68, 94, .05); }
+.autoCustomersHeroActions { display: flex; align-items: center; gap: 10px; }
+.autoCustomerExport { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 15px; border: 1px solid #c9dbe5; border-radius: 10px; background: #fff; color: #176783; font: 700 11.5px var(--font-main); cursor: pointer; box-shadow: 0 3px 9px rgba(20, 48, 76, .07); transition: all .16s ease; white-space: nowrap; }
+.autoCustomerExport:hover { border-color: #83b6ca; background: #f3f9fb; color: #0f5b77; transform: translateY(-1px); box-shadow: 0 5px 12px rgba(20, 48, 76, .1); }
+.autoCustomerExport:focus-visible { outline: 3px solid rgba(2, 132, 199, .3); outline-offset: 2px; }
+.autoFinanceContainer .content.autoModulePage { max-width: none; padding: 30px clamp(20px, 3vw, 44px) 42px; }
+.autoModuleHero { position: relative; isolation: isolate; display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 22px; padding: 27px 32px; overflow: hidden; border: 1px solid #dce9f3; border-radius: 18px; background: radial-gradient(ellipse at 88% 10%, rgba(56, 189, 248, .15), transparent 35%), linear-gradient(120deg, #f8fbff, #eff7fb 65%, #edf8f8); box-shadow: 0 9px 24px rgba(15, 42, 66, .05); }
+.autoModuleHero::after { position: absolute; z-index: -1; content: ""; width: 180px; height: 180px; right: 10%; top: -128px; border: 1px solid rgba(2, 132, 199, .1); border-radius: 50%; box-shadow: 0 0 0 22px rgba(2, 132, 199, .025), 0 0 0 44px rgba(2, 132, 199, .018); }
+.autoModuleHero h2 { margin: 8px 0 5px; color: #102b46; font: 800 clamp(24px, 2vw, 30px) var(--font-heading); letter-spacing: -.7px; }
+.autoModuleHero p { margin: 0; color: #687e91; font-size: 13px; line-height: 1.6; }
+.autoModuleHero .autoBadgeTag { padding: 6px 10px; border: 1px solid #cde9f5; border-radius: 999px; background: #e8f6fc; color: #087e9b; font-size: 9px; letter-spacing: 1px; }
+.autoModuleHeroActions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
+.autoFinanceContainer .metric.autoMetric { position: relative; border: 1px solid #e2e8ee; border-top: 1px solid #e2e8ee !important; border-radius: 15px; background: #fff !important; box-shadow: 0 3px 7px rgba(15, 42, 66, .045), 0 12px 24px -15px rgba(15, 42, 66, .2); }
+.autoFinanceContainer .metric.autoMetric > span { color: #718195; font-size: 10px; font-weight: 750; letter-spacing: .35px; }
+.autoFinanceContainer .metric.autoMetric > b { color: #18334d; font-size: clamp(21px, 2vw, 27px); letter-spacing: -.55px; }
+.autoFinanceContainer .metric.autoMetric.blue > b { color: #2e67ad; }
+.autoFinanceContainer .metric.autoMetric.green > b { color: #27825c; }
+.autoFinanceContainer .metric.autoMetric.teal > b { color: #187c85; }
+.autoFinanceContainer .metric.autoMetric.orange > b { color: #b46b1e; }
+.autoFinanceContainer .metric.autoMetric.red > b { color: #bd4e49; }
+.autoFinanceContainer .metric.autoMetric:hover { transform: translateY(-2px); border-color: #cbd7e0; box-shadow: 0 5px 10px rgba(15, 42, 66, .06), 0 16px 28px -16px rgba(15, 42, 66, .23); }
+
+/* File deletion confirmation */
+.autoDeleteOverlay { z-index: 2200; background: rgba(12, 27, 42, .58); backdrop-filter: blur(5px); }
+.autoDeleteDialog { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 15px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 26px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 20px; background: #fff; box-shadow: 0 28px 75px rgba(8, 25, 43, .28), 0 4px 12px rgba(8, 25, 43, .1); animation: autoScaleIn .18s cubic-bezier(.16, 1, .3, 1); }
+.autoDeleteIcon { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid #fecaca; border-radius: 15px; background: #fff1f0; color: #d34338; }
+.autoDeleteCopy { min-width: 0; }
+.autoDeleteEyebrow { color: #c24136; font-size: 9px; font-weight: 800; letter-spacing: 1.2px; }
+.autoDeleteCopy h3 { margin: 5px 0 7px; color: #172f43; font: 800 19px var(--font-heading); letter-spacing: -.3px; }
+.autoDeleteCopy p { margin: 0; color: #6d7d8b; font-size: 12px; line-height: 1.6; }
+.autoDeleteFile { display: flex; align-items: center; gap: 9px; min-width: 0; margin-top: 17px; padding: 11px 12px; border: 1px solid #e7edf2; border-radius: 11px; background: #f7f9fb; color: #75899a; }
+.autoDeleteFile strong { overflow: hidden; color: #344e63; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.autoDeleteActions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; margin-top: 23px; padding-top: 16px; border-top: 1px solid #edf1f4; }
+.autoDeleteCancel, .autoDeleteConfirm { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 0 14px; border-radius: 9px; font: 700 11px var(--font-main); cursor: pointer; transition: all .16s ease; }
+.autoDeleteCancel { border: 1px solid #d9e2e9; background: #fff; color: #536a7d; }
+.autoDeleteCancel:hover { border-color: #b9cbd7; background: #f7fafc; }
+.autoDeleteConfirm { border: 1px solid #c9362b; background: linear-gradient(135deg, #e34d41, #c9362b); color: #fff; box-shadow: 0 4px 10px rgba(201, 54, 43, .2); }
+.autoDeleteConfirm:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(201, 54, 43, .28); }
+.autoDeleteCancel:focus-visible, .autoDeleteConfirm:focus-visible { outline: 3px solid rgba(2, 132, 199, .3); outline-offset: 2px; }
+.autoFinanceContainer .metricGroupHeading { margin: 26px 0 13px; padding-left: 12px; border-left: 3px solid #1481a0; }
+.autoFinanceContainer .metricGroupHeading h3 { color: #19354e; }
+.autoFinanceContainer .metricGroupHeading p { color: #7b8d9e; }
+.autoVehicleMetrics { gap: 13px; }
+.autoLoansToolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 0 0 15px; padding: 12px; border: 1px solid #e3eaf1; border-radius: 14px; background: #fff; box-shadow: 0 4px 15px rgba(20, 48, 76, .04); }
+.autoLoanTabs { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid #e8edf2; border-radius: 11px; background: #f5f8fa; }
+.autoLoanTabs button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 8px; background: transparent; color: #738596; font: 700 11px var(--font-main); cursor: pointer; transition: all .16s ease; white-space: nowrap; }
+.autoLoanTabs button:hover { color: #24465f; }
+.autoLoanTabs button.active { background: #fff; color: #126d88; box-shadow: 0 2px 7px rgba(20, 48, 76, .1); }
+.autoLoanFilters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+.autoLoanMonth, .autoLoanSearchInput, .autoLoanTypeSelect { box-sizing: border-box; height: 38px; border: 1px solid #dce5ed; border-radius: 9px; background: #fbfdff; color: #40586c; font: 500 11.5px var(--font-main); transition: border-color .16s ease, box-shadow .16s ease; }
+.autoLoanMonth { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; color: #0b8297; }
+.autoLoanMonthInput { width: 112px; border: 0; outline: 0; background: transparent; color: #40586c; font: 500 11.5px var(--font-main); }
+.autoClearIconBtn { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #8293a4; cursor: pointer; }
+.autoClearIconBtn:hover { background: #edf3f6; color: #304e66; }
+.autoLoanSearchWrap { min-width: 220px; max-width: 340px; flex: 1; }
+.autoLoanSearchInput { width: 100%; padding: 0 11px; }
+.autoLoanTypeSelect { padding: 0 10px; font-weight: 650; }
+.autoLoanMonth:focus-within, .autoLoanSearchInput:focus, .autoLoanTypeSelect:focus { outline: 0; border-color: #69aeca; box-shadow: 0 0 0 3px rgba(2, 132, 199, .09); }
+.autoLoansTableCard { border-color: #e0e8ef; border-radius: 15px; box-shadow: 0 7px 22px rgba(20, 48, 76, .05); }
+.autoLoansTableCard table th { background: #f7fafc; color: #7b8e9f; font-size: 9px; letter-spacing: .7px; }
+.autoLoansTableCard table td { padding: 5px 8px !important; line-height: 1.2; }
+.autoDashboardLoansTable td { padding: 5px 8px !important; line-height: 1.2; }
+.autoLoanDossier table td { padding-top: 7px; padding-bottom: 7px; line-height: 1.25; }
+.autoLoanDossier table thead th { background: #f3f7fa; color: #607589; font-size: 10px; letter-spacing: .45px; }
+.autoLoanDossier table tbody tr:nth-child(even) { background: #f9fbfc; }
+.autoLoanDossier table tbody tr:hover { background: #f0f9f8; }
+
+@media (max-width: 640px) {
+  .detailsCard.autoLoanDossier { display: block; padding: 14px; }
+  .autoLoanAgreementHeader { min-height: 0; margin-bottom: 14px; padding: 20px 16px; }
+  .autoLoanDossier .loanSummaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoLoanVehicleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autoLoanAgreementHeader { flex-direction: row; align-items: flex-start; }
+  .autoLoanBorrowerMeta { flex-direction: column; align-items: flex-start; }
+  .autoVehicleEditForm { grid-template-columns: 1fr; }
+  .autoVehicleEditActions { grid-column: 1; }
+  .autoLoanSection, .autoLoanDossier .loanSummaryGrid, .autoLoanDossier .autoLoanBrokerSection { margin-bottom: 14px; }
+}
+@media (min-width: 641px) and (max-width: 980px) {
+  .autoLoanDossier .loanSummaryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .autoLoanVehicleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.autoLoansTableCard tbody tr:hover { background: #f6fbfd; }
+.autoLoansTableCard .payButton { border-radius: 8px; padding: 7px 12px; font-size: 11px; box-shadow: 0 3px 8px rgba(15, 23, 42, .1); transition: transform .15s ease, box-shadow .15s ease; }
+.autoLoansTableCard .payButton:hover { transform: translateY(-1px); box-shadow: 0 5px 11px rgba(15, 23, 42, .14); }
+.autoSchemeGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 15px; }
+.autoSchemeCard { padding: 19px; border: 1px solid #e1eaf0; border-radius: 15px; background: linear-gradient(155deg, #fff, #fbfdff); box-shadow: 0 6px 19px rgba(20, 48, 76, .045); transition: transform .18s ease, box-shadow .18s ease; }
+.autoSchemeCard:hover { transform: translateY(-2px); box-shadow: 0 11px 25px rgba(20, 48, 76, .08); }
+.autoSchemeIcon { display: grid; place-items: center; width: 39px; height: 39px; border: 1px solid #d8edf5; border-radius: 12px; background: #edf8fb; color: #087e9b; }
+.autoSchemeName { margin-top: 15px; }
+.autoSchemeName > span { color: #8a9aaa; font-size: 8.5px; font-weight: 800; letter-spacing: 1px; }
+.autoSchemeName h3 { margin: 4px 0 0; color: #19364f; font: 800 17px var(--font-heading); }
+.autoSchemeDetails { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 9px; margin-top: 17px; padding-top: 14px; border-top: 1px solid #edf1f4; }
+.autoSchemeDetails > div > span { display: block; margin-bottom: 6px; color: #8c9aa7; font-size: 9px; font-weight: 650; }
+.autoSchemeDetails strong { color: #344e64; font-size: 11px; }
+.autoSchemeDetails strong small { color: #8495a3; font-size: 9px; font-weight: 600; }
+.autoSchemeDetails .autoSchemeRate { color: #078367; font-size: 16px; }
+.autoSchemeEmpty { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; padding: 55px 20px; border: 1px dashed #cfdae3; border-radius: 16px; background: #fbfdff; text-align: center; }
+.autoSchemeEmpty > div { display: grid; place-items: center; width: 50px; height: 50px; margin-bottom: 12px; border-radius: 15px; background: #eef6fa; color: #6092a6; }
+.autoSchemeEmpty strong { color: #28445d; font-size: 13px; }
+.autoSchemeEmpty p { max-width: 340px; margin: 5px 0 0; color: #8998a6; font-size: 11px; }
+.autoReportsToolbar { align-items: center; padding: 14px; border: 1px solid #e3eaf1; border-radius: 14px; box-shadow: 0 4px 15px rgba(20, 48, 76, .04); }
+.autoReportsToolbar .presetButtons { flex: 0 0 auto; gap: 4px; }
+.autoReportsToolbar .presetButtons button { border-radius: 8px; font-size: 11px; }
+.autoReportsToolbar .presetButtons button.active { background: #087e9b; border-color: #087e9b; box-shadow: 0 3px 8px rgba(8, 126, 155, .23); }
+.autoReportsToolbar > input, .autoReportsToolbar > select, .autoReportsToolbar label input { min-height: 38px; box-sizing: border-box; border-color: #dce5ed; border-radius: 9px; background: #fbfdff; font-size: 11px; }
+.autoReportsToolbar > label { font-size: 10px; }
+.autoReportDownload { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; color: #fff; font: 700 12px var(--font-main); white-space: nowrap; }
+.autoReportsPage .exportBar button { border-color: #d8e3eb; border-radius: 9px; background: #fff; color: #426078; font-size: 11px; }
+.autoReportsPage .card.tableWrap { border-color: #e0e8ef; border-radius: 15px; box-shadow: 0 7px 22px rgba(20, 48, 76, .05); }
+.autoReportsPage .cardHead { border-bottom: 1px solid #edf1f4; }
+.autoReportsPage .cardHead h3 { color: #19364f; }
+
+/* Shared finance sidebar theme */
+.financeLayout > aside { background: linear-gradient(180deg, #101c31 0%, #12243a 52%, #10263a 100%); border-right-color: rgba(131, 179, 204, .15); }
+.financeLayout > aside .menuTitle { margin: 19px 10px 10px; color: #8299ad; font-size: 9px; letter-spacing: 1.65px; }
+.financeLayout > aside .moduleSwitcherContainer { padding: 4px; border: 1px solid rgba(177, 203, 220, .12); border-radius: 12px; background: rgba(5, 15, 29, .42); }
+.financeLayout > aside .moduleToggleBtn { min-height: 36px; border-radius: 8px; color: #a1b3c2; }
+.financeLayout > aside .moduleToggleBtn.active.autoMode { background: linear-gradient(135deg, #147d93, #17618a); color: #fff; box-shadow: 0 4px 12px rgba(4, 91, 124, .28); }
+.financeLayout > aside .menuItemBtn { position: relative; min-height: 42px; margin: 3px 0; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; color: #a4b3c0; font-size: 12.5px; }
+.financeLayout > aside .menuItemBtn i { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(188, 209, 224, .1); border-radius: 9px; background: rgba(255, 255, 255, .045); color: #90a8ba; }
+.financeLayout > aside .menuItemBtn:hover { transform: translateX(2px); border-color: rgba(141, 191, 211, .13); background: rgba(255, 255, 255, .055); color: #e4edf3; }
+.financeLayout > aside .menuItemBtn.active { border-color: rgba(67, 173, 193, .2); border-left: 1px solid rgba(67, 173, 193, .2); border-radius: 10px; background: linear-gradient(100deg, rgba(23, 126, 149, .25), rgba(30, 91, 128, .13)); color: #e7f7fb; box-shadow: inset 3px 0 #49b7c6, 0 4px 12px rgba(0, 0, 0, .1); }
+.financeLayout > aside .menuItemBtn.active i { border-color: rgba(83, 193, 205, .26); background: rgba(42, 158, 174, .16); color: #71d1d8; }
+.financeLayout > aside .sidebarBottom { border-top-color: rgba(160, 190, 209, .12); }
+
+@media (max-width: 760px) {
+  .autoFinanceContainer .content.autoModulePage { padding: 18px 14px 30px; }
+  .autoModuleHero { align-items: flex-start; flex-direction: column; gap: 16px; padding: 22px 20px; }
+  .autoModuleHeroActions { justify-content: flex-start; }
+  .autoLoansToolbar { align-items: stretch; }
+  .autoLoanTabs { width: 100%; box-sizing: border-box; }
+  .autoLoanTabs button { flex: 1; padding: 0 7px; font-size: 10px; }
+  .autoLoanFilters { justify-content: flex-start; }
+  .autoLoanSearchWrap { min-width: 100%; max-width: none; }
+  .autoLoanTypeSelect { flex: 1; }
+  .autoReportsToolbar .presetButtons { width: 100%; }
+  .autoReportsToolbar .presetButtons button { flex: 1; }
+}
+.autoCustomersTotalIcon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #e7f5fb; color: #087e9b; }
+.autoCustomersTotal strong, .autoCustomersTotal small { display: block; }
+.autoCustomersTotal strong { color: #12324d; font: 800 21px var(--font-heading); line-height: 1.1; }
+.autoCustomersTotal small { margin-top: 4px; color: #718397; font-size: 10.5px; font-weight: 600; }
+.autoCustomersToolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 17px; padding: 12px; border: 1px solid #e3eaf1; border-radius: 14px; background: #fff; box-shadow: 0 4px 16px rgba(20, 48, 76, .045); }
+.autoCustomerSearch, .autoCustomerMonth { display: flex; align-items: center; height: 42px; box-sizing: border-box; border: 1px solid #dce5ed; border-radius: 10px; background: #fbfdff; color: #8293a4; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
+.autoCustomerSearch { flex: 1; min-width: 220px; gap: 10px; padding: 0 12px; }
+.autoCustomerSearch:focus-within, .autoCustomerMonth:focus-within { border-color: #69aeca; background: #fff; box-shadow: 0 0 0 3px rgba(2, 132, 199, .1); }
+.autoCustomerSearch input, .autoCustomerMonth input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #243b53; font: 500 12.5px var(--font-main); }
+.autoCustomerSearch input::placeholder { color: #97a6b5; }
+.autoCustomerSearch button, .autoCustomerMonth button { display: grid; flex: 0 0 auto; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #8293a4; cursor: pointer; }
+.autoCustomerSearch button:hover, .autoCustomerMonth button:hover { background: #eef4f8; color: #24445e; }
+.autoCustomerMonth { gap: 8px; padding: 0 10px; color: #0b8297; }
+.autoCustomerMonth > span { color: #718397; font-size: 11px; font-weight: 700; }
+.autoCustomerMonth input { width: 126px; font-size: 12px; }
+.autoSecondaryBtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 13px; border: 1px solid #d9e2ec; border-radius: 9px; background: #fff; color: #475d70; font: 700 11.5px var(--font-main); cursor: pointer; transition: all .16s ease; white-space: nowrap; }
+.autoSecondaryBtn:hover { border-color: #b8d2df; background: #f2f8fb; color: #096e8b; }
+.autoCustomersTableCard { overflow: hidden; border: 1px solid #e0e8ef; border-radius: 16px; background: #fff; box-shadow: 0 8px 24px rgba(20, 48, 76, .055); }
+.autoCustomersTableHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 19px 23px; border-bottom: 1px solid #e9eef3; }
+.autoCustomersTableHeading h3 { margin: 0; color: #18334d; font: 800 15px var(--font-heading); }
+.autoCustomersTableHeading p { margin: 4px 0 0; color: #8493a2; font-size: 11px; }
+.autoCustomersTableHeading > span { padding: 5px 10px; border-radius: 999px; background: #f0f6fa; color: #587287; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.autoCustomersTableScroll { overflow-x: auto; }
+.autoCustomersTable { width: 100%; min-width: 940px !important; border-collapse: collapse; font-size: 12px; }
+.autoCustomersTable th { position: static; padding: 12px 15px; border: 0; border-bottom: 1px solid #e9eef3; background: #f7fafc; color: #8595a5; text-align: left; font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; white-space: nowrap; }
+.autoCustomersTable td { padding: 13px 15px; border-top: 1px solid #f0f3f6; color: #40566b; white-space: nowrap; }
+.autoCustomersTable .autoCustomerIndex { width: 46px; color: #a0adba; font-size: 10px; font-weight: 700; }
+.autoCustomersTable tbody tr:first-child td { border-top: 0; }
+.autoCustomerRow { cursor: pointer; transition: background .15s ease; }
+.autoCustomerRow:hover { background: #f6fbfd; }
+.autoCustomerIdentity { display: flex; align-items: center; gap: 10px; min-width: 185px; }
+.autoCustomerAvatar { display: grid; flex: 0 0 auto; place-items: center; width: 35px; height: 35px; border: 1px solid #d5eaf1; border-radius: 11px; background: linear-gradient(145deg, #edf8fb, #e8f1fa); color: #087c98; font-size: 11px; font-weight: 800; }
+.autoCustomerName strong, .autoCustomerName small { display: block; }
+.autoCustomerName strong { max-width: 205px; overflow: hidden; color: #17334d; font-size: 12px; font-weight: 750; text-overflow: ellipsis; }
+.autoCustomerName small { margin-top: 3px; color: #8a9aaa; font-size: 10px; }
+.autoCustomersTable .autoTag { padding: 3px 8px; border: 1px solid #d8edf5; border-radius: 6px; font-size: 9px; }
+.autoCustomerInline { display: inline-flex; align-items: center; gap: 6px; color: #60768b; }
+.autoCustomerInline svg { flex: 0 0 auto; color: #91a7b7; }
+.autoCustomerMuted { color: #b0bac4; }
+.autoCustomerAddress { max-width: 205px; overflow: hidden; color: #7a8b9b !important; text-overflow: ellipsis; }
+.autoCustomerOpen { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 8px; color: #a1b0bc; transition: all .15s ease; }
+.autoCustomerRow:hover .autoCustomerOpen { border-color: #d9eaf1; background: #fff; color: #087e9b; }
+.autoCustomersEmpty { display: flex; flex-direction: column; align-items: center; padding: 52px 20px; text-align: center; }
+.autoCustomersEmpty > span { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 12px; border-radius: 15px; background: #eef6fa; color: #6092a6; }
+.autoCustomersEmpty > strong { color: #28445d; font-size: 13px; }
+.autoCustomersEmpty p { margin: 5px 0 14px; color: #8998a6; font-size: 11px; }
+
+form.paymentCard.autoPayEmiForm {
+  box-sizing: border-box;
+  width: min(580px, calc(100vw - 40px));
+  padding: 30px 32px;
+}
+.autoPayEmiForm > .overline { display: inline-flex; margin-bottom: 6px; }
+.autoPayEmiForm h2 { margin: 0 34px 8px 0; color: #17334d; font-size: 22px; }
+.autoPayEmiForm > p { margin: 0 0 18px !important; padding: 10px 12px; border: 1px solid #f4d8d6; border-radius: 10px; background: #fff7f6; }
+.autoPayEmiFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+.autoPayEmiFields label { min-width: 0; color: #4a6073; font-size: 11px; letter-spacing: .45px; }
+.autoPayEmiFields input, .autoPayEmiFields select { box-sizing: border-box; height: 44px; margin-top: 6px; padding: 9px 11px; }
+.autoPayEmiForm > .autoBtn { min-height: 46px; margin-top: 22px !important; }
+
+@media (max-width: 680px) {
+  .autoCustomersHero { align-items: flex-start; flex-direction: column; gap: 17px; padding: 23px 20px; }
+  .autoCustomersHeroActions { width: 100%; flex-wrap: wrap; }
+  .autoCustomersTotal { min-width: 155px; padding: 10px 12px; }
+  .autoCustomersTotalIcon { width: 34px; height: 34px; }
+  .autoCustomersToolbar { align-items: stretch; flex-wrap: wrap; padding: 10px; }
+  .autoCustomerSearch { flex-basis: 100%; }
+  .autoCustomerMonth { flex: 1; }
+  .autoCustomerMonth input { flex: 1; width: auto; }
+  .autoCustomersTableHeading { padding: 16px; }
+  .autoPayEmiForm { padding: 27px 22px; }
+  .autoPayEmiFields { grid-template-columns: minmax(0, 1fr); gap: 13px; }
 }
 
 @keyframes autoSpin {

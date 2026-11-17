@@ -79,6 +79,94 @@ body {
   overflow-y: auto;
 }
 
+/* Shared navigation styling across every finance module */
+.financeLayout > aside { background: linear-gradient(180deg, #101c31 0%, #12243a 52%, #10263a 100%); border-right-color: rgba(131, 179, 204, .15); }
+.financeLayout > aside .menuTitle { margin: 19px 10px 10px; color: #8299ad; font-size: 9px; letter-spacing: 1.65px; }
+.financeLayout > aside .moduleSwitcherContainer { padding: 4px; border: 1px solid rgba(177, 203, 220, .12); border-radius: 12px; background: rgba(5, 15, 29, .42); }
+.financeLayout > aside .moduleToggleBtn { min-height: 36px; border-radius: 8px; color: #a1b3c2; }
+.financeLayout > aside .moduleToggleBtn.active.autoMode { background: linear-gradient(135deg, #147d93, #17618a); color: #fff; box-shadow: 0 4px 12px rgba(4, 91, 124, .28); }
+.financeLayout > aside button.menuItemBtn { position: relative; min-height: 42px; margin: 3px 0; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; color: #a4b3c0; font-size: 12.5px; }
+.financeLayout > aside button.menuItemBtn i { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(188, 209, 224, .1); border-radius: 9px; background: rgba(255, 255, 255, .045); color: #90a8ba; }
+.financeLayout > aside button.menuItemBtn:hover { transform: translateX(2px); border-color: rgba(141, 191, 211, .13); background: rgba(255, 255, 255, .055); color: #e4edf3; }
+.financeLayout > aside button.menuItemBtn.active { border-color: rgba(67, 173, 193, .2); border-left: 1px solid rgba(67, 173, 193, .2); border-radius: 10px; background: linear-gradient(100deg, rgba(23, 126, 149, .25), rgba(30, 91, 128, .13)); color: #e7f7fb; box-shadow: inset 3px 0 #49b7c6, 0 4px 12px rgba(0, 0, 0, .1); }
+.financeLayout > aside button.menuItemBtn.active i { border-color: rgba(83, 193, 205, .26); background: rgba(42, 158, 174, .16); color: #71d1d8; }
+.financeLayout > aside .sidebarBottom { border-top-color: rgba(160, 190, 209, .12); }
+
+/* Table Studio readability and field editing affordances */
+.tableStudioRoot { background: #eef3f8 !important; color: #17324b !important; font-size: 14px !important; }
+.tableStudioRoot > header { min-height: 60px; height: 60px !important; padding: 10px 22px !important; background: linear-gradient(110deg, #102b45, #12445d) !important; }
+.tableStudioRoot .studioSidebarNav { width: 258px !important; min-width: 258px !important; max-width: 258px !important; background: #fff !important; border-right: 1px solid #dce5ed !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem { min-height: 39px; margin: 2px 6px; width: calc(100% - 12px) !important; padding: 7px 9px !important; border: 1px solid transparent !important; border-radius: 9px !important; background: transparent !important; color: #526b80 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem:hover { border-color: #d9e8ef !important; background: #f1f7fa !important; color: #1c4e69 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem.active { border-color: #b9dce8 !important; background: #e8f5f9 !important; color: #155e75 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem > div > div { color: inherit !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem > span { background: #e5edf2 !important; color: #5b7386 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem.active > span { background: #cde9f0 !important; color: #155e75 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem > div > div:first-child { background: #edf2f5 !important; color: #647d90 !important; }
+.tableStudioRoot .studioSidebarNav button.studioTableNavItem.active > div > div:first-child { background: #147d93 !important; color: #fff !important; }
+.tableStudioRoot > .tableStudioMainLayout { background: #eef3f8 !important; }
+.tableStudioMainLayout > .tableStudioGridArea { background: #f4f7fa !important; }
+.tableStudioRoot .tableStudioDeleteOverlay { background: rgba(0, 0, 0, .68) !important; backdrop-filter: blur(6px); }
+.tableStudioRoot table th { position: sticky; top: 0; z-index: 2; padding: 12px 13px !important; background: #eaf0f5 !important; color: #536c80 !important; font-size: 11px !important; letter-spacing: .3px; }
+.tableStudioRoot table th * { color: #536c80 !important; }
+.tableStudioRoot table td { min-height: 42px; padding: 9px 12px !important; border-right: 1px solid #e8edf2 !important; border-bottom: 1px solid #e8edf2 !important; color: #263f54 !important; font-size: 12px; }
+.tableStudioRoot table td > div, .tableStudioRoot table td > div > span { color: #263f54 !important; }
+.tableStudioRoot table tbody tr { background: #fff !important; }
+.tableStudioRoot table tbody tr:nth-child(even) { background: #f8fafc !important; }
+.tableStudioRoot table tbody tr:hover { background: #edf7fb !important; }
+.tableStudioRoot table td.tableStudioEditableCell { cursor: pointer !important; }
+.tableStudioRoot table td.tableStudioReadOnlyCell { cursor: not-allowed !important; }
+.tableStudioRoot input:not([type="checkbox"]), .tableStudioRoot select { min-height: 34px; box-sizing: border-box; border: 1px solid #8dc3d5 !important; border-radius: 7px !important; background: #fff !important; color: #18354d !important; font: 500 12px var(--font-main) !important; }
+.tableStudioRoot .tableStudioCellEditor { width: 100%; min-width: 110px; padding: 5px 8px; outline: 0; box-shadow: 0 0 0 3px rgba(14, 132, 162, .12); }
+.tableStudioRoot .tableStudioFieldMarker { display: inline-grid; flex: 0 0 auto; place-items: center; width: 25px; height: 25px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; cursor: pointer; transition: all .15s ease; opacity: 0; }
+.tableStudioRoot table td:hover .tableStudioFieldMarker, .tableStudioRoot table td:focus-within .tableStudioFieldMarker { opacity: 1; }
+.tableStudioRoot .tableStudioFieldMarker.isEditable { color: #137e9a; }
+.tableStudioRoot .tableStudioFieldMarker.isEditable:hover { border-color: #b8dbe5; background: #eaf6f9; color: #075f78; }
+.tableStudioRoot .tableStudioFieldMarker.isReadOnly { color: #b4bec7; cursor: not-allowed; }
+.tableStudioRoot .tableStudioFieldMarker:focus-visible { outline: 2px solid #3da4bd; outline-offset: 1px; }
+.tableStudioRoot > footer { min-height: 48px; height: auto !important; padding: 9px 20px !important; background: #fff !important; border-top: 1px solid #dce5ed !important; color: #61778a !important; }
+.tableStudioRoot > header form input { width: clamp(170px, 20vw, 290px) !important; min-height: 38px; padding: 7px 30px 7px 11px !important; background: #fff !important; color: #18354d !important; }
+.tableStudioNotification { z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 48px; box-sizing: border-box; padding: 8px 20px; border-bottom: 1px solid; font-size: 13px; font-weight: 700; }
+.tableStudioNotification.isSuccess { border-color: #a8dfc0; background: #eaf8ef; color: #176b3b; }
+.tableStudioNotification.isError { border-color: #f0b9b6; background: #fff0ef; color: #a8322d; }
+.tableStudioNotificationIcon { display: grid; flex: 0 0 auto; place-items: center; width: 28px; height: 28px; border-radius: 9px; }
+.isSuccess .tableStudioNotificationIcon { background: #d2f0dc; color: #197143; }
+.isError .tableStudioNotificationIcon { background: #fbd9d7; color: #b93832; }
+.tableStudioNotificationText { line-height: 1.45; }
+@media (max-width: 760px) {
+  .tableStudioRoot > header { padding: 8px 10px !important; }
+  .tableStudioRoot .studioSidebarNav { width: 205px !important; min-width: 205px !important; max-width: 205px !important; }
+}
+
+/* Final shared sidebar state overrides for every module */
+.financeLayout.financeLayout > aside { background: linear-gradient(180deg, #101c31 0%, #12243a 52%, #10263a 100%); border-right-color: rgba(131, 179, 204, .15); }
+.financeLayout.financeLayout > aside button.menuItemBtn { min-height: 42px; margin: 3px 0; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; color: #a4b3c0; font-size: 12.5px; }
+.financeLayout.financeLayout > aside button.menuItemBtn i { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(188, 209, 224, .1); border-radius: 9px; background: rgba(255, 255, 255, .045); color: #90a8ba; }
+.financeLayout.financeLayout > aside button.menuItemBtn.active { border: 1px solid rgba(67, 173, 193, .2); border-radius: 10px; background: linear-gradient(100deg, rgba(23, 126, 149, .25), rgba(30, 91, 128, .13)); color: #e7f7fb; box-shadow: inset 3px 0 #49b7c6, 0 4px 12px rgba(0, 0, 0, .1); }
+.financeLayout.financeLayout > aside button.menuItemBtn.active i { border-color: rgba(83, 193, 205, .26); background: rgba(42, 158, 174, .16); color: #71d1d8; }
+.financeLayout.financeLayout > aside .moduleSwitcherContainer { padding: 4px; border: 1px solid rgba(177, 203, 220, .12); border-radius: 12px; background: rgba(5, 15, 29, .42); }
+.financeLayout.financeLayout > aside .moduleToggleBtn { min-height: 36px; border-radius: 8px; color: #a1b3c2; }
+.financeLayout.financeLayout > aside .moduleToggleBtn.active { background: linear-gradient(135deg, #147d93, #17618a); color: #fff; box-shadow: 0 4px 12px rgba(4, 91, 124, .28); }
+.financeLayout.financeLayout > aside .globalPortalBtn { border: 1px solid rgba(131, 179, 204, .17); border-radius: 12px; background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .025)); box-shadow: 0 4px 12px rgba(0, 0, 0, .12); }
+.financeLayout.financeLayout > aside .globalPortalBtn:hover { border-color: rgba(117, 191, 207, .35); background: rgba(255, 255, 255, .08); }
+.financeLayout.financeLayout > aside .globalPortalBtn.active { border-color: rgba(75, 184, 163, .48); background: linear-gradient(145deg, #126e68, #145b6d); box-shadow: 0 5px 16px rgba(9, 75, 91, .32); }
+.financeLayout.financeLayout > aside .menuTitle { color: #8299ad; }
+.financeLayout.financeLayout > aside .sidebarBottom { border-top-color: rgba(160, 190, 209, .12); }
+
+/* Consistent navigation styling across Daily, Auto, and Global Finance */
+.financeLayout > aside { background: linear-gradient(180deg, #101c31 0%, #12243a 52%, #10263a 100%); border-right-color: rgba(131, 179, 204, .15); }
+.financeLayout > aside .menuTitle { margin: 19px 10px 10px; color: #8299ad; font-size: 9px; letter-spacing: 1.65px; }
+.financeLayout > aside .moduleSwitcherContainer { padding: 4px; border: 1px solid rgba(177, 203, 220, .12); border-radius: 12px; background: rgba(5, 15, 29, .42); }
+.financeLayout > aside .moduleToggleBtn { min-height: 36px; border-radius: 8px; color: #a1b3c2; }
+.financeLayout > aside .moduleToggleBtn.active.autoMode { background: linear-gradient(135deg, #147d93, #17618a); color: #fff; box-shadow: 0 4px 12px rgba(4, 91, 124, .28); }
+.financeLayout > aside .moduleItemBtn { position: relative; }
+.financeLayout > aside button.menuItemBtn { position: relative; min-height: 42px; margin: 3px 0; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; color: #a4b3c0; font-size: 12.5px; }
+.financeLayout > aside button.menuItemBtn i { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(188, 209, 224, .1); border-radius: 9px; background: rgba(255, 255, 255, .045); color: #90a8ba; }
+.financeLayout > aside button.menuItemBtn:hover { transform: translateX(2px); border-color: rgba(141, 191, 211, .13); background: rgba(255, 255, 255, .055); color: #e4edf3; }
+.financeLayout > aside button.menuItemBtn.active { border-color: rgba(67, 173, 193, .2); border-left: 1px solid rgba(67, 173, 193, .2); border-radius: 10px; background: linear-gradient(100deg, rgba(23, 126, 149, .25), rgba(30, 91, 128, .13)); color: #e7f7fb; box-shadow: inset 3px 0 #49b7c6, 0 4px 12px rgba(0, 0, 0, .1); }
+.financeLayout > aside button.menuItemBtn.active i { border-color: rgba(83, 193, 205, .26); background: rgba(42, 158, 174, .16); color: #71d1d8; }
+.financeLayout > aside .sidebarBottom { border-top-color: rgba(160, 190, 209, .12); }
+
 .financeLogo { 
   display: flex; 
   align-items: center; 

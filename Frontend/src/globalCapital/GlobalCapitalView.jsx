@@ -93,6 +93,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
     notes: "",
     initialContribution: "",
     effectiveDate: new Date().toISOString().slice(0, 10),
+    targetModule: "DAILY",
   });
 
   const [showCapitalModal, setShowCapitalModal] = useState(false);
@@ -373,6 +374,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
         notes: "",
         initialContribution: "",
         effectiveDate: new Date().toISOString().slice(0, 10),
+        targetModule: "DAILY",
       });
       fetchPartners(false);
       if (hadContrib) {

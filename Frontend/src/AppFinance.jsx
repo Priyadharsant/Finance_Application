@@ -468,7 +468,7 @@ export default function AppFinance() {
       />
 
       {showTableEditor && (
-        <ExcelTableEditorView onClose={() => setShowTableEditor(false)} />
+        <ExcelTableEditorView onClose={() => { setShowTableEditor(false); setRefreshKey((key) => key + 1); }} />
       )}
     </div>
   );

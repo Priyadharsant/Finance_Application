@@ -18,7 +18,9 @@ import {
   Save,
   Upload,
   FileText,
-  Trash
+  Trash,
+  TriangleAlert,
+  LoaderCircle
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money, dateLabel, API_BASE } from "../services/autoFinanceApi";
@@ -37,11 +39,13 @@ export default function LoanDetailsModal({
 }) {
   const [isEditingVehicle, setIsEditingVehicle] = useState(false);
   const [vehicleForm, setVehicleForm] = useState({});
+  const [documentToDelete, setDocumentToDelete] = useState(null);
+  const [uploadingDocType, setUploadingDocType] = useState(null);
 
   const handleEditVehicleToggle = () => {
     if (!isEditingVehicle) {
       setVehicleForm({
-        vehicleType: selectedLoan.loan.vehicle_type || "",
+        vehicleType: selectedLoan.loan.vehicle_type || "TWO_WHEELER",
         make: selectedLoan.loan.make || "",
         model: selectedLoan.loan.model || "",
         year: selectedLoan.loan.year || "",
@@ -54,14 +58,21 @@ export default function LoanDetailsModal({
     setIsEditingVehicle(!isEditingVehicle);
   };
 
-  const submitVehicleEdit = (e) => {
-    handleEditVehicle(e, vehicleForm);
-    setIsEditingVehicle(false);
+  const submitVehicleEdit = async (e) => {
+    const saved = await handleEditVehicle(e, vehicleForm);
+    if (saved) setIsEditingVehicle(false);
   };
 
-  const handleFileChange = (docType, e) => {
+  const handleFileChange = async (docType, e) => {
     if (e.target.files && e.target.files[0]) {
-      handleUploadDocument(docType, e.target.files[0]);
+      const file = e.target.files[0];
+      setUploadingDocType(docType);
+      try {
+        await handleUploadDocument(docType, file);
+      } finally {
+        setUploadingDocType(null);
+        e.target.value = "";
+      }
     }
   };
   if (!selectedLoan) return null;
@@ -72,6 +83,15 @@ export default function LoanDetailsModal({
       (total, schedule) => total + Number(schedule.scheduled_interest ?? schedule.interest_component ?? 0),
       0,
     );
+  const paymentSummaryByEmi = new Map();
+  (selectedLoan.payments || []).forEach((payment) => {
+    if (!payment.emi_id) return;
+    const summary = paymentSummaryByEmi.get(payment.emi_id) || { lastDate: "", fineAmount: 0 };
+    const paymentDate = String(payment.payment_date || "").slice(0, 10);
+    if (paymentDate > summary.lastDate) summary.lastDate = paymentDate;
+    summary.fineAmount += Number(payment.fine_amount || 0);
+    paymentSummaryByEmi.set(payment.emi_id, summary);
+  });
 
   return (
     <div
@@ -83,67 +103,34 @@ export default function LoanDetailsModal({
       <div
         className="detailsCard autoLoanDossier"
         onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(92vw, 1040px)", maxWidth: "1040px" }}
+        style={{ width: "min(94vw, 1120px)", maxWidth: "1120px" }}
       >
         <button className="close" onClick={() => setSelectedLoan(null)}>
           <X size={18} />
         </button>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          <div>
-            <span className="overline autoBadgeTag">
-              VEHICLE LOAN AGREEMENT &amp; BORROWER DETAILS
-            </span>
-            <h2 style={{ marginTop: "4px" }}>
-              {selectedLoan.loan.first_name} {selectedLoan.loan.last_name}
-            </h2>
-            <p style={{ margin: "2px 0 0", color: "#64748b" }}>
-              <IdCard size={13} /> Customer Code:{" "}
-              <b>{selectedLoan.loan.customer_code}</b> ·
-              <Phone size={13} /> Phone:{" "}
-              {selectedLoan.loan.phone ? (
-                <PhoneLink phone={selectedLoan.loan.phone} />
-              ) : (
-                <b>Not provided</b>
-              )}{" "}
-              {selectedLoan.loan.email ? (
-                <>
-                  <Mail size={13} /> {selectedLoan.loan.email}
-                </>
-              ) : (
-                ""
-              )}
-            </p>
+        <div className="autoLoanAgreementHeader">
+          <div className="autoLoanAgreementIdentity">
+            <span className="overline autoBadgeTag">VEHICLE LOAN AGREEMENT &amp; BORROWER DETAILS</span>
+            <h2>{selectedLoan.loan.first_name} {selectedLoan.loan.last_name}</h2>
+            <div className="autoLoanBorrowerMeta">
+              <span><IdCard size={13} /> Code <b>{selectedLoan.loan.customer_code || "—"}</b></span>
+              <span><Phone size={13} /> {selectedLoan.loan.phone ? <PhoneLink phone={selectedLoan.loan.phone} /> : <b>Phone not provided</b>}</span>
+              {selectedLoan.loan.email && <span><Mail size={13} /> {selectedLoan.loan.email}</span>}
+            </div>
             {selectedLoan.loan.address && (
-              <p
-                style={{
-                  margin: "2px 0 0",
-                  color: "#64748b",
-                  fontSize: "13px",
-                }}
-              >
+              <p className="autoLoanBorrowerAddress">
                 <MapPin size={13} /> Address: {selectedLoan.loan.address}
               </p>
             )}
           </div>
-          <span
-            className="tag active"
-            style={{ fontSize: "13px", padding: "6px 14px" }}
-          >
+          <span className="autoLoanAgreementStatus">
             {selectedLoan.loan.status}
           </span>
         </div>
 
         {/* FINANCIAL SUMMARY */}
         <div className="loanSummaryGrid">
-          <div className="loanSummaryMetric">
+          <div className="loanSummaryMetric principalMetric">
             <div className="loanSummaryLabel">
               <span>
                 <Banknote size={15} />
@@ -153,7 +140,7 @@ export default function LoanDetailsModal({
             <strong>{money(selectedLoan.loan.loan_amount)}</strong>
             <small>Principal amount</small>
           </div>
-          <div className="loanSummaryMetric">
+          <div className="loanSummaryMetric rateMetric">
             <div className="loanSummaryLabel">
               <span>
                 <Percent size={15} />
@@ -165,7 +152,7 @@ export default function LoanDetailsModal({
               {selectedLoan.loan.interest_type || "FLAT"} interest
             </small>
           </div>
-          <div className="loanSummaryMetric">
+          <div className="loanSummaryMetric interestMetric">
             <div className="loanSummaryLabel">
               <span>
                 <CircleDollarSign size={15} />
@@ -175,7 +162,7 @@ export default function LoanDetailsModal({
             <strong>{money(scheduledInterest)}</strong>
             <small>Total interest in scheduled installments</small>
           </div>
-          <div className="loanSummaryMetric">
+          <div className="loanSummaryMetric tenureMetric">
             <div className="loanSummaryLabel">
               <span>
                 <CalendarClock size={15} />
@@ -223,7 +210,7 @@ export default function LoanDetailsModal({
 
         {/* BROKER & GUARANTOR DETAILS */}
         {selectedLoan.loan.fees_details && (selectedLoan.loan.fees_details.brokerName || selectedLoan.loan.fees_details.jaminName) && (
-          <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
+          <div className="autoLoanSection autoLoanBrokerSection">
             <h4 style={{ margin: "0 0 10px 0", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
               🤝 Broker & Guarantor
             </h4>
@@ -246,56 +233,74 @@ export default function LoanDetailsModal({
         )}
 
         {/* VEHICLE ASSET SPECIFICATIONS */}
-        <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <h4 style={{ margin: 0, color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
-              <CarFront size={16} /> Vehicle Asset Specifications
-            </h4>
-            <button className="secondary autoBtn" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={handleEditVehicleToggle}>
+        <div className="autoLoanSection autoLoanVehicleSection">
+          <div className="autoLoanSectionHeader">
+            <div>
+              <span className="autoLoanSectionEyebrow">COLLATERAL</span>
+              <h4><CarFront size={17} /> Vehicle Asset Specifications</h4>
+            </div>
+            <button className="secondary autoBtn" style={{ padding: "6px 10px", fontSize: "12px" }} onClick={handleEditVehicleToggle}>
               {isEditingVehicle ? <><X size={12}/> Cancel</> : <><Edit size={12}/> Edit Vehicle</>}
             </button>
           </div>
 
           {isEditingVehicle ? (
-            <form onSubmit={submitVehicleEdit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-              <label>Vehicle Type <input className="autoInput" value={vehicleForm.vehicleType} onChange={(e) => setVehicleForm({...vehicleForm, vehicleType: e.target.value})} /></label>
-              <label>Make <input className="autoInput" value={vehicleForm.make} onChange={(e) => setVehicleForm({...vehicleForm, make: e.target.value})} /></label>
-              <label>Model <input className="autoInput" value={vehicleForm.model} onChange={(e) => setVehicleForm({...vehicleForm, model: e.target.value})} /></label>
-              <label>Year <input type="number" className="autoInput" value={vehicleForm.year} onChange={(e) => setVehicleForm({...vehicleForm, year: e.target.value})} /></label>
-              <label>Reg Number <input className="autoInput" value={vehicleForm.registrationNumber} onChange={(e) => setVehicleForm({...vehicleForm, registrationNumber: e.target.value})} /></label>
-              <label>Chassis No <input className="autoInput" value={vehicleForm.chassisNumber} onChange={(e) => setVehicleForm({...vehicleForm, chassisNumber: e.target.value})} /></label>
-              <label>Engine No <input className="autoInput" value={vehicleForm.engineNumber} onChange={(e) => setVehicleForm({...vehicleForm, engineNumber: e.target.value})} /></label>
-              <label>Insurance Details <input className="autoInput" value={vehicleForm.insuranceDetails} onChange={(e) => setVehicleForm({...vehicleForm, insuranceDetails: e.target.value})} /></label>
-              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
-                <button type="submit" className="primary autoBtn"><Save size={14} /> Save Changes</button>
+            <form className="autoVehicleEditForm" onSubmit={submitVehicleEdit}>
+              <label><span>Vehicle type</span><select className="autoInput" value={vehicleForm.vehicleType} onChange={(e) => setVehicleForm({...vehicleForm, vehicleType: e.target.value})}>
+                <option value="TWO_WHEELER">Two Wheeler (Bike / Scooter)</option>
+                <option value="THREE_WHEELER">Three Wheeler / Auto Rickshaw</option>
+                <option value="CAR">Car / SUV</option>
+                <option value="COMMERCIAL">Commercial Vehicle</option>
+                <option value="PICKUP">Pickup</option>
+                <option value="TRUCK">Truck</option>
+                <option value="BUS">Bus</option>
+                <option value="TRACTOR">Tractor</option>
+                <option value="VAN">Van / Minibus</option>
+                <option value="OTHER">Other</option>
+              </select></label>
+              <label><span>Make</span><input className="autoInput" value={vehicleForm.make} onChange={(e) => setVehicleForm({...vehicleForm, make: e.target.value})} /></label>
+              <label><span>Model</span><input className="autoInput" value={vehicleForm.model} onChange={(e) => setVehicleForm({...vehicleForm, model: e.target.value})} /></label>
+              <label><span>Year</span><input type="number" className="autoInput" value={vehicleForm.year} onChange={(e) => setVehicleForm({...vehicleForm, year: e.target.value})} /></label>
+              <label><span>Registration number</span><input className="autoInput" value={vehicleForm.registrationNumber} onChange={(e) => setVehicleForm({...vehicleForm, registrationNumber: e.target.value})} /></label>
+              <label><span>Chassis number</span><input className="autoInput" value={vehicleForm.chassisNumber} onChange={(e) => setVehicleForm({...vehicleForm, chassisNumber: e.target.value})} /></label>
+              <label><span>Engine number</span><input className="autoInput" value={vehicleForm.engineNumber} onChange={(e) => setVehicleForm({...vehicleForm, engineNumber: e.target.value})} /></label>
+              <label><span>Insurance details</span><input className="autoInput" value={vehicleForm.insuranceDetails} onChange={(e) => setVehicleForm({...vehicleForm, insuranceDetails: e.target.value})} /></label>
+              <div className="autoVehicleEditActions">
+                <button type="button" className="secondary autoBtn" onClick={handleEditVehicleToggle}>Cancel</button>
+                <button type="submit" className="primary autoBtn"><Save size={14} /> Save changes</button>
               </div>
             </form>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px" }}>
-              <div><span><CarFront size={14} /> Vehicle:</span> <b>{selectedLoan.loan.make} {selectedLoan.loan.model} ({selectedLoan.loan.year || "2026"})</b></div>
-              <div><span><Tags size={14} /> Type:</span> <b>{selectedLoan.loan.vehicle_type || "TWO_WHEELER"}</b></div>
-              <div><span><IdCard size={14} /> Reg No:</span> <b className="autoRegNo">{selectedLoan.loan.registration_number || "PENDING"}</b></div>
-              <div><span><Wrench size={14} /> Chassis No:</span> <b>{selectedLoan.loan.chassis_number || "—"}</b></div>
-              <div><span><Zap size={14} /> Engine No:</span> <b>{selectedLoan.loan.engine_number || "—"}</b></div>
-              {selectedLoan.loan.insurance_details && <div><span><ShieldCheck size={14} /> Insurance:</span> <b>{selectedLoan.loan.insurance_details}</b></div>}
+            <div className="autoLoanVehicleGrid">
+              <div className="autoLoanVehicleItem"><span><CarFront size={13} /> Vehicle</span><b>{[selectedLoan.loan.make, selectedLoan.loan.model].filter(Boolean).join(" ") || "Vehicle"} ({selectedLoan.loan.year || "2026"})</b></div>
+              <div className="autoLoanVehicleItem"><span><Tags size={13} /> Type</span><b>{selectedLoan.loan.vehicle_type || "TWO_WHEELER"}</b></div>
+              <div className="autoLoanVehicleItem"><span><IdCard size={13} /> Registration</span><b className="autoRegNo">{selectedLoan.loan.registration_number || "PENDING"}</b></div>
+              <div className="autoLoanVehicleItem"><span><Wrench size={13} /> Chassis number</span><b>{selectedLoan.loan.chassis_number || "—"}</b></div>
+              <div className="autoLoanVehicleItem"><span><Zap size={13} /> Engine number</span><b>{selectedLoan.loan.engine_number || "—"}</b></div>
+              {selectedLoan.loan.insurance_details && <div className="autoLoanVehicleItem"><span><ShieldCheck size={13} /> Insurance</span><b>{selectedLoan.loan.insurance_details}</b></div>}
             </div>
           )}
         </div>
 
         {/* LOAN DOCUMENTS */}
-        <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "16px 0", fontSize: "13px" }}>
-          <h4 style={{ margin: "0 0 10px 0", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
-            <FileText size={16} /> Loan Documents
-          </h4>
+        <div className="autoLoanSection autoLoanDocumentsSection">
+          <div className="autoLoanSectionHeader autoLoanDocumentsHeader">
+            <div>
+              <span className="autoLoanSectionEyebrow">FILES &amp; RECORDS</span>
+              <h4><FileText size={17} /> Loan Documents</h4>
+            </div>
+            <span className="autoLoanDocumentCount">{selectedLoan.documents?.length || 0} files</span>
+          </div>
           
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+          <div className="autoLoanUploadActions">
             {["aadhaar", "rc_book", "main_doc", "other"].map(docType => {
               const label = docType === "aadhaar" ? "Aadhaar" : docType === "rc_book" ? "RC Book" : docType === "main_doc" ? "Main Doc" : "Other";
               return (
                 <div key={docType} style={{ position: "relative" }}>
-                  <input type="file" id={`upload_${docType}`} style={{ display: "none" }} onChange={(e) => handleFileChange(docType, e)} />
-                  <label htmlFor={`upload_${docType}`} className="secondary autoBtn" style={{ padding: "4px 10px", fontSize: "12px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                    <Upload size={13} /> Upload {label}
+                  <input type="file" id={`upload_${docType}`} style={{ display: "none" }} disabled={Boolean(uploadingDocType)} onChange={(e) => handleFileChange(docType, e)} />
+                  <label htmlFor={`upload_${docType}`} className={`secondary autoBtn autoLoanUploadButton ${uploadingDocType === docType ? "isUploading" : ""}`} aria-disabled={Boolean(uploadingDocType)} style={{ padding: "6px 10px", fontSize: "12px", cursor: uploadingDocType ? "wait" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: uploadingDocType && uploadingDocType !== docType ? 0.55 : 1 }}>
+                    {uploadingDocType === docType ? <LoaderCircle size={13} className="autoUploadSpinner" /> : <Upload size={13} />}
+                    {uploadingDocType === docType ? `Uploading ${label}...` : `Upload ${label}`}
                   </label>
                 </div>
               );
@@ -325,7 +330,7 @@ export default function LoanDetailsModal({
                       {handleDeleteDocument && (
                         <button
                           type="button"
-                          onClick={() => handleDeleteDocument(doc.filename)}
+                          onClick={() => setDocumentToDelete(doc.filename)}
                           title="Delete document"
                           style={{
                             background: "transparent",
@@ -348,9 +353,27 @@ export default function LoanDetailsModal({
               })}
             </div>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "12px", fontStyle: "italic" }}>No documents uploaded yet.</div>
+            <div className="autoLoanEmptyDocuments"><FileText size={19} /><span>No documents uploaded yet.</span><small>Upload borrower or vehicle records using the buttons above.</small></div>
           )}
         </div>
+
+        {documentToDelete && (
+          <div className="modal autoDeleteOverlay" style={{ zIndex: 2200 }} onClick={() => setDocumentToDelete(null)}>
+            <div className="autoDeleteDialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-document-title" aria-describedby="delete-document-description" onClick={(e) => e.stopPropagation()}>
+              <div className="autoDeleteIcon"><TriangleAlert size={21} /></div>
+              <div className="autoDeleteCopy">
+                <span className="autoDeleteEyebrow">REMOVE FILE</span>
+                <h3 id="delete-document-title">Delete this document?</h3>
+                <p id="delete-document-description">This will permanently remove the file from this loan. This action can’t be undone.</p>
+                <div className="autoDeleteFile"><FileText size={16} /><strong title={documentToDelete}>{documentToDelete}</strong></div>
+              </div>
+              <div className="autoDeleteActions">
+                <button type="button" className="autoDeleteCancel" onClick={() => setDocumentToDelete(null)}>Keep document</button>
+                <button type="button" className="autoDeleteConfirm" onClick={async () => { const filename = documentToDelete; setDocumentToDelete(null); await handleDeleteDocument(filename); }}><Trash size={14} /> Delete file</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="card tableWrap" style={{ marginTop: "16px" }}>
           <div className="cardHead" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -384,6 +407,7 @@ export default function LoanDetailsModal({
               <tr>
                 <th>Inst #</th>
                 <th>Due Date</th>
+                <th>Collected Date</th>
                 <th>Principal</th>
                 <th>Interest</th>
                 <th>Total EMI</th>
@@ -399,6 +423,8 @@ export default function LoanDetailsModal({
                 return selectedLoan.schedules?.map((s) => {
                   const isEarliestDue = earliestUnpaid && earliestUnpaid.id === s.id;
                   const hasPriorUnpaid = earliestUnpaid && earliestUnpaid.installment_number < s.installment_number;
+                  const paymentSummary = paymentSummaryByEmi.get(s.id) || { lastDate: "", fineAmount: 0 };
+                  const emiCollected = Number(s.total_cash_collected || s.collected_amount || s.total_emi || 0);
 
                   return (
                     <tr key={s.id}>
@@ -406,6 +432,7 @@ export default function LoanDetailsModal({
                         <b>#{s.installment_number}</b>
                       </td>
                       <td>{dateLabel(s.due_date)}</td>
+                      <td>{paymentSummary.lastDate ? dateLabel(paymentSummary.lastDate) : "—"}</td>
 
                       {/* PRINCIPAL COLUMN */}
                       <td>
@@ -465,8 +492,13 @@ export default function LoanDetailsModal({
                               </span>
                             )}
                             <span style={{ fontSize: "11px", fontWeight: "bold", color: "#0f172a" }}>
-                              Total Collected: {money(s.total_cash_collected || s.collected_amount || s.total_emi)}
+                              EMI Collected: {money(emiCollected)}
                             </span>
+                            {paymentSummary.fineAmount > 0 && (
+                              <span style={{ fontSize: "11px", color: "#a16207", fontWeight: 600 }}>
+                                Fine: {money(paymentSummary.fineAmount)}
+                              </span>
+                            )}
                           </div>
                         ) : s.status === "PARTIAL" ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
@@ -474,8 +506,13 @@ export default function LoanDetailsModal({
                               PARTIAL
                             </span>
                             <span style={{ fontSize: "11px", color: "#64748b" }}>
-                              Paid: {money(s.total_cash_collected || s.scheduled_amount_paid || s.collected_amount)}
+                              Paid: {money(emiCollected)}
                             </span>
+                            {paymentSummary.fineAmount > 0 && (
+                              <span style={{ fontSize: "11px", color: "#a16207", fontWeight: 600 }}>
+                                Fine: {money(paymentSummary.fineAmount)}
+                              </span>
+                            )}
                             {Number(s.extra_principal_paid || 0) > 0 && (
                               <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: "500" }}>
                                 Extra Principal: {money(s.extra_principal_paid)}
@@ -495,7 +532,7 @@ export default function LoanDetailsModal({
                       <td>
                         {selectedLoan.loan.status === "COMPLETED" || s.status === "CANCELLED" ? (
                           <div style={{ color: s.status === "PAID" ? "#047857" : "#94a3b8", fontWeight: s.status === "PAID" ? "bold" : "normal", fontSize: "12px" }}>
-                            {s.status === "PAID" ? money(s.total_cash_collected || s.collected_amount || s.total_emi) : "Cancelled"}
+                            {s.status === "PAID" ? money(emiCollected) : "Cancelled"}
                           </div>
                         ) : s.status !== "PAID" ? (
                           <button
@@ -522,8 +559,11 @@ export default function LoanDetailsModal({
                                 });
                                 setPayForm({
                                   amountPaid: earliestUnpaid.status === "PARTIAL" ? earliestUnpaid.remaining_emi_amount : earliestUnpaid.total_emi,
+                                  fineAmount: "0",
+                                  collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                                   paymentMethod: "CASH",
                                   referenceNumber: "",
+                                  receiptNumber: "",
                                 });
                                 return;
                               }
@@ -537,8 +577,11 @@ export default function LoanDetailsModal({
                               });
                               setPayForm({
                                 amountPaid: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
+                                fineAmount: "0",
+                                collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                                 paymentMethod: "CASH",
                                 referenceNumber: "",
+                                receiptNumber: "",
                               });
                             }}
                           >
@@ -546,7 +589,7 @@ export default function LoanDetailsModal({
                           </button>
                         ) : (
                           <div style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
-                            {money(s.total_cash_collected || s.collected_amount || s.total_emi)}
+                            {money(emiCollected)}
                           </div>
                         )}
                       </td>

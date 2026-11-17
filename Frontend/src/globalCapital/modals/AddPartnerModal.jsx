@@ -135,6 +135,35 @@ export default function AddPartnerModal({
               >
                 💰 Initial Capital Deposit (Optional)
               </span>
+              <div className="formGroup" style={{ margin: "0 0 12px" }}>
+                <label style={{ color: "#166534" }}>Deposit To</label>
+                <div className="moduleChoiceGroup">
+                  <label className={`moduleChoiceOption daily ${partnerFormData.targetModule !== "AUTO" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      className="moduleChoiceInput"
+                      name="initialDepositModule"
+                      value="DAILY"
+                      checked={partnerFormData.targetModule !== "AUTO"}
+                      onChange={() => setPartnerFormData({ ...partnerFormData, targetModule: "DAILY" })}
+                    />
+                    <span className="moduleChoiceIndicator" aria-hidden="true" />
+                    Daily Finance
+                  </label>
+                  <label className={`moduleChoiceOption auto ${partnerFormData.targetModule === "AUTO" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      className="moduleChoiceInput"
+                      name="initialDepositModule"
+                      value="AUTO"
+                      checked={partnerFormData.targetModule === "AUTO"}
+                      onChange={() => setPartnerFormData({ ...partnerFormData, targetModule: "AUTO" })}
+                    />
+                    <span className="moduleChoiceIndicator" aria-hidden="true" />
+                    Auto Finance
+                  </label>
+                </div>
+              </div>
               <div style={{ display: "flex", gap: "12px" }}>
                 <div className="formGroup" style={{ flex: 1.2, margin: 0 }}>
                   <label style={{ color: "#166534" }}>Amount (₹)</label>

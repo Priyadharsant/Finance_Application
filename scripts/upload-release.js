@@ -253,6 +253,46 @@ async function main() {
     );
   }
 
+  // Keep only the five newest published releases (including the release just uploaded).
+  // Remove the associated tag as well so old versions are fully retired.
+  console.log("\nChecking GitHub release retention (keep newest 5)...");
+  const releases = [];
+  for (let page = 1; ; page += 1) {
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100&page=${page}`,
+      { headers },
+    );
+    if (!response.ok) {
+      throw new Error(`Could not list releases for cleanup: ${response.status} ${await response.text()}`);
+    }
+    const batch = await response.json();
+    releases.push(...batch.filter((item) => !item.draft && item.published_at));
+    if (batch.length < 100) break;
+  }
+
+  releases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  for (const oldRelease of releases.slice(5)) {
+    console.log(`Removing old release ${oldRelease.tag_name}...`);
+    const deleteRelease = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/releases/${oldRelease.id}`,
+      { method: "DELETE", headers },
+    );
+    if (!deleteRelease.ok) {
+      throw new Error(`Could not delete release ${oldRelease.tag_name}: ${deleteRelease.status} ${await deleteRelease.text()}`);
+    }
+
+    const deleteTag = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/refs/tags/${encodeURIComponent(oldRelease.tag_name)}`,
+      { method: "DELETE", headers },
+    );
+    if (deleteTag.ok || deleteTag.status === 404) {
+      console.log(`✓ Removed release and tag ${oldRelease.tag_name}`);
+    } else {
+      throw new Error(`Release removed, but tag ${oldRelease.tag_name} could not be deleted: ${deleteTag.status} ${await deleteTag.text()}`);
+    }
+  }
+  console.log(`✓ Retention complete: ${Math.min(releases.length, 5)} newest releases kept`);
+
   console.log(`\n========================================================`);
   console.log(`🎉 Successfully released and uploaded KAMBAM FINANCE ${tag}!`);
   console.log(

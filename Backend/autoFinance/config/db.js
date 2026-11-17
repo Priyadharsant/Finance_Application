@@ -11,6 +11,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const { Pool } = pg;
 
+// PostgreSQL DATE values are calendar dates, not instants. Keep them as
+// YYYY-MM-DD strings so JSON serialization cannot shift them by a timezone.
+pg.types.setTypeParser(1082, (value) => value);
+
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 const isRemote =
   connectionString &&

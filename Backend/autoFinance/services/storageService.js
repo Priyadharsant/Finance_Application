@@ -73,6 +73,32 @@ function getBucketName() {
 }
 const getBucket = () => getBucketName();
 
+async function uploadWithRetry(client, bucket, storagePath, fileBuffer, options) {
+  const maxAttempts = 3;
+  let lastResult = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      lastResult = await client.storage
+        .from(bucket)
+        .upload(storagePath, fileBuffer, options);
+
+      if (!lastResult.error) return lastResult;
+
+      const status = Number(lastResult.error.status || 0);
+      const retryable = status === 0 || status >= 500 || /fetch failed|network|timeout/i.test(lastResult.error.message || "");
+      if (!retryable || attempt === maxAttempts) return lastResult;
+    } catch (error) {
+      lastResult = { data: null, error };
+      if (attempt === maxAttempts) return lastResult;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+  }
+
+  return lastResult;
+}
+
 /**
  * Ensures the target bucket exists in Supabase, creating it if needed.
  */
@@ -140,15 +166,19 @@ export async function uploadDocumentFile({ loanId, file, docType }) {
       const storagePath = `${loanId}/${filename}`;
       const fileBuffer = fs.readFileSync(file.path);
 
-      const { data, error } = await client.storage
-        .from(getBucket())
-        .upload(storagePath, fileBuffer, {
+      const { data, error } = await uploadWithRetry(
+        client,
+        getBucket(),
+        storagePath,
+        fileBuffer,
+        {
           contentType: file.mimetype || "application/octet-stream",
           upsert: true,
-        });
+        },
+      );
 
       if (error) {
-        console.warn(`[Storage] Supabase upload failed, falling back to local:`, error.message);
+        console.warn(`[Storage] Supabase upload failed after retries, falling back to local:`, error.message);
       } else {
         // Remove temporary file from multer tmpdir
         try {

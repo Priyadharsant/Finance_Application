@@ -1564,6 +1564,7 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   const collectionRows = [];
   let collSl = 1;
   let grandCollAmt = 0;
+  let grandFineAmt = 0;
 
   sortedLoans.forEach((l) => {
     const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
@@ -1590,14 +1591,19 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
       let runBal = loanTotal;
       custPayments.forEach((p, pIdx) => {
         const amt = Number(p.amount || p.amount_paid || 0);
+        const fine = Number(p.fine_amount || 0);
+        const totalCollected = amt + fine;
         runBal = Math.max(0, runBal - amt);
-        grandCollAmt += amt;
+        grandCollAmt += totalCollected;
+        grandFineAmt += fine;
 
         collectionRows.push({
           "Sl": pIdx === 0 ? collSl++ : "",
           "Name": pIdx === 0 ? custName : "", // Name only on first collection row
           "Date": formatDate(p.payment_date),
-          "Collection Amount": amt,
+          "EMI Amount": amt,
+          "Fine Amount": fine,
+          "Total Collected": totalCollected,
           "Balance": runBal,
           "Total": loanTotal,
         });
@@ -1610,7 +1616,9 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
       "Sl": "TOTAL",
       "Name": "",
       "Date": "",
-      "Collection Amount": grandCollAmt,
+      "EMI Amount": grandCollAmt - grandFineAmt,
+      "Fine Amount": grandFineAmt,
+      "Total Collected": grandCollAmt,
       "Balance": "",
       "Total": "",
     });
@@ -1677,6 +1685,7 @@ export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {
   const collectionRows = [];
   let collSl = 1;
   let grandCollAmt = 0;
+  let grandFineAmt = 0;
 
   sortedLoans.forEach((l) => {
     const custName = l.customerName || `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—";
@@ -1685,8 +1694,8 @@ export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {
 
     // Filter payments to selected targetMonth with amount > 0
     const custPayments = (autoCollections || []).filter(p => {
-      const amt = Number(p.amount || p.amount_paid || 0);
-      if (amt <= 0) return false;
+      const amt = Number(p.amount_paid ?? p.amount ?? 0);
+      if (amt + Number(p.fine_amount || 0) <= 0) return false;
       const pDate = p.payment_date ? String(p.payment_date).slice(0, 7) : "";
       if (pDate !== targetMonth) return false;
       if (loanId && p.loan_id === loanId) return true;
@@ -1704,15 +1713,19 @@ export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {
     if (custPayments.length > 0) {
       let runBal = loanTotal;
       custPayments.forEach((p, pIdx) => {
-        const amt = Number(p.amount || p.amount_paid || 0);
+        const amt = Number(p.amount_paid ?? p.amount ?? 0);
+        const fine = Number(p.fine_amount || 0);
+        const totalCollected = amt + fine;
         runBal = Math.max(0, runBal - amt);
-        grandCollAmt += amt;
+        grandCollAmt += totalCollected;
+        grandFineAmt += fine;
 
         collectionRows.push({
           "Sl": pIdx === 0 ? collSl++ : "",
           "Name": pIdx === 0 ? custName : "", // Name only on first collection row
           "Date": formatDate(p.payment_date),
-          "Collection Amount": amt,
+          "Collection Amount": totalCollected,
+          ...(fine > 0 ? { "Fine": fine } : {}),
           "Balance": runBal,
           "Total": loanTotal,
         });
@@ -1726,6 +1739,7 @@ export const exportAutoMonthlyCollectionReport = (reportData, additionalData = {
       "Name": "",
       "Date": "",
       "Collection Amount": grandCollAmt,
+      "Fine": grandFineAmt,
       "Balance": "",
       "Total": "",
     });

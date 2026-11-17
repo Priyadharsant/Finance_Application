@@ -1,5 +1,5 @@
 import React from "react";
-import { X, UserRound, CarFront } from "lucide-react";
+import { X, UserRound, CarFront, Upload, FileCheck2, LoaderCircle } from "lucide-react";
 import SearchableSelect from "../common/SearchableSelect";
 import { money } from "../services/autoFinanceApi";
 
@@ -12,6 +12,7 @@ export default function CreateLoanModal({
   handleCreateLoan,
   partners = [],
   submitting = false,
+  uploadProgress = null,
 }) {
   if (!showCreateLoan) return null;
 
@@ -23,7 +24,7 @@ export default function CreateLoanModal({
       }}
     >
       <form
-        className="formCard modalForm"
+        className="formCard modalForm autoNewLoanForm"
         onClick={(event) => event.stopPropagation()}
         onSubmit={handleCreateLoan}
       >
@@ -34,27 +35,26 @@ export default function CreateLoanModal({
         >
           <X size={18} />
         </button>
-        <div className="formTitle">
-          <span className="overline autoBadgeTag">NEW VEHICLE LOAN</span>
-          <h2>Issue Vehicle Loan & Generate EMI</h2>
-          <p>
-            Link customer details, loan parameters, and vehicle registration
-            info.
-          </p>
+        <div className="formTitle autoNewLoanTitle">
+          <span className="overline autoBadgeTag">AUTO FINANCE · NEW LOAN</span>
+          <h2>Issue a vehicle loan</h2>
+          <p>Choose a borrower, set repayment terms, and add vehicle details.</p>
         </div>
 
         <div className="formGrid">
           <div className="formSectionHeader">
             <UserRound size={15} /> Customer Selection
           </div>
-          <SearchableSelect
-            label="Search & Select Customer"
-            placeholder="🔍 Select existing or leave blank to create new..."
-            options={[{ value: "", label: "+ Create New Customer Inline", subtext: "" }, ...customerOptions]}
-            value={loanForm.customerId}
-            onChange={(val) => setLoanForm({ ...loanForm, customerId: val })}
-            hint="Select an existing customer or leave empty to fill details below."
-          />
+          <div className="loanCustomerPicker">
+            <SearchableSelect
+              label="Search & Select Customer"
+              placeholder="Select existing customer or create a new one..."
+              options={[{ value: "", label: "+ Create New Customer Inline", subtext: "" }, ...customerOptions]}
+              value={loanForm.customerId}
+              onChange={(val) => setLoanForm({ ...loanForm, customerId: val })}
+              hint="Select an existing customer or leave empty to fill details below."
+            />
+          </div>
 
           {!loanForm.customerId && (
             <>
@@ -208,11 +208,11 @@ export default function CreateLoanModal({
           <div className="formSectionHeader" style={{ marginTop: "24px" }}>
             🤝 Broker & Guarantor (Jamin) Details
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+          <div className="loanSubFormGrid">
             <label>Broker Name <input placeholder="Name" value={loanForm.brokerName} onChange={(e) => setLoanForm({ ...loanForm, brokerName: e.target.value })} /></label>
             <label>Broker Phone <input placeholder="Phone" value={loanForm.brokerPhone} onChange={(e) => setLoanForm({ ...loanForm, brokerPhone: e.target.value })} /></label>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "10px" }}>
+          <div className="loanSubFormGrid">
             <label>Jamin (Guarantor) Name <input placeholder="Name" value={loanForm.jaminName} onChange={(e) => setLoanForm({ ...loanForm, jaminName: e.target.value })} /></label>
             <label>Jamin Phone <input placeholder="Phone" value={loanForm.jaminPhone} onChange={(e) => setLoanForm({ ...loanForm, jaminPhone: e.target.value })} /></label>
             <label>Jamin Relation <input placeholder="Relation (e.g. Brother)" value={loanForm.jaminRelation} onChange={(e) => setLoanForm({ ...loanForm, jaminRelation: e.target.value })} /></label>
@@ -221,7 +221,7 @@ export default function CreateLoanModal({
           <div className="formSectionHeader" style={{ marginTop: "24px" }}>
             💰 Deductions & Fees
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
+          <div className="loanFeesGrid">
             <label>Income Due <input type="number" className="autoInput" value={loanForm.incomeDue} onChange={(e) => setLoanForm({ ...loanForm, incomeDue: Number(e.target.value) })} /></label>
             <label>Document <input type="number" className="autoInput" value={loanForm.documentFee} onChange={(e) => setLoanForm({ ...loanForm, documentFee: Number(e.target.value) })} /></label>
             <label>Hire Purchase <input type="number" className="autoInput" value={loanForm.hirePurchase} onChange={(e) => setLoanForm({ ...loanForm, hirePurchase: Number(e.target.value) })} /></label>
@@ -239,36 +239,47 @@ export default function CreateLoanModal({
           <div className="formSectionHeader" style={{ marginTop: "24px" }}>
             📎 Loan Documents (Optional)
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", background: "#f8fafc", padding: "16px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+          <div className="loanDocumentPickerGrid">
             {[
               { id: 'aadhaar', label: 'Aadhaar Card' },
               { id: 'rc_book', label: 'RC Book' },
               { id: 'main_doc', label: 'Main Agreement' },
               { id: 'other', label: 'Other Document' }
             ].map(doc => (
-              <div key={doc.id} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>{doc.label}</label>
-                <input 
-                  type="file" 
-                  style={{ fontSize: "12px" }}
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setLoanForm({
-                        ...loanForm,
-                        documents: {
-                          ...(loanForm.documents || {}),
-                          [doc.id]: e.target.files[0]
-                        }
-                      });
-                    }
-                  }} 
-                />
+              <div key={doc.id} className="loanDocumentUploadCard">
+                <span className="loanDocumentUploadLabel">{doc.label}</span>
+                <label className={`loanDocumentUploadButton ${loanForm.documents?.[doc.id] ? "hasFile" : ""} ${uploadProgress?.docType === doc.id ? "isUploading" : ""}`}>
+                  {uploadProgress?.docType === doc.id ? <LoaderCircle size={15} className="autoUploadSpinner" /> : loanForm.documents?.[doc.id] ? <FileCheck2 size={15} /> : <Upload size={15} />}
+                  <span>{uploadProgress?.docType === doc.id ? `Uploading ${uploadProgress.current}/${uploadProgress.total} · ${uploadProgress.fileName}` : loanForm.documents?.[doc.id]?.name || "Choose a file"}</span>
+                  <input
+                    type="file"
+                    aria-label={`Upload ${doc.label}`}
+                    disabled={submitting}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setLoanForm({
+                          ...loanForm,
+                          documents: {
+                            ...(loanForm.documents || {}),
+                            [doc.id]: e.target.files[0]
+                          }
+                        });
+                      }
+                    }}
+                  />
+                </label>
               </div>
             ))}
           </div>
+          {uploadProgress && (
+            <div className="loanUploadProgressNotice" role="status" aria-live="polite">
+              <LoaderCircle size={16} className="autoUploadSpinner" />
+              <span>Uploading {uploadProgress.docType.replaceAll("_", " ")} ({uploadProgress.current} of {uploadProgress.total})</span>
+            </div>
+          )}
 
           {/* LIVE EMI CALCULATION PREVIEW BOX (FLAT & REDUCING) */}
-          <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px dashed #cbd5e1", marginTop: "12px" }}>
+          <div className="loanDisbursementPreview">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ color: "#64748b", fontWeight: 600 }}>Total Loan Amount:</span>
               <b style={{ fontSize: "16px", color: "#0f172a" }}>₹{Number(loanForm.loanAmount || 0).toLocaleString()}</b>
@@ -308,7 +319,7 @@ export default function CreateLoanModal({
               }
 
               return (
-                <div className="breakdown">
+                <div className="breakdown loanEmiPreview">
                   <div>
                     <span>Monthly EMI ({loanForm.interestType})</span>
                     <b>{money(monthlyEmi)}</b>
@@ -344,8 +355,15 @@ export default function CreateLoanModal({
               <option value="TWO_WHEELER">
                 Two-Wheeler (Bike / Scooter)
               </option>
+              <option value="THREE_WHEELER">Three Wheeler / Auto Rickshaw</option>
               <option value="CAR">Car / SUV</option>
               <option value="COMMERCIAL">Commercial Vehicle</option>
+              <option value="PICKUP">Pickup</option>
+              <option value="TRUCK">Truck</option>
+              <option value="BUS">Bus</option>
+              <option value="TRACTOR">Tractor</option>
+              <option value="VAN">Van / Minibus</option>
+              <option value="OTHER">Other</option>
             </select>
           </label>
 
@@ -424,7 +442,9 @@ export default function CreateLoanModal({
           {submitting ? (
             <>
               <span className="autoBtnSpinner" />
-              Generating Loan &amp; Schedules...
+              {uploadProgress
+                ? `Uploading ${uploadProgress.docType.replaceAll("_", " ")} (${uploadProgress.current}/${uploadProgress.total})...`
+                : "Generating Loan & Schedules..."}
             </>
           ) : (
             "Generate Loan & EMI Schedule"

@@ -1,165 +1,142 @@
-import { CarFront, Phone, Mail, MapPin, X } from "lucide-react";
-import { money } from "../services/autoFinanceApi";
+import { useEffect, useState } from "react";
+import { CarFront, Phone, Mail, MapPin, X, FileText, Download, CalendarDays, IndianRupee, CreditCard, Gauge, UserRound, ShieldCheck } from "lucide-react";
+import { apiCall, API_BASE, money, dateLabel } from "../services/autoFinanceApi";
 
-export default function CustomerDetailsModal({ customer, loans, onClose }) {
+export default function CustomerDetailsModal({ customer, loans = [], onClose }) {
+  const [loanDetails, setLoanDetails] = useState({});
+  const [loading, setLoading] = useState(true);
+  const customerId = customer?.id;
+  const customerLoans = loans.filter((loan) => String(loan.customer_id) === String(customerId));
+
+  useEffect(() => {
+    let active = true;
+    if (!customerId) {
+      setLoanDetails({});
+      setLoading(false);
+      return () => { active = false; };
+    }
+    setLoading(true);
+    Promise.all(customerLoans.map(async (loan) => {
+      try {
+        const response = await apiCall(`/loans/${loan.id}`);
+        return [loan.id, response.data || null];
+      } catch {
+        return [loan.id, null];
+      }
+    })).then((entries) => {
+      if (active) setLoanDetails(Object.fromEntries(entries));
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [customerId, loans]);
+
   if (!customer) return null;
 
-  const fullName = `${customer.first_name || ""} ${customer.last_name || ""}`.trim();
-  const customerLoans = loans.filter(
-    (loan) => String(loan.customer_id) === String(customer.id)
-  );
-  const initials = fullName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const fullName = `${customer.first_name || ""} ${customer.last_name || ""}`.trim() || "Customer";
+  const info = [
+    { icon: Phone, label: "Phone", value: customer.phone, href: customer.phone ? `tel:${customer.phone}` : null },
+    { icon: Mail, label: "Email", value: customer.email },
+    { icon: MapPin, label: "Location", value: [customer.city, customer.state].filter(Boolean).join(", ") },
+    { icon: MapPin, label: "Address", value: customer.address },
+    { icon: ShieldCheck, label: "Aadhaar", value: customer.aadhar_number || customer.aadhaar_number },
+    { icon: FileText, label: "PAN", value: customer.pan_number },
+  ];
 
   return (
-    <div
-      className="modal"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="detailsCard"
-        style={{ maxWidth: 520, padding: 0, overflow: "hidden" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header strip */}
-        <div style={{
-          background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
-          padding: "24px 24px 20px",
-          position: "relative",
-          color: "#fff"
-        }}>
-          <button
-            className="close"
-            onClick={onClose}
-            style={{ position: "absolute", top: 12, right: 12, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 8px", cursor: "pointer" }}
-          >
-            <X size={16} />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* Avatar */}
-            <div style={{
-              width: 52, height: 52, borderRadius: "50%",
-              background: "rgba(255,255,255,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 20, fontWeight: 700, color: "#fff", flexShrink: 0
-            }}>
-              {initials || "?"}
-            </div>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{fullName || "Customer"}</div>
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                {customer.customer_code || "—"} &nbsp;·&nbsp; Auto Finance Customer
-              </div>
+    <div className="modal autoCustomerModal" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="autoCustomerDialog" role="dialog" aria-modal="true" aria-labelledby="auto-customer-title" onClick={(event) => event.stopPropagation()}>
+        <header className="autoCustomerDialogHero">
+          <div className="autoCustomerDialogIdentity">
+            <div className="autoCustomerDialogAvatar"><UserRound size={24} /></div>
+            <div className="autoCustomerDialogTitle">
+              <span>CUSTOMER PROFILE</span>
+              <h2 id="auto-customer-title">{fullName}</h2>
+              <small>{customer.customer_code || "Auto Finance customer"}</small>
             </div>
           </div>
-        </div>
+          <button type="button" className="autoCustomerDialogClose" onClick={onClose} aria-label="Close customer profile"><X size={18} /></button>
+        </header>
 
-        {/* Contact Info */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: 1, marginBottom: 10 }}>CONTACT DETAILS</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px" }}>
-            <InfoRow icon={<Phone size={14} />} label="Phone" value={
-              customer.phone
-                ? <a href={`tel:${customer.phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>{customer.phone}</a>
-                : "—"
-            } />
-            <InfoRow icon={<Mail size={14} />} label="Email" value={customer.email || "—"} />
-            <InfoRow icon={<MapPin size={14} />} label="City" value={customer.city || "—"} />
-            <InfoRow icon={<MapPin size={14} />} label="Address" value={customer.address || "—"} />
-          </div>
-        </div>
+        <div className="autoCustomerDialogBody">
+          <section className="autoCustomerInfoSection">
+            <div className="autoCustomerSectionHeading"><div><span>PROFILE</span><h3>Contact details</h3></div><span className="autoCustomerSectionCount">{info.filter((item) => item.value).length} details</span></div>
+            <div className="autoCustomerInfoGrid">
+              {info.map(({ icon: Icon, label, value, href }) => (
+                <div className="autoCustomerInfoItem" key={label}>
+                  <span className="autoCustomerInfoIcon"><Icon size={16} /></span>
+                  <span className="autoCustomerInfoText"><small>{label}</small>{href && value ? <a href={href}>{value}</a> : <strong>{value || "Not provided"}</strong>}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        {/* Loans */}
-        <div style={{ padding: "16px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: 1 }}>VEHICLE LOANS</div>
-            <span style={{ fontSize: 11, background: "#dbeafe", color: "#1d4ed8", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
-              {customerLoans.length} {customerLoans.length === 1 ? "Loan" : "Loans"}
-            </span>
-          </div>
-
-          {customerLoans.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {customerLoans.map((loan) => {
-                const paidPct = loan.loan_amount > 0
-                  ? Math.min(100, Math.round((Number(loan.total_paid || 0) / Number(loan.loan_amount)) * 100))
-                  : 0;
-                const statusColor = loan.status === "ACTIVE" ? "#16a34a" : loan.status === "CLOSED" ? "#64748b" : "#d97706";
+          <section className="autoCustomerLoansSection">
+            <div className="autoCustomerSectionHeading"><div><span>PORTFOLIO</span><h3>Vehicle loans</h3></div><span className="autoCustomerSectionCount">{customerLoans.length} {customerLoans.length === 1 ? "loan" : "loans"}</span></div>
+            {loading && <div className="autoCustomerLoading"><span className="autoCustomerLoadingSpinner" />Loading loan details…</div>}
+            {!loading && customerLoans.length === 0 && <div className="autoCustomerNoLoans"><CarFront size={21} /><strong>No vehicle loans yet</strong><span>Loans associated with this customer will appear here.</span></div>}
+            <div className="autoCustomerLoanList">
+              {customerLoans.map((summary) => {
+                const details = loanDetails[summary.id];
+                const loan = details?.loan || summary;
+                const fee = loan.fees_details || {};
+                const docs = details?.documents || [];
+                const paid = Number(loan.total_paid || 0);
+                const principal = Number(loan.loan_amount || 0);
+                const balance = Number(loan.remaining_balance ?? loan.balance_pending ?? Math.max(0, principal - paid));
                 return (
-                  <div key={loan.id} style={{
-                    background: "#f8fafc", borderRadius: 10,
-                    padding: "14px 16px", border: "1px solid #e2e8f0"
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <CarFront size={16} color="#2563eb" />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: "#1e293b" }}>
-                            {loan.make || "Vehicle"} {loan.model || ""}
-                          </div>
-                          <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                            {loan.registration_number || loan.vehicle_type || "Vehicle loan"}
-                          </div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: `${statusColor}15`, borderRadius: 20, padding: "3px 10px" }}>
-                        {loan.status || "ACTIVE"}
-                      </span>
+                  <article className="autoCustomerLoanCard" key={summary.id}>
+                    <div className="autoCustomerLoanCardHead">
+                      <span className="autoCustomerLoanIcon"><CarFront size={18} /></span>
+                      <div className="autoCustomerVehicle"><span>VEHICLE</span><h4>{[loan.make, loan.model].filter(Boolean).join(" ") || "Vehicle loan"}</h4><small>{loan.registration_number || "Registration pending"} · {loan.vehicle_type || "Vehicle"}</small></div>
+                      <span className={`autoCustomerStatus ${String(loan.status || "ACTIVE").toLowerCase()}`}>{loan.status || "ACTIVE"}</span>
                     </div>
 
-                    {/* Loan numbers */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
-                      <LoanStat label="Loan Amount" value={money(loan.loan_amount)} />
-                      <LoanStat label="Amount Paid" value={money(loan.total_paid || 0)} color="#16a34a" />
-                      <LoanStat label="Interest Rate" value={`${loan.interest_rate}% / mo`} />
+                    <div className="autoCustomerLoanStats">
+                      <Metric icon={IndianRupee} label="Principal" value={money(loan.loan_amount)} />
+                      <Metric icon={CreditCard} label="Collected" value={money(paid)} />
+                      <Metric icon={Gauge} label="Balance" value={money(balance)} />
+                      <Metric icon={CalendarDays} label="Tenure" value={`${loan.tenure_months ?? "—"} months`} />
                     </div>
 
-                    {/* Progress bar */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748b", marginBottom: 4 }}>
-                        <span>Recovery Progress</span>
-                        <span style={{ fontWeight: 600 }}>{paidPct}%</span>
-                      </div>
-                      <div style={{ background: "#e2e8f0", borderRadius: 99, height: 6, overflow: "hidden" }}>
-                        <div style={{ width: `${paidPct}%`, background: "#2563eb", height: "100%", borderRadius: 99, transition: "width 0.4s" }} />
+                    <div className="autoCustomerLoanMeta">
+                      <span><small>Interest</small><strong>{loan.interest_type || "FLAT"} · {loan.interest_rate ?? "—"}% / month</strong></span>
+                      <span><small>Start date</small><strong>{dateLabel(loan.loan_start_date || loan.start_date)}</strong></span>
+                      <span><small>Maturity</small><strong>{dateLabel(loan.maturity_date || loan.end_date)}</strong></span>
+                      <span><small>Chassis / Engine</small><strong>{[loan.chassis_number, loan.engine_number].filter(Boolean).join(" / ") || "Not provided"}</strong></span>
+                    </div>
+
+                    <div className="autoCustomerLoanDetails">
+                      <div className="autoCustomerExpandedContent">
+                        <h5>Fees &amp; deductions</h5>
+                        <div className="autoCustomerFeeGrid">{[["Income due", fee.incomeDue], ["Document fee", fee.documentFee], ["Hire purchase", fee.hirePurchase], ["Tax", fee.taxAmount], ["Insurance", fee.insurance], ["Insurance fine", fee.insuranceFine], ["Green tax", fee.greenTax], ["Fine", fee.fine], ["National tax", fee.nationalTax], ["Permit", fee.permit], ["Customer brokerage", fee.brokerageCustomer], ["Hand brokerage", fee.brokerageHand]].map(([label, value]) => <span key={label}><small>{label}</small><strong>{money(value || 0)}</strong></span>)}</div>
+
+                        <h5>Broker &amp; guarantor</h5>
+                        <div className="autoCustomerPeopleGrid">{[["Broker", loan.broker_name], ["Broker phone", loan.broker_phone], ["Guarantor", loan.guarantor_name || loan.jamin_name], ["Guarantor phone", loan.guarantor_phone || loan.jamin_phone], ["Relation", loan.guarantor_relation || loan.jamin_relation]].map(([label, value]) => <span key={label}><small>{label}</small><strong>{value || "—"}</strong></span>)}</div>
+
+                        <h5>Documents <span>{docs.length}</span></h5>
+                        {docs.length ? <div className="autoCustomerDocumentList">{docs.map((doc) => <a key={doc.filename} href={doc.url || `${API_BASE}/loans/${loan.id}/documents/${encodeURIComponent(doc.filename)}`} target="_blank" rel="noreferrer"><FileText size={15} /><span><strong>{doc.docType || "Document"}</strong><small>{doc.filename}</small></span><Download size={15} /></a>)}</div> : <p className="autoCustomerSubtle">No documents uploaded.</p>}
+
+                        <h5>Repayment schedule <span>{details?.schedules?.length || 0}</span></h5>
+                        {details?.schedules?.length ? <DataTable headings={["#", "Due date", "EMI", "Principal", "Interest", "Status"]} rows={details.schedules.map((row) => [row.installment_number, dateLabel(row.due_date), money(row.total_emi), money(row.principal_component), money(row.interest_component), row.status])} /> : <p className="autoCustomerSubtle">{details ? "No repayment schedule available." : "Loan details could not be loaded."}</p>}
+
+                        <h5>Payments <span>{details?.payments?.length || 0}</span></h5>
+                        {details?.payments?.length ? <DataTable headings={["Collected date", "EMI amount", "Method", "Receipt"]} rows={details.payments.map((row) => [dateLabel(row.payment_date), money(row.amount_paid), row.payment_method || "—", row.receipt_number || "—"])} /> : <p className="autoCustomerSubtle">No payments recorded.</p>}
                       </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
-          ) : (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px 0", fontSize: 13 }}>
-              No vehicle loans found for this customer.
-            </div>
-          )}
+          </section>
         </div>
       </div>
     </div>
   );
 }
 
-function InfoRow({ icon, label, value }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-      <span style={{ color: "#94a3b8", marginTop: 2, flexShrink: 0 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 500, marginTop: 1 }}>{value}</div>
-      </div>
-    </div>
-  );
+function Metric({ icon: Icon, label, value }) {
+  return <div className="autoCustomerLoanMetric"><span><Icon size={13} />{label}</span><strong>{value || "—"}</strong></div>;
 }
 
-function LoanStat({ label, value, color }) {
-  return (
-    <div style={{ background: "#fff", borderRadius: 8, padding: "8px 10px", border: "1px solid #e2e8f0" }}>
-      <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: color || "#1e293b" }}>{value}</div>
-    </div>
-  );
+function DataTable({ headings, rows }) {
+  return <div className="autoCustomerDataTableWrap"><table className="autoCustomerDataTable"><thead><tr>{headings.map((heading) => <th key={heading}>{heading}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, cellIndex) => <td key={cellIndex}>{value || "—"}</td>)}</tr>)}</tbody></table></div>;
 }

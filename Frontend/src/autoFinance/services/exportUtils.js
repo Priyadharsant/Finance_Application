@@ -212,6 +212,7 @@ export const exportIndividualLoan = (loan) => {
     (acc, s) => acc + parseFloat(s.total_cash_collected || s.collected_amount || 0),
     0
   );
+  const totalFineCollected = (loan.payments || []).reduce((sum, payment) => sum + Number(payment.fine_amount || 0), 0);
   const scheduledInterest = loan.schedules
     .filter((schedule) => schedule.status !== "CANCELLED")
     .reduce(
@@ -261,7 +262,8 @@ export const exportIndividualLoan = (loan) => {
     { "Category": "Tenure (Months)", "Value": Number(loan.loan.tenure_months) },
     { "Category": "Start Date", "Value": dateLabel(loan.loan.start_date) },
     { "Category": "End Date", "Value": dateLabel(loan.loan.end_date) },
-    { "Category": "Total Collected", "Value": Number(totalCollected) },
+    { "Category": "Fine Collected", "Value": totalFineCollected },
+    { "Category": "Total Collected", "Value": Number(totalCollected + totalFineCollected) },
   ];
 
   const sortedSchedules = [...(loan.schedules || [])].sort((a, b) => {
@@ -274,10 +276,17 @@ export const exportIndividualLoan = (loan) => {
     return Number(a.installment_number || 0) - Number(b.installment_number || 0);
   });
 
-  const scheduleData = sortedSchedules.map((s, idx) => ({
+  const scheduleData = sortedSchedules.map((s, idx) => {
+    const collectedDates = (loan.payments || [])
+      .filter((payment) => String(payment.emi_id) === String(s.id))
+      .map((payment) => String(payment.payment_date || "").slice(0, 10))
+      .filter(Boolean)
+      .sort();
+    return {
     "S.No": idx + 1,
     "Inst #": s.installment_number,
     "Due Date": dateLabel(s.due_date),
+    "Collected Date": collectedDates.at(-1) ? dateLabel(collectedDates.at(-1)) : "—",
     "Principal": Number(s.principal_component),
     "Interest": Number(s.interest_component),
     "Total EMI": Number(s.total_emi),
@@ -285,7 +294,8 @@ export const exportIndividualLoan = (loan) => {
     "Paid Principal": Number(s.paid_principal || 0),
     "Paid Interest": Number(s.paid_interest || 0),
     "Status": s.status,
-  }));
+    };
+  });
 
   let paymentsData = [];
   if (loan.payments && loan.payments.length > 0) {
@@ -302,11 +312,13 @@ export const exportIndividualLoan = (loan) => {
       "Payment ID": p.id,
       "Date": dateLabel(p.payment_date),
       "Amount": Number(p.amount_paid),
+      "Fine Amount": Number(p.fine_amount || 0),
       "Principal Component": Number(p.principal_paid),
       "Interest Component": Number(p.interest_paid),
       "Extra Principal": Number(p.extra_principal_paid),
       "Method": p.payment_method,
       "Reference No": p.reference_number || "—",
+      "Receipt No": p.receipt_number || "—",
     }));
   } else {
     paymentsData = [{ "Message": "No payments recorded yet." }];

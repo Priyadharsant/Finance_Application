@@ -70,6 +70,18 @@
 .formGroup label { color: #475569; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .formGroup input, .formGroup select { width: 100%; padding: 11px 13px; border: 1px solid #cbd5e1; border-radius: 9px; color: #0f172a; font: 14px var(--font-main); }
 .formGroup input:focus, .formGroup select:focus { outline: 3px solid rgba(13, 148, 136, .15); border-color: #0d9488; }
+.moduleChoiceGroup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.moduleChoiceOption { position: relative; display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; min-height: 48px; margin: 0; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; color: #475569; cursor: pointer; font: 700 13px var(--font-main) !important; line-height: 1.25; text-align: center; text-transform: none !important; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+.moduleChoiceOption.daily.selected { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
+.moduleChoiceOption.auto.selected { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+.formGroup input.moduleChoiceInput { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.formGroup input.moduleChoiceInput:focus { outline: none; border: 0; }
+.moduleChoiceIndicator { display: inline-grid; flex: 0 0 16px; width: 16px; height: 16px; place-items: center; border: 1.5px solid #94a3b8; border-radius: 50%; background: #fff; }
+.moduleChoiceOption.daily.selected .moduleChoiceIndicator { border-color: #0f766e; }
+.moduleChoiceOption.auto.selected .moduleChoiceIndicator { border-color: #2563eb; }
+.moduleChoiceOption.selected .moduleChoiceIndicator::after { width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ""; }
+.moduleChoiceInput:focus-visible + .moduleChoiceIndicator { outline: 3px solid rgba(13, 148, 136, .2); outline-offset: 2px; }
+@media (max-width: 480px) { .moduleChoiceGroup { grid-template-columns: 1fr; } }
 
 .globalRecordModal { max-height: min(680px, calc(100vh - 40px)); overflow-y: auto; }
 .globalRecordModal .modalHeader { position: sticky; top: 0; z-index: 1; background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); }

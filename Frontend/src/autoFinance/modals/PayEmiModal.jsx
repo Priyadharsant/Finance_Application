@@ -20,7 +20,7 @@ export default function PayEmiModal({
       }}
     >
       <form
-        className="paymentCard"
+        className="paymentCard autoPayEmiForm"
         onClick={(event) => event.stopPropagation()}
         onSubmit={handlePayEmi}
       >
@@ -40,43 +40,83 @@ export default function PayEmiModal({
             Remaining Amount: <b style={{ color: "#ef4444" }}>{money(payEmiModal.remainingEmi)}</b>
           </p>
         )}
-        <label>
-          Amount (₹)
-          <input
-            type="number"
-            required
-            disabled={submitting}
-            value={payForm.amountPaid}
-            onChange={(e) =>
-              setPayForm({ ...payForm, amountPaid: e.target.value })
-            }
-          />
-        </label>
-        <label>
-          Payment Method
-          <select
-            disabled={submitting}
-            value={payForm.paymentMethod}
-            onChange={(e) =>
-              setPayForm({ ...payForm, paymentMethod: e.target.value })
-            }
-          >
-            <option value="CASH">Cash</option>
-            <option value="UPI">UPI / GPay / PhonePe</option>
-            <option value="BANK_TRANSFER">Bank Transfer</option>
-          </select>
-        </label>
-        <label>
-          Reference / UTR No
-          <input
-            placeholder="Transaction ID (optional)"
-            disabled={submitting}
-            value={payForm.referenceNumber}
-            onChange={(e) =>
-              setPayForm({ ...payForm, referenceNumber: e.target.value })
-            }
-          />
-        </label>
+        <div className="autoPayEmiFields">
+          <label>
+            EMI Amount (₹)
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+              disabled={submitting}
+              value={payForm.amountPaid}
+              onChange={(e) =>
+                setPayForm({ ...payForm, amountPaid: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Fine Amount (₹)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              disabled={submitting}
+              value={payForm.fineAmount ?? "0"}
+              onChange={(e) =>
+                setPayForm({ ...payForm, fineAmount: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Collected Date
+            <input
+              type="date"
+              required
+              disabled={submitting}
+              value={payForm.collectedDate || ""}
+              onChange={(e) =>
+                setPayForm({ ...payForm, collectedDate: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Payment Method
+            <select
+              disabled={submitting}
+              value={payForm.paymentMethod}
+              onChange={(e) =>
+                setPayForm({ ...payForm, paymentMethod: e.target.value })
+              }
+            >
+              <option value="CASH">Cash</option>
+              <option value="UPI">UPI / GPay / PhonePe</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+            </select>
+          </label>
+          <label>
+            Reference / UTR No
+            <input
+              placeholder="Transaction ID (optional)"
+              disabled={submitting}
+              value={payForm.referenceNumber}
+              onChange={(e) =>
+                setPayForm({ ...payForm, referenceNumber: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Receipt Number
+            <input
+              placeholder="Receipt number (optional)"
+              disabled={submitting}
+              value={payForm.receiptNumber || ""}
+              onChange={(e) =>
+                setPayForm({ ...payForm, receiptNumber: e.target.value })
+              }
+            />
+          </label>
+        </div>
         <button
           type="submit"
           className="primary autoBtn full"

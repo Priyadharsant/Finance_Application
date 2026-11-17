@@ -25,6 +25,8 @@ import {
   CarFront,
   Eye,
   AlertTriangle,
+  Pencil,
+  Ban,
 } from "lucide-react";
 import { getApiBaseUrl } from "../apiConfig.js";
 
@@ -60,6 +62,18 @@ const ESSENTIAL_COLUMNS_MAP = {
     "registration_number",
     "loan_amount",
     "interest_rate",
+    "interest_type",
+    "income_due",
+    "document_fee",
+    "hire_purchase",
+    "tax_amount",
+    "insurance",
+    "insurance_fine",
+    "green_tax",
+    "fine",
+    "national_tax",
+    "permit",
+    "brokerage_customer",
     "total_amount",
     "tenure_months",
     "disbursement_date",
@@ -91,6 +105,8 @@ const ESSENTIAL_COLUMNS_MAP = {
     "due_date",
     "total_emi",
     "collected_amount",
+    "collected_date",
+    "fine_amount",
     "status",
   ],
   expenses: [
@@ -122,6 +138,20 @@ const ESSENTIAL_COLUMNS_MAP = {
   ],
 };
 
+// Table Studio only exposes fields that match the selected table's purpose.
+// Workflow and derived values remain read-only even when the DB column itself is writable.
+const EDITABLE_FIELDS_BY_TABLE = {
+  daily_finance_accounts: ["customer_name", "gross_finance_amount", "interest_value", "interest_type", "initial_deduction", "agreed_total_payable", "daily_agreed_due", "mobile_number", "address", "finance_date", "notes"],
+  daily_finance_payments: ["amount", "collection_date", "payment_method", "reference_number", "notes"],
+  autofinance_loans: ["customer_name", "customer_phone", "registration_number", "loan_amount", "interest_rate", "interest_type", "tenure_months", "start_date", "disbursement_date", "income_due", "document_fee", "hire_purchase", "tax_amount", "insurance", "insurance_fine", "green_tax", "fine", "national_tax", "permit", "brokerage_customer"],
+  autofinance_customers: ["first_name", "last_name", "phone", "email", "city", "state", "address", "alternate_phone", "notes"],
+  autofinance_emi_schedules: ["collected_amount", "collected_date", "fine_amount"],
+  expenses: ["expense_date", "category", "expense_type", "amount", "description"],
+  partner_capital_amounts: ["partner_name", "amount", "lender_name", "interest_rate", "effective_date", "notes"],
+  partner_capital_transactions: ["amount", "lender_name", "interest_rate", "effective_date", "notes"],
+};
+const AUTO_LOAN_FEE_COLUMNS = ["income_due", "document_fee", "hire_purchase", "tax_amount", "insurance", "insurance_fine", "green_tax", "fine", "national_tax", "permit", "brokerage_customer"];
+
 // Friendly column labels
 const COLUMN_LABEL_MAP = {
   id: "ID",
@@ -134,6 +164,8 @@ const COLUMN_LABEL_MAP = {
   amount: "Amount",
   amount_paid: "Collected Amount",
   collected_amount: "Collected Amount",
+  collected_date: "Collected Date",
+  fine_amount: "Fine Amount",
   total_emi: "Total EMI",
   installment_number: "EMI #",
   due_date: "Due Date",
@@ -156,6 +188,17 @@ const COLUMN_LABEL_MAP = {
   expense_type: "Expense Type",
   interest_value: "Interest Value",
   interest_type: "Interest Type",
+  income_due: "Income Due",
+  document_fee: "Document Fee",
+  hire_purchase: "Hire Purchase",
+  tax_amount: "Tax Amount",
+  insurance: "Insurance",
+  insurance_fine: "Insurance Fine",
+  green_tax: "Green Tax",
+  fine: "Fine",
+  national_tax: "National Tax",
+  permit: "Permit",
+  brokerage_customer: "Customer Brokerage",
   initial_deduction: "Upfront Interest (Pitipu)",
   agreed_total_payable: "Total Return",
   daily_agreed_due: "Daily Due",
@@ -347,41 +390,28 @@ export default function ExcelTableEditorView({ onClose }) {
   // Check if a cell is editable
   const isCellEditable = (colName, isPK, row) => {
     if (isPK) return false;
-    if (selectedTable === "deleted_loans_archive") return false;
-    if (
-      colName === "id" ||
-      colName === "customer_code" ||
-      colName === "installment_number" ||
-      colName === "net_disbursement" ||
-      colName === "loan_remaining_balance" ||
-      colName === "loan_total_payable" ||
-      colName === "loan_status"
-    ) {
-      return false;
-    }
-
-    if (
-      colName === "partner_name" &&
-      selectedTable !== "partner_capital_amounts" &&
-      selectedTable !== "global_partners"
-    ) {
-      return false;
-    }
-    if (
-      selectedTable === "partner_capital_amounts" &&
-      colName === "fund_source_type"
-    ) {
-      return false;
-    }
-    if (
-      selectedTable === "partner_capital_amounts" &&
-      colName === "lender_name" &&
-      row?.fund_source_type === "OWN"
-    ) {
-      return false;
-    }
+    if (["id", "customer_code", "installment_number", "net_disbursement", "loan_remaining_balance", "loan_total_payable", "loan_status", "status", "transaction_type", "fund_source_type"].includes(colName)) return false;
+    if (colName === "interest_type" && ["daily_finance_accounts", "autofinance_loans"].includes(selectedTable)) return true;
+    const allowedFields = EDITABLE_FIELDS_BY_TABLE[selectedTable] || [];
+    if (!allowedFields.includes(colName)) return false;
+    if (selectedTable === "partner_capital_amounts" && row?.fund_source_type === "OWN" && ["lender_name", "interest_rate", "effective_date"].includes(colName)) return false;
+    if (selectedTable === "partner_capital_amounts" && row?.fund_source_type !== "OWN" && colName === "partner_name") return false;
     return true;
   };
+
+  const getEditorOptions = (colName, currentValue) => {
+    const key = colName.toLowerCase();
+    if (key === "payment_method") return ["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"];
+    if (key === "interest_type") return selectedTable === "autofinance_loans" ? ["FLAT", "REDUCING"] : ["AMOUNT", "PERCENT"];
+    if (key === "category") {
+      const tableCategories = (tableData?.rows || []).map((row) => row[colName]).filter(Boolean);
+      const commonCategories = ["AUTO", "DAILY", "GLOBAL", "GENERAL", "OFFICE", "TRAVEL", "OTHER"];
+      return [...new Set([...commonCategories, ...tableCategories, currentValue].filter(Boolean).map(String))].sort();
+    }
+    return null;
+  };
+
+  const isDateEditor = (colName, dataType) => dataType === "date" || (colName.toLowerCase().includes("date") && !colName.toLowerCase().includes("time"));
 
   const handleCellClick = (rowId, colName, row) => {
     const colDef = tableData?.columns.find((c) => c.column_name === colName);
@@ -394,7 +424,7 @@ export default function ExcelTableEditorView({ onClose }) {
   useEffect(() => {
     if (editingCell && editInputRef.current) {
       editInputRef.current.focus();
-      editInputRef.current.select();
+      if (typeof editInputRef.current.select === "function") editInputRef.current.select();
     }
   }, [editingCell]);
 
@@ -738,7 +768,8 @@ export default function ExcelTableEditorView({ onClose }) {
       colName.includes("principal_component") ||
       colName.includes("interest_component") ||
       colName.includes("daily_agreed_due") ||
-      colName.includes("agreed_total_payable");
+      colName.includes("agreed_total_payable") ||
+      AUTO_LOAN_FEE_COLUMNS.includes(colName);
 
     if (isAmountCol && !isNaN(Number(val)) && val !== "") {
       const num = Number(val);
@@ -774,6 +805,7 @@ export default function ExcelTableEditorView({ onClose }) {
 
   return (
     <div
+      className="tableStudioRoot"
       style={{
         position: "fixed",
         inset: 0,
@@ -992,22 +1024,9 @@ export default function ExcelTableEditorView({ onClose }) {
 
       {/* NOTIFICATION TOAST */}
       {notification && (
-        <div
-          style={{
-            background: notification.type === "error" ? "#7f1d1d" : "#065f46",
-            color: "#ffffff",
-            padding: "6px 16px",
-            fontSize: "12px",
-            fontWeight: "600",
-            display: "flex",
-            alignItems: "center",
-            gap: "7px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-            flexShrink: 0,
-          }}
-        >
-          {notification.type === "error" ? <AlertCircle size={14} /> : <CheckCircle2 size={14} />}
-          <span>{notification.text}</span>
+        <div className={`tableStudioNotification ${notification.type === "error" ? "isError" : "isSuccess"}`} role="status">
+          <span className="tableStudioNotificationIcon">{notification.type === "error" ? <AlertCircle size={17} /> : <CheckCircle2 size={17} />}</span>
+          <span className="tableStudioNotificationText">{notification.text}</span>
         </div>
       )}
 
@@ -1015,6 +1034,7 @@ export default function ExcelTableEditorView({ onClose }) {
       {/* 2. SPLIT LAYOUT: FIXED COMPACT SIDEBAR + FULL HORIZONTAL SCROLL TABLE */}
       {/* ========================================================================= */}
       <div
+        className="tableStudioMainLayout"
         style={{
           flex: 1,
           display: "flex",
@@ -1105,6 +1125,7 @@ export default function ExcelTableEditorView({ onClose }) {
                       <button
                         key={t.name}
                         type="button"
+                        className={`studioTableNavItem ${isSelected ? "active" : ""}`}
                         disabled={loading}
                         onClick={() => {
                           if (selectedTable !== t.name) {
@@ -1198,6 +1219,7 @@ export default function ExcelTableEditorView({ onClose }) {
 
         {/* RIGHT AREA: SPREADSHEET TABLE GRID CONTAINER */}
         <div
+          className="tableStudioGridArea"
           style={{
             flex: 1,
             minWidth: 0,
@@ -1350,8 +1372,8 @@ export default function ExcelTableEditorView({ onClose }) {
                             {selectedTable === "autofinance_emi_schedules" && col.column_name === "total_emi" && (
                               <Lock size={11} color="#94a3b8" title="Scheduled EMI (Locked / Read-Only)" />
                             )}
-                            {selectedTable === "autofinance_emi_schedules" && col.column_name === "collected_amount" && (
-                              <span style={{ color: "#34d399", fontSize: "11px", fontWeight: "900" }} title="Editable Collected Amount">✎</span>
+                            {selectedTable === "autofinance_emi_schedules" && ["collected_amount", "collected_date", "fine_amount"].includes(col.column_name) && (
+                              <span style={{ color: "#34d399", fontSize: "11px", fontWeight: "900" }} title={`Editable ${label}`}>✎</span>
                             )}
                             <span
                               style={{
@@ -1360,7 +1382,7 @@ export default function ExcelTableEditorView({ onClose }) {
                                   ? "#fbbf24"
                                   : isPerson
                                   ? "#38bdf8"
-                                  : selectedTable === "autofinance_emi_schedules" && col.column_name === "collected_amount"
+                                  : selectedTable === "autofinance_emi_schedules" && ["collected_amount", "collected_date", "fine_amount"].includes(col.column_name)
                                   ? "#34d399"
                                   : selectedTable === "autofinance_emi_schedules" && col.column_name === "total_emi"
                                   ? "#94a3b8"
@@ -1651,7 +1673,8 @@ export default function ExcelTableEditorView({ onClose }) {
                               colName.includes("amount") ||
                               colName.includes("total_emi") ||
                               colName.includes("agreed_total_payable") ||
-                              colName.includes("daily_agreed_due");
+                              colName.includes("daily_agreed_due") ||
+                              (selectedTable === "autofinance_loans" && AUTO_LOAN_FEE_COLUMNS.includes(colName));
                             const isPerson =
                               (colName === "partner_name" || colName === "customer_name") &&
                               !formatted.isNull;
@@ -1663,7 +1686,9 @@ export default function ExcelTableEditorView({ onClose }) {
                             return (
                               <td
                                 key={colName}
+                                className={editable ? "tableStudioEditableCell" : "tableStudioReadOnlyCell"}
                                 rowSpan={cellRowSpan}
+                                onClick={(event) => { if (!event.target.closest("button, input, select, a")) handleCellClick(rowId, colName, row); }}
                                 onDoubleClick={() => editable && handleCellClick(rowId, colName, row)}
                                 style={{
                                   padding: isEditing ? "2px" : "6px 12px",
@@ -1698,31 +1723,34 @@ export default function ExcelTableEditorView({ onClose }) {
                                     ? "Primary Key"
                                     : !editable
                                     ? "Reference identity"
-                                    : "Double-click to edit cell"
+                                    : "Click to edit cell"
                                 }
                               >
                                 {isEditing ? (
-                                  <input
-                                    ref={editInputRef}
-                                    type="text"
-                                    value={currentValue === null ? "" : currentValue}
-                                    onChange={(e) =>
-                                      handleCellChange(rowId, colName, e.target.value)
-                                    }
-                                    onBlur={handleCellBlur}
-                                    onKeyDown={(e) => handleCellKeyDown(e, rowId, colName)}
-                                    style={{
-                                      width: "100%",
-                                      padding: "3px 6px",
-                                      background: "#0284c7",
-                                      color: "#ffffff",
-                                      border: "1.5px solid #38bdf8",
-                                      borderRadius: "4px",
-                                      fontSize: "12px",
-                                      outline: "none",
-                                      boxSizing: "border-box",
-                                    }}
-                                  />
+                                  (() => {
+                                    const options = getEditorOptions(colName, currentValue);
+                                    const isNumericColumn = /numeric|integer|double|real/i.test(col.data_type);
+                                    const editorType = isDateEditor(colName, col.data_type)
+                                      ? "date"
+                                      : options
+                                      ? "select"
+                                      : isNumericColumn
+                                      ? "number"
+                                      : "input";
+                                    const editorValue = isDateEditor(colName, col.data_type) && currentValue
+                                      ? String(currentValue).slice(0, 10)
+                                      : currentValue;
+                                    const editorProps = {
+                                      ref: editInputRef,
+                                      value: editorValue === null ? "" : editorValue,
+                                      onChange: (e) => handleCellChange(rowId, colName, e.target.value),
+                                      onBlur: handleCellBlur,
+                                      onKeyDown: (e) => handleCellKeyDown(e, rowId, colName),
+                                      className: "tableStudioCellEditor",
+                                    };
+                                    if (editorType === "select") return <select {...editorProps}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+                                    return <input {...editorProps} type={editorType === "date" ? "date" : editorType === "number" ? "number" : "text"} min={colName === "fine_amount" ? "0" : undefined} step={colName === "fine_amount" ? "0.01" : undefined} />;
+                                  })()
                                 ) : (
                                   <div
                                     style={{
@@ -1861,6 +1889,17 @@ export default function ExcelTableEditorView({ onClose }) {
                                       </span>
                                     )}
 
+                                    <button
+                                      type="button"
+                                      className={`tableStudioFieldMarker ${editable ? "isEditable" : "isReadOnly"}`}
+                                      aria-label={editable ? `Edit ${COLUMN_LABEL_MAP[colName] || colName}` : `${COLUMN_LABEL_MAP[colName] || colName} is read only`}
+                                      title={editable ? "Edit this field" : "This field is read-only"}
+                                      onClick={(event) => { event.stopPropagation(); if (editable) handleCellClick(rowId, colName, row); }}
+                                      disabled={!editable}
+                                    >
+                                      {editable ? <Pencil size={12} /> : <Ban size={12} />}
+                                    </button>
+
                                     {isModified && (
                                       <span
                                         style={{
@@ -1995,6 +2034,7 @@ export default function ExcelTableEditorView({ onClose }) {
         {/* ========================================================================= */}
         {deleteModal && (
           <div
+            className="tableStudioDeleteOverlay"
             style={{
               position: "fixed",
               inset: 0,
@@ -2214,6 +2254,7 @@ export default function ExcelTableEditorView({ onClose }) {
         {/* ========================================================================= */}
         {viewArchiveModal && (
           <div
+            className="tableStudioDeleteOverlay"
             style={{
               position: "fixed",
               inset: 0,
@@ -2425,6 +2466,7 @@ export default function ExcelTableEditorView({ onClose }) {
         {/* Rule Violation Prevention Popup Modal */}
         {violationModal && (
           <div
+            className="tableStudioDeleteOverlay"
             style={{
               position: "fixed",
               top: 0,

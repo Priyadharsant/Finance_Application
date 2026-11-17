@@ -305,6 +305,7 @@ router.post('/partners', async (req, res) => {
       notes,
       initialContribution,
       effectiveDate,
+      targetModule,
     } = req.body;
 
     if (!name || !name.trim()) {
@@ -333,7 +334,8 @@ router.post('/partners', async (req, res) => {
         partner.id,
         Number(initialContribution),
         effectiveDate || new Date().toISOString().slice(0, 10),
-        'Initial partner capital contribution'
+        'Initial partner capital contribution',
+        { targetModule: targetModule || 'DAILY' }
       );
     }
 

@@ -1,11 +1,11 @@
 import React from "react";
-import { UserRound, Calendar, X, RotateCcw, Download } from "lucide-react";
+import { UserRound, Calendar, X, RotateCcw, Search, Users, MapPin, Mail, ArrowUpRight, Download } from "lucide-react";
 
 export default function AutoCustomers({
   filteredCustomers = [],
   customerMonthFilter = "",
   setCustomerMonthFilter,
-  search,
+  search = "",
   setSearch,
   handleExportCustomers,
   setSelectedCustomer,
@@ -18,159 +18,77 @@ export default function AutoCustomers({
   };
 
   return (
-    <section className="content">
-      <div className="intro">
-        <div>
-          <span className="overline autoBadgeTag">CUSTOMERS</span>
-          <h2>Auto Finance Customer Directory</h2>
-          <p>Manage customer profiles, contact info, and loan histories.</p>
+    <section className="content autoCustomersPage">
+      <div className="autoCustomersHero">
+        <div className="autoCustomersHeroCopy">
+          <span className="overline autoBadgeTag">CUSTOMER MANAGEMENT</span>
+          <h2>Customer directory</h2>
+          <p>Find customer profiles, contact details, and vehicle loan history in one place.</p>
+        </div>
+        <div className="autoCustomersHeroActions">
+          <div className="autoCustomersTotal" aria-label={`${filteredCustomers.length} customers shown`}>
+            <span className="autoCustomersTotalIcon"><Users size={18} /></span>
+            <span><strong>{filteredCustomers.length}</strong><small>customers shown</small></span>
+          </div>
+          {handleExportCustomers && <button type="button" className="autoCustomerExport" onClick={handleExportCustomers}><Download size={15} /> Export list</button>}
         </div>
       </div>
 
-      <div
-        className="filterBar"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "10px",
-          marginBottom: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "280px", flexWrap: "wrap" }}>
-          {/* Month Calendar Picker (Joined Month) */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "#ffffff",
-              padding: "4px 10px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-            title="Filter by Join Month Calendar"
-          >
-            <Calendar size={15} color="#0f766e" />
-            <input
-              type="month"
-              value={customerMonthFilter}
-              onChange={(e) => setCustomerMonthFilter?.(e.target.value)}
-              style={{
-                border: "none",
-                outline: "none",
-                fontSize: "12.5px",
-                color: "#1e293b",
-                fontWeight: "500",
-                background: "transparent",
-                cursor: "pointer",
-              }}
-              title="Filter customers by registration month"
-            />
-            {customerMonthFilter && (
-              <button
-                type="button"
-                onClick={() => setCustomerMonthFilter?.("")}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "#94a3b8",
-                  cursor: "pointer",
-                  padding: "0 2px",
-                }}
-                title="Clear Month Filter"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
+      <div className="autoCustomersToolbar">
+        <label className="autoCustomerSearch">
+          <Search size={17} aria-hidden="true" />
+          <input
+            placeholder="Search name, phone, code, address or notes"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search customers"
+          />
+          {search && <button type="button" onClick={() => setSearch("")} title="Clear search" aria-label="Clear search"><X size={15} /></button>}
+        </label>
 
-          <div style={{ flex: 1, minWidth: "200px" }}>
-            <input
-              style={{ width: "100%", padding: "7px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "12.5px", outline: "none" }}
-              placeholder="Search name, phone, customer code or ID, address, notes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+        <label className="autoCustomerMonth" title="Filter by registration month">
+          <Calendar size={16} aria-hidden="true" />
+          <span>Joined</span>
+          <input
+            type="month"
+            value={customerMonthFilter}
+            onChange={(e) => setCustomerMonthFilter?.(e.target.value)}
+            aria-label="Filter customers by registration month"
+          />
+          {customerMonthFilter && <button type="button" onClick={() => setCustomerMonthFilter?.("")} title="Clear month filter" aria-label="Clear month filter"><X size={14} /></button>}
+        </label>
 
-          {isFiltered && (
-            <button
-              type="button"
-              className="secondary autoBtn"
-              style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-              onClick={handleResetFilters}
-              title="Reset filters"
-            >
-              <RotateCcw size={12} /> Reset
-            </button>
-          )}
-        </div>
-
+        {isFiltered && <button type="button" className="autoSecondaryBtn" onClick={handleResetFilters}><RotateCcw size={14} /> Clear filters</button>}
       </div>
 
-      <div className="card tableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: "50px" }}>S.No</th>
-              <th>Code</th>
-              <th>Customer Name</th>
-              <th>Phone Number</th>
-              <th>Email</th>
-              <th>City / State</th>
-              <th>Address</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCustomers.map((c, idx) => (
-              <tr
-                key={c.id}
-                className="clickable"
-                onClick={() => setSelectedCustomer(c)}
-              >
-                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
-                <td>
-                  <span className="tag autoTag">{c.customer_code}</span>
-                </td>
-                <td>
-                  <div className="customerNameCell">
-                    <b>
-                      {c.first_name} {c.last_name}
-                    </b>
-                  </div>
-                </td>
-                <td>
-                  {c.phone ? (
-                    <a
-                      className="phoneLink"
-                      href={`tel:${c.phone}`}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {c.phone}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td>{c.email || "—"}</td>
-                <td>{c.city ? `${c.city}, ${c.state || ""}` : "—"}</td>
-                <td>
-                  <small>{c.address || "—"}</small>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!filteredCustomers.length && (
-          <div className="empty">
-            <div>
-              <UserRound size={28} />
-            </div>
-            <b>No customers found matching search.</b>
-          </div>
-        )}
+      <div className="autoCustomersTableCard">
+        <div className="autoCustomersTableHeading">
+          <div><h3>All customers</h3><p>Select a customer to view their profile and loan history.</p></div>
+          <span>{filteredCustomers.length} {filteredCustomers.length === 1 ? "record" : "records"}</span>
+        </div>
+        <div className="autoCustomersTableScroll">
+          <table className="autoCustomersTable">
+            <thead><tr><th className="autoCustomerIndex">#</th><th>Customer</th><th>Phone</th><th>Email</th><th>Location</th><th>Address</th><th aria-label="Open profile" /></tr></thead>
+            <tbody>
+              {filteredCustomers.map((c, idx) => {
+                const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Unnamed customer";
+                const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+                return (
+                  <tr key={c.id} className="autoCustomerRow" onClick={() => setSelectedCustomer(c)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedCustomer(c); } }}>
+                    <td className="autoCustomerIndex">{String(idx + 1).padStart(2, "0")}</td>
+                    <td><div className="autoCustomerIdentity"><span className="autoCustomerAvatar">{initials || <UserRound size={17} />}</span><span className="autoCustomerName"><strong>{name}</strong><small>{c.customer_code || "Customer profile"}</small></span></div></td>
+                    <td>{c.phone ? <a className="phoneLink" href={`tel:${c.phone}`} onClick={(event) => event.stopPropagation()}>{c.phone}</a> : <span className="autoCustomerMuted">—</span>}</td>
+                    <td>{c.email ? <span className="autoCustomerInline"><Mail size={14} />{c.email}</span> : <span className="autoCustomerMuted">—</span>}</td>
+                    <td>{c.city || c.state ? <span className="autoCustomerInline"><MapPin size={14} />{[c.city, c.state].filter(Boolean).join(", ")}</span> : <span className="autoCustomerMuted">—</span>}</td>
+                    <td className="autoCustomerAddress" title={c.address || ""}>{c.address || <span className="autoCustomerMuted">—</span>}</td>
+                    <td><span className="autoCustomerOpen" aria-hidden="true"><ArrowUpRight size={16} /></span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!filteredCustomers.length && <div className="autoCustomersEmpty"><span><UserRound size={22} /></span><strong>No customers found</strong><p>Try a different name, contact, or registration month.</p>{isFiltered && <button type="button" className="autoSecondaryBtn" onClick={handleResetFilters}>Clear filters</button>}</div>}
+        </div>
       </div>
     </section>
   );

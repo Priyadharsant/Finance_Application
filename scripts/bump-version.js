@@ -35,6 +35,7 @@ function loadEnvToken() {
 const FILES = {
   rootPackage: path.join(ROOT_DIR, "package.json"),
   frontendPackage: path.join(ROOT_DIR, "Frontend", "package.json"),
+  frontendLock: path.join(ROOT_DIR, "Frontend", "package-lock.json"),
   backendPackage: path.join(ROOT_DIR, "Backend", "package.json"),
   frontendVersionJs: path.join(ROOT_DIR, "Frontend", "src", "version.js"),
   backendVersionRoute: path.join(ROOT_DIR, "Backend", "src", "routes", "versionRoutes.js"),
@@ -188,6 +189,11 @@ async function main() {
     process.exit(1);
   }
 
+  const releaseToken = shouldRelease ? loadEnvToken() : null;
+  if (shouldRelease && !releaseToken) {
+    throw new Error("GH_TOKEN or GITHUB_TOKEN is required to publish a release. Set it in the environment or .env.");
+  }
+
   const today = getTodayDateString();
   const modifiedFiles = [];
 
@@ -205,6 +211,15 @@ async function main() {
     pkg.version = nextVersion;
     writeJson(FILES.frontendPackage, pkg, 2);
     modifiedFiles.push("Frontend/package.json");
+  }
+
+  // Keep npm ci and Electron Builder metadata in sync with the app version.
+  if (fs.existsSync(FILES.frontendLock)) {
+    const lock = readJson(FILES.frontendLock);
+    lock.version = nextVersion;
+    if (lock.packages?.[""]) lock.packages[""].version = nextVersion;
+    writeJson(FILES.frontendLock, lock);
+    modifiedFiles.push("Frontend/package-lock.json");
   }
 
   // 3. Backend package.json
@@ -256,60 +271,31 @@ async function main() {
     console.log(` Executing Automated Release for v${nextVersion}`);
     console.log("========================================================");
 
-    try {
-      console.log("\n📦 Staging and committing release version files...");
-      execSync("git add -A", {
-        stdio: "inherit",
-        cwd: ROOT_DIR,
-      });
-      execSync(`git commit -m "chore(release): v${nextVersion}"`, {
-        stdio: "inherit",
-        cwd: ROOT_DIR,
-      });
-      console.log(`✓ Committed release commit for v${nextVersion}`);
-    } catch (gitErr) {
-      console.warn("⚠️ Git commit notice:", gitErr.message);
-    }
+    const releaseFiles = [
+      "package.json",
+      "Frontend/package.json",
+      "Frontend/package-lock.json",
+      "Backend/package.json",
+      "Frontend/src/version.js",
+      "Backend/src/routes/versionRoutes.js",
+    ].filter((file) => fs.existsSync(path.join(ROOT_DIR, file)));
+    const git = (args) => execSync(`git ${args}`, { stdio: "inherit", cwd: ROOT_DIR });
 
-    try {
-      execSync(`git tag v${nextVersion}`, { stdio: "inherit", cwd: ROOT_DIR });
-      console.log(`✓ Created git tag v${nextVersion}`);
-    } catch (tagErr) {
-      console.warn("⚠️ Git tag notice:", tagErr.message);
-    }
-
-    try {
-      console.log("\n🚀 Pushing release commit and tag to GitHub origin...");
-      execSync("git push origin main && git push origin --tags", {
-        stdio: "inherit",
-        cwd: ROOT_DIR,
-      });
-      console.log("✓ Pushed to GitHub origin");
-    } catch (pushErr) {
-      console.warn("⚠️ Git push notice:", pushErr.message);
-    }
-
-    console.log(`\n🔨 Building frontend for production...`);
+    console.log("\n🔨 Building frontend for production...");
     execSync("npm --prefix Frontend run build", { stdio: "inherit", cwd: ROOT_DIR });
+    console.log("\n🔨 Packaging installer with Electron Builder...");
+    execSync("npx electron-builder", { stdio: "inherit", cwd: path.join(ROOT_DIR, "Frontend") });
 
-    const token = loadEnvToken();
-    console.log(`\n🔨 Packaging installer with Electron Builder...`);
-    execSync("npx electron-builder", {
-      stdio: "inherit",
-      cwd: path.join(ROOT_DIR, "Frontend"),
-    });
+    console.log("\n📦 Committing only version metadata...");
+    git(`add -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
+    git(`commit -m "chore(release): v${nextVersion}" -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
+    git(`tag v${nextVersion}`);
+    console.log("\n🚀 Pushing release commit and tag to GitHub origin...");
+    git("push origin main");
+    git("push origin --tags");
 
-    if (token) {
-      console.log(`\n🔑 GitHub Token detected. Uploading release v${nextVersion} assets to GitHub...`);
-      execSync("node scripts/upload-release.js", {
-        stdio: "inherit",
-        cwd: ROOT_DIR,
-      });
-    } else {
-      console.log(`\nℹ️ No GH_TOKEN found in environment or .env.`);
-      console.log(`✅ Local installer built successfully in: App/`);
-      console.log(`💡 Tip: Add GH_TOKEN=<your-github-token> to .env to automatically upload EXE to GitHub Releases!`);
-    }
+    console.log(`\n🔑 Uploading release v${nextVersion} assets to GitHub...`);
+    execSync("node scripts/upload-release.js", { stdio: "inherit", cwd: ROOT_DIR });
   } else {
     console.log("--------------------------------------------------------");
     console.log("Next steps (manual):");

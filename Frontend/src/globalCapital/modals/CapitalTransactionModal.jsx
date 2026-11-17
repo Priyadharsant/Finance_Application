@@ -101,26 +101,30 @@ export default function CapitalTransactionModal({
               <label style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "6px" }}>
                 Target Finance Business *
               </label>
-              <div style={{ display: "flex", gap: "16px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: capitalFormData.targetModule !== "AUTO" ? "700" : "500", color: capitalFormData.targetModule !== "AUTO" ? "#0f766e" : "#64748b" }}>
+              <div className="moduleChoiceGroup">
+                <label className={`moduleChoiceOption daily ${capitalFormData.targetModule !== "AUTO" ? "selected" : ""}`}>
                   <input
                     type="radio"
+                    className="moduleChoiceInput"
                     name="targetModule"
                     value="DAILY"
                     checked={capitalFormData.targetModule !== "AUTO"}
                     onChange={() => setCapitalFormData({ ...capitalFormData, targetModule: "DAILY" })}
                   />
-                  <span>Daily Finance (தினசரி)</span>
+                  <span className="moduleChoiceIndicator" aria-hidden="true" />
+                  Daily Finance (தினசரி)
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: capitalFormData.targetModule === "AUTO" ? "700" : "500", color: capitalFormData.targetModule === "AUTO" ? "#2563eb" : "#64748b" }}>
+                <label className={`moduleChoiceOption auto ${capitalFormData.targetModule === "AUTO" ? "selected" : ""}`}>
                   <input
                     type="radio"
+                    className="moduleChoiceInput"
                     name="targetModule"
                     value="AUTO"
                     checked={capitalFormData.targetModule === "AUTO"}
                     onChange={() => setCapitalFormData({ ...capitalFormData, targetModule: "AUTO" })}
                   />
-                  <span>Auto Finance (வாகனம்)</span>
+                  <span className="moduleChoiceIndicator" aria-hidden="true" />
+                  Auto Finance (வாகனம்)
                 </label>
               </div>
             </div>

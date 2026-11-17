@@ -1,7 +1,40 @@
 import { pool } from "../config/db.js";
-import { validateAndDisburseFunds, createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
+import { createLedgerEntry } from "../../global_cash/services/globalCash.service.js";
 import { listDocumentFiles } from "./storageService.js";
 import crypto from "crypto";
+
+let autoPaymentColumnsPromise;
+
+export async function ensureAutoPaymentColumns() {
+  if (!autoPaymentColumnsPromise) {
+    autoPaymentColumnsPromise = (async () => {
+      await pool.query(`ALTER TABLE autofinance_payments ADD COLUMN IF NOT EXISTS fine_amount NUMERIC(14,2) NOT NULL DEFAULT 0`);
+      await pool.query(`ALTER TABLE autofinance_payments ADD COLUMN IF NOT EXISTS receipt_number VARCHAR(100)`);
+    })().catch((error) => {
+      autoPaymentColumnsPromise = null;
+      throw error;
+    });
+  }
+  await autoPaymentColumnsPromise;
+}
+
+async function getAvailableAutoBalance(client) {
+  const ledgerRes = await client.query(`
+    SELECT COALESCE(SUM(CASE
+      WHEN direction = 'CREDIT' THEN amount
+      WHEN direction = 'DEBIT' THEN -amount
+      ELSE 0
+    END), 0) AS balance
+    FROM global_cash_ledger
+    WHERE UPPER(COALESCE(source_module, '')) = 'AUTO'
+  `);
+  const expenseRes = await client.query(`
+    SELECT COALESCE(SUM(amount), 0) AS expenses
+    FROM expenses
+    WHERE UPPER(COALESCE(category, 'GENERAL')) = 'AUTO'
+  `);
+  return Number(ledgerRes.rows[0]?.balance || 0) - Number(expenseRes.rows[0]?.expenses || 0);
+}
 
 export function addMonthsSafe(baseDate, months) {
   let y, m, d;
@@ -124,6 +157,18 @@ export async function createLoanWithVehicle(data) {
       partnerInterestRate: 0
     };
 
+    const totalDeductions = feesDetailsObj.incomeDue + feesDetailsObj.documentFee + feesDetailsObj.hirePurchase + feesDetailsObj.taxAmount + feesDetailsObj.insurance + feesDetailsObj.insuranceFine + feesDetailsObj.greenTax + feesDetailsObj.fine + feesDetailsObj.nationalTax + feesDetailsObj.permit + feesDetailsObj.brokerageCustomer;
+    const inHandAmount = Number(loanAmount) - totalDeductions;
+    const handBrokerageAmount = Number(feesDetailsObj.brokerageHand || 0);
+    const totalAutoCashRequired = inHandAmount + handBrokerageAmount;
+    const availableAutoBalance = await getAvailableAutoBalance(client);
+
+    if (totalAutoCashRequired > availableAutoBalance) {
+      throw new Error(
+        `Insufficient Auto Finance balance. Available: ₹${availableAutoBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}; required: ₹${totalAutoCashRequired.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (customer payout plus hand brokerage).`,
+      );
+    }
+
     // 1. Insert Loan
     const loanQuery = `
       INSERT INTO autofinance_loans (
@@ -145,14 +190,13 @@ export async function createLoanWithVehicle(data) {
     ]);
     const loan = loanRes.rows[0];
 
-    const totalDeductions = feesDetailsObj.incomeDue + feesDetailsObj.documentFee + feesDetailsObj.hirePurchase + feesDetailsObj.taxAmount + feesDetailsObj.insurance + feesDetailsObj.insuranceFine + feesDetailsObj.greenTax + feesDetailsObj.fine + feesDetailsObj.nationalTax + feesDetailsObj.permit + feesDetailsObj.brokerageCustomer;
-    const inHandAmount = Number(loanAmount) - totalDeductions;
-
-    // Global Cash Ledger Integration (Disburse in-hand amount from Global Capital)
+    // Record this Auto loan's actual customer payout from the Auto cash balance.
     if (inHandAmount > 0) {
-      await validateAndDisburseFunds(client, {
-        module: 'AUTO',
+      await createLedgerEntry(client, {
+        type: 'AUTO_LOAN_DISBURSEMENT',
         amount: inHandAmount,
+        direction: 'DEBIT',
+        sourceModule: 'AUTO',
         effectiveDate: startStr,
         referenceType: 'AUTO_LOAN',
         referenceId: loan.id,
@@ -282,6 +326,7 @@ export async function createLoanWithVehicle(data) {
 }
 
 export async function getAllLoans() {
+  await ensureAutoPaymentColumns();
   const query = `
     SELECT 
       l.*,
@@ -294,6 +339,8 @@ export async function getAllLoans() {
       v.vehicle_type, v.make, v.model, v.registration_number,
       COALESCE(s.total_interest, 0) AS total_interest,
       COALESCE(p.total_paid, s.schedule_total_paid, 0) as total_paid,
+      COALESCE(p.total_fine_paid, 0) as total_fine_paid,
+      p.last_collected_date,
       COALESCE(CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE s.pending_dues_count END, 0) as pending_dues_count,
       COALESCE(s.paid_dues_count, 0) as paid_dues_count,
       COALESCE(s.total_dues_count, l.tenure_months) as total_dues_count,
@@ -310,7 +357,10 @@ export async function getAllLoans() {
     LEFT JOIN autofinance_loan_types lt ON l.loan_type_id = lt.id
     LEFT JOIN autofinance_vehicles v ON l.id = v.loan_id
     LEFT JOIN (
-      SELECT loan_id, SUM(amount_paid) as total_paid
+      SELECT loan_id,
+        SUM(amount_paid) as total_paid,
+        SUM(COALESCE(fine_amount, 0)) as total_fine_paid,
+        MAX(payment_date) as last_collected_date
       FROM autofinance_payments
       GROUP BY loan_id
     ) p ON l.id = p.loan_id
@@ -351,6 +401,7 @@ export async function getAllLoans() {
 }
 
 export async function getLoanDetails(loanId) {
+  await ensureAutoPaymentColumns();
   const loanQuery = `
     SELECT 
       l.*,
@@ -462,13 +513,16 @@ export async function getDueInstallments() {
 }
 
 export async function getAutoFinanceOverview() {
+  await ensureAutoPaymentColumns();
   // 1. Isolated counts/sums to completely eliminate multi-table Cartesian multiplication
   const query = `
     SELECT
       (SELECT COUNT(*) FROM autofinance_loans) as total_loans,
       (SELECT COALESCE(SUM(loan_amount), 0) FROM autofinance_loans) as total_disbursed,
       (SELECT COUNT(*) FROM autofinance_customers) as total_customers,
-      (SELECT COALESCE(SUM(amount_paid), 0) FROM autofinance_payments) as total_collected,
+      (SELECT COALESCE(SUM(amount_paid + COALESCE(fine_amount, 0)), 0) FROM autofinance_payments) as total_collected,
+      (SELECT COALESCE(SUM(fine_amount), 0) FROM autofinance_payments) as total_fine_collected,
+      (SELECT COALESCE(SUM(amount_paid), 0) FROM autofinance_payments) as total_loan_repayments,
       (SELECT COUNT(*) FROM autofinance_vehicles) as total_vehicles,
       (SELECT COUNT(*) FROM autofinance_vehicles WHERE vehicle_type = 'TWO_WHEELER') as two_wheeler_count,
       (SELECT COUNT(*) FROM autofinance_vehicles WHERE vehicle_type = 'CAR') as car_count,
@@ -515,10 +569,11 @@ export async function getAutoFinanceOverview() {
 
   const totalDisbursed = parseFloat(row.total_disbursed || 0);
   const totalCollected = parseFloat(row.total_collected || 0);
+  const totalLoanRepayments = parseFloat(row.total_loan_repayments || 0);
   const totalExpected = parseFloat(schedRow.total_expected_emi || (totalDisbursed * 1.2));
   const totalProfit = parseFloat(schedRow.total_expected_interest || (totalExpected - totalDisbursed));
-  const remaining = Math.max(0, totalExpected - totalCollected);
-  const recoveryRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : '0.0';
+  const remaining = Math.max(0, totalExpected - totalLoanRepayments);
+  const recoveryRate = totalExpected > 0 ? ((totalLoanRepayments / totalExpected) * 100).toFixed(1) : '0.0';
 
   // Capital & Expenses dedicated for Auto Finance
   let autoCapital = 0;

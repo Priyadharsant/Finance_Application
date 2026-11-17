@@ -1,7 +1,7 @@
 import express from 'express';
 import { pool as db } from '../../autoFinance/config/db.js';
 import { verifyAuthToken } from './appAuthRoutes.js';
-import { rescheduleFutureEMIs } from '../../autoFinance/services/loanService.js';
+import { ensureAutoPaymentColumns, rescheduleFutureEMIs } from '../../autoFinance/services/loanService.js';
 import {
   ensureDeletedLoansTable,
   deleteDailyLoan,
@@ -125,6 +125,17 @@ const MAIN_TABLES_CONFIG = [
   },
 ];
 
+const TABLE_EDITOR_ALLOWED_FIELDS = {
+  daily_finance_accounts: ['customer_name', 'gross_finance_amount', 'interest_value', 'interest_type', 'initial_deduction', 'agreed_total_payable', 'daily_agreed_due', 'mobile_number', 'address', 'finance_date', 'notes'],
+  daily_finance_payments: ['amount', 'collection_date', 'payment_method', 'reference_number', 'notes'],
+  autofinance_loans: ['customer_name', 'customer_phone', 'registration_number', 'loan_amount', 'interest_rate', 'interest_type', 'tenure_months', 'start_date', 'disbursement_date', 'income_due', 'document_fee', 'hire_purchase', 'tax_amount', 'insurance', 'insurance_fine', 'green_tax', 'fine', 'national_tax', 'permit', 'brokerage_customer'],
+  autofinance_customers: ['first_name', 'last_name', 'phone', 'email', 'city', 'state', 'address', 'alternate_phone', 'notes'],
+  autofinance_emi_schedules: ['collected_amount', 'collected_date', 'fine_amount'],
+  expenses: ['expense_date', 'category', 'expense_type', 'amount', 'description'],
+  partner_capital_amounts: ['partner_name', 'amount', 'lender_name', 'interest_rate', 'effective_date', 'notes'],
+  partner_capital_transactions: ['amount', 'lender_name', 'interest_rate', 'effective_date', 'notes'],
+};
+
 // Check if table is valid (handles physical and virtual tables)
 async function getValidTables() {
   const allowed = MAIN_TABLES_CONFIG.map((t) => t.name).filter(
@@ -209,7 +220,8 @@ const TABLE_ENRICHMENTS = {
     searchFields: ['dc.customer_name', 'dc.mobile_number', 'dc.address', 'dc.notes', 'a.status']
   },
   autofinance_loans: {
-    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number, COALESCE(v.make, '—') AS vehicle_make, COALESCE(v.model, '—') AS vehicle_model`,
+    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number, COALESCE(v.make, '—') AS vehicle_make, COALESCE(v.model, '—') AS vehicle_model,
+      COALESCE((t.fees_details->>'incomeDue')::numeric, 0) AS income_due, COALESCE((t.fees_details->>'documentFee')::numeric, 0) AS document_fee, COALESCE((t.fees_details->>'hirePurchase')::numeric, 0) AS hire_purchase, COALESCE((t.fees_details->>'taxAmount')::numeric, 0) AS tax_amount, COALESCE((t.fees_details->>'insurance')::numeric, 0) AS insurance, COALESCE((t.fees_details->>'insuranceFine')::numeric, 0) AS insurance_fine, COALESCE((t.fees_details->>'greenTax')::numeric, 0) AS green_tax, COALESCE((t.fees_details->>'fine')::numeric, 0) AS fine, COALESCE((t.fees_details->>'nationalTax')::numeric, 0) AS national_tax, COALESCE((t.fees_details->>'permit')::numeric, 0) AS permit, COALESCE((t.fees_details->>'brokerageCustomer')::numeric, 0) AS brokerage_customer`,
     joinClause: `LEFT JOIN "autofinance_customers" c ON c.id = t.customer_id LEFT JOIN "autofinance_vehicles" v ON v.loan_id = t.id`,
     extraColumns: [
       { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
@@ -217,18 +229,31 @@ const TABLE_ENRICHMENTS = {
       { column_name: 'customer_code', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
       { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
       { column_name: 'vehicle_make', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
-      { column_name: 'vehicle_model', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'vehicle_model', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'income_due', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'document_fee', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'hire_purchase', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'tax_amount', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'insurance', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'insurance_fine', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'green_tax', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'fine', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'national_tax', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'permit', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'brokerage_customer', data_type: 'numeric', is_nullable: 'YES', is_primary: false, is_virtual: true }
     ],
     searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'v.make', 'v.model', 'v.vehicle_type']
   },
   autofinance_emi_schedules: {
-    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number`,
+    selectExtra: `, COALESCE(NULLIF(TRIM(c.first_name || ' ' || COALESCE(c.last_name, '')), ''), '—') AS customer_name, COALESCE(c.phone, '—') AS customer_phone, COALESCE(c.customer_code, '—') AS customer_code, COALESCE(v.registration_number, '—') AS registration_number, (SELECT MAX(p.payment_date)::text FROM autofinance_payments p WHERE p.emi_id = t.id) AS collected_date, COALESCE((SELECT SUM(p.amount_paid) FROM autofinance_payments p WHERE p.emi_id = t.id), t.collected_amount, 0) AS collected_amount, (SELECT COALESCE(SUM(p.fine_amount), 0) FROM autofinance_payments p WHERE p.emi_id = t.id) AS fine_amount`,
     joinClause: `LEFT JOIN "autofinance_loans" l ON l.id = t.loan_id LEFT JOIN "autofinance_customers" c ON c.id = l.customer_id LEFT JOIN "autofinance_vehicles" v ON v.loan_id = l.id`,
     extraColumns: [
       { column_name: 'customer_name', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
       { column_name: 'customer_phone', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
       { column_name: 'customer_code', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
-      { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true }
+      { column_name: 'registration_number', data_type: 'character varying', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'collected_date', data_type: 'date', is_nullable: 'YES', is_primary: false, is_virtual: true },
+      { column_name: 'fine_amount', data_type: 'numeric', is_nullable: 'NO', is_primary: false, is_virtual: true }
     ],
     searchFields: ['c.first_name', 'c.last_name', 'c.phone', 'c.customer_code', 'v.registration_number', 'l.id']
   },
@@ -269,6 +294,7 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
     if (!validTables.includes(tableName)) {
       return res.status(404).json({ error: `Table '${tableName}' not found or not accessible.` });
     }
+    if (tableName === 'autofinance_emi_schedules') await ensureAutoPaymentColumns();
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
@@ -529,6 +555,19 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
     const validTables = await getValidTables();
     if (!validTables.includes(tableName)) {
       return res.status(404).json({ error: 'Table not found' });
+    }
+    if (tableName === 'autofinance_emi_schedules') await ensureAutoPaymentColumns();
+    const allowedFields = TABLE_EDITOR_ALLOWED_FIELDS[tableName] || [];
+    const unsupportedFields = Object.keys(updates || {}).filter((field) => !allowedFields.includes(field));
+    if (unsupportedFields.length) {
+      return res.status(403).json({ error: `These fields are not editable in ${tableName}: ${unsupportedFields.join(', ')}.` });
+    }
+    if (tableName === 'autofinance_loans' && updates.interest_type !== undefined && !['FLAT', 'REDUCING'].includes(String(updates.interest_type).toUpperCase())) {
+      return res.status(400).json({ error: 'Interest Type must be Flat or Reducing.' });
+    }
+    const protectedFields = Object.keys(updates || {}).filter((field) => ['status', 'loan_status', 'transaction_type'].includes(field));
+    if (protectedFields.length) {
+      return res.status(403).json({ error: `These fields are controlled by finance workflows and cannot be edited here: ${protectedFields.join(', ')}.` });
     }
 
     let autoFinanceLoanIdToReschedule = null;
@@ -929,6 +968,38 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
           );
         }
 
+        const feeFieldMap = {
+          income_due: 'incomeDue',
+          document_fee: 'documentFee',
+          hire_purchase: 'hirePurchase',
+          tax_amount: 'taxAmount',
+          insurance: 'insurance',
+          insurance_fine: 'insuranceFine',
+          green_tax: 'greenTax',
+          fine: 'fine',
+          national_tax: 'nationalTax',
+          permit: 'permit',
+          brokerage_customer: 'brokerageCustomer',
+        };
+        const feeUpdates = Object.entries(feeFieldMap).filter(([field]) => updates[field] !== undefined);
+        if (feeUpdates.length) {
+          const feesDetails = typeof curL.fees_details === 'string'
+            ? JSON.parse(curL.fees_details || '{}')
+            : { ...(curL.fees_details || {}) };
+          for (const [field, jsonKey] of feeUpdates) {
+            const amount = Number(updates[field]);
+            if (!Number.isFinite(amount) || amount < 0) {
+              return res.status(400).json({ error: `${field} must be a valid non-negative amount.` });
+            }
+            feesDetails[jsonKey] = amount;
+            delete updates[field];
+          }
+          await db.query(
+            `UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+            [JSON.stringify(feesDetails), id]
+          );
+        }
+
         // Sync global_cash_ledger if loan_amount or disbursement_date changes
         const newLoanAmt = updates.loan_amount !== undefined ? Number(updates.loan_amount) : Number(curL.loan_amount);
         let newDisbDate = updates.disbursement_date || updates.start_date || curL.start_date || new Date();
@@ -982,7 +1053,7 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
     // =========================================================================
     if (tableName === 'autofinance_emi_schedules') {
       const curRes = await db.query(
-        `SELECT id, loan_id, installment_number, principal_component, interest_component, total_emi 
+        `SELECT id, loan_id, installment_number, principal_component, interest_component, total_emi, collected_amount
          FROM autofinance_emi_schedules WHERE id = $1`,
         [id]
       );
@@ -993,11 +1064,40 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
         const iComp = Number(sched.interest_component || 0);
         const contractualEmi = Number((pComp + iComp).toFixed(2));
 
-        if (updates.collected_amount !== undefined) {
-          const rawCol = updates.collected_amount;
-          const newAmt = (rawCol === '' || rawCol === null || isNaN(Number(rawCol)))
-            ? 0
-            : Math.max(0, Number(Number(rawCol).toFixed(2)));
+        const amountWasEdited = updates.collected_amount !== undefined;
+        const fineWasEdited = updates.fine_amount !== undefined;
+        const dateWasEdited = updates.collected_date !== undefined;
+        const hasCollectionEdits = amountWasEdited || fineWasEdited || dateWasEdited;
+
+        if (fineWasEdited) {
+          const fineAmount = Number(updates.fine_amount);
+          if (!Number.isFinite(fineAmount) || fineAmount < 0) {
+            return res.status(400).json({ error: 'Fine amount must be a valid amount greater than or equal to zero.' });
+          }
+          updates.fine_amount = Number(fineAmount.toFixed(2));
+        }
+        if (dateWasEdited) {
+          const collectedDate = String(updates.collected_date || '');
+          const validDate = /^\d{4}-\d{2}-\d{2}$/.test(collectedDate)
+            && !Number.isNaN(Date.parse(`${collectedDate}T00:00:00Z`))
+            && new Date(`${collectedDate}T00:00:00Z`).toISOString().slice(0, 10) === collectedDate;
+          if (!validDate) {
+            return res.status(400).json({ error: 'Collected date must be a valid date.' });
+          }
+        }
+
+        if (hasCollectionEdits) {
+          let newAmt = Number(sched.collected_amount || 0);
+          if (amountWasEdited) {
+            const rawCol = updates.collected_amount;
+            newAmt = (rawCol === '' || rawCol === null || isNaN(Number(rawCol)))
+              ? 0
+              : Math.max(0, Number(Number(rawCol).toFixed(2)));
+          }
+
+          if (!amountWasEdited && newAmt <= 0) {
+            return res.status(400).json({ error: 'Fine amount and collected date can only be edited on an installment with a payment.' });
+          }
 
           let paidInterest = 0;
           let paidPrincipal = 0;
@@ -1016,40 +1116,87 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
             newStatus = isFullyPaid ? 'PAID' : 'PARTIAL';
           }
 
-          updates.collected_amount = newAmt > 0 ? newAmt : null;
-          updates.paid_interest = paidInterest;
-          updates.paid_principal = paidPrincipal;
-          updates.extra_principal_paid = extraPrincipal;
-          updates.status = newStatus;
-          updates.total_emi = contractualEmi;
+          if (amountWasEdited) {
+            updates.collected_amount = newAmt > 0 ? newAmt : null;
+            updates.paid_interest = paidInterest;
+            updates.paid_principal = paidPrincipal;
+            updates.extra_principal_paid = extraPrincipal;
+            updates.status = newStatus;
+            updates.total_emi = contractualEmi;
+          }
 
           // Reconcile autofinance_payments
           if (newAmt > 0) {
             const payCheck = await db.query(
-              `SELECT id FROM autofinance_payments WHERE emi_id = $1 ORDER BY created_at ASC`,
+              `SELECT id, fine_amount, payment_date FROM autofinance_payments WHERE emi_id = $1 ORDER BY created_at ASC`,
               [id]
             );
+            const primary = payCheck.rows[0];
+            const primaryId = primary?.id;
+            const existingFine = payCheck.rows.reduce((sum, payment) => sum + Number(payment.fine_amount || 0), 0);
+            const fineToSave = fineWasEdited ? Number(updates.fine_amount) : existingFine;
+            const localToday = new Date();
+            const todayDate = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+            const dateToSave = dateWasEdited ? updates.collected_date : primary?.payment_date || todayDate;
+
             if (payCheck.rows.length > 0) {
-              const primaryId = payCheck.rows[0].id;
-              await db.query(
-                `UPDATE autofinance_payments 
-                 SET amount_paid = $1, principal_paid = $2, interest_paid = $3, extra_principal_paid = $4, payment_date = CURRENT_DATE
-                 WHERE id = $5`,
-                [newAmt, paidPrincipal, paidInterest, extraPrincipal, primaryId]
-              );
-              if (payCheck.rows.length > 1) {
-                const extraIds = payCheck.rows.slice(1).map((r) => r.id);
+              if (amountWasEdited) {
+                await db.query(
+                  `UPDATE autofinance_payments
+                   SET amount_paid = $1, principal_paid = $2, interest_paid = $3, extra_principal_paid = $4, payment_date = $5, fine_amount = $6
+                   WHERE id = $7`,
+                  [newAmt, paidPrincipal, paidInterest, extraPrincipal, dateToSave, fineToSave, primaryId]
+                );
+              } else {
+                if (dateWasEdited) {
+                  await db.query(`UPDATE autofinance_payments SET payment_date = $1 WHERE emi_id = $2`, [updates.collected_date, id]);
+                }
+                if (fineWasEdited) {
+                  await db.query(
+                    `UPDATE autofinance_payments SET fine_amount = CASE WHEN id = $1 THEN $2 ELSE 0 END WHERE emi_id = $3`,
+                    [primaryId, fineToSave, id]
+                  );
+                }
+              }
+              if (amountWasEdited && payCheck.rows.length > 1) {
+                const extraIds = payCheck.rows.slice(1).map((payment) => payment.id);
+                await db.query(
+                  `DELETE FROM global_cash_ledger WHERE source_module = 'AUTO' AND reference_type = 'AUTO_PAYMENT' AND reference_id = ANY($1::uuid[])`,
+                  [extraIds]
+                );
                 await db.query(`DELETE FROM autofinance_payments WHERE id = ANY($1)`, [extraIds]);
               }
             } else {
-              await db.query(
+              const insertedPayment = await db.query(
                 `INSERT INTO autofinance_payments (
-                  loan_id, emi_id, payment_date, amount_paid, principal_paid, interest_paid, extra_principal_paid, payment_method, reference_number
-                ) VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6, 'CASH', 'Table Studio')`,
-                [autoFinanceLoanIdToReschedule, id, newAmt, paidPrincipal, paidInterest, extraPrincipal]
+                  loan_id, emi_id, payment_date, amount_paid, fine_amount, principal_paid, interest_paid, extra_principal_paid, payment_method, reference_number
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'CASH', 'Table Studio')
+                RETURNING id`,
+                [autoFinanceLoanIdToReschedule, id, dateToSave, newAmt, fineToSave, paidPrincipal, paidInterest, extraPrincipal]
+              );
+              await db.query(
+                `INSERT INTO global_cash_ledger (effective_date, type, amount, direction, source_module, reference_type, reference_id, notes)
+                 VALUES ($1, 'AUTO_COLLECTION', $2, 'CREDIT', 'AUTO', 'AUTO_PAYMENT', $3, 'Auto collection recorded via Table Studio')`,
+                [dateToSave, newAmt + fineToSave, insertedPayment.rows[0].id]
               );
             }
+            await db.query(
+              `UPDATE global_cash_ledger ledger
+               SET amount = payment.amount_paid + COALESCE(payment.fine_amount, 0), effective_date = payment.payment_date
+               FROM autofinance_payments payment
+               WHERE ledger.source_module = 'AUTO' AND ledger.reference_type = 'AUTO_PAYMENT'
+                 AND ledger.reference_id = payment.id AND payment.emi_id = $1`,
+              [id]
+            );
           } else {
+            const removedPayments = await db.query(`SELECT id FROM autofinance_payments WHERE emi_id = $1`, [id]);
+            const removedIds = removedPayments.rows.map((payment) => payment.id);
+            if (removedIds.length) {
+              await db.query(
+                `DELETE FROM global_cash_ledger WHERE source_module = 'AUTO' AND reference_type = 'AUTO_PAYMENT' AND reference_id = ANY($1::uuid[])`,
+                [removedIds]
+              );
+            }
             await db.query(`DELETE FROM autofinance_payments WHERE emi_id = $1`, [id]);
           }
         }

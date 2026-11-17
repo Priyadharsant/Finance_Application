@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { FileSpreadsheet, Printer, Calendar, Search, X } from "lucide-react";
 import { matchesSearch } from "../../utils/search.js";
-import { money } from "../services/autoFinanceApi.js";
+import { money, dateLabel } from "../services/autoFinanceApi.js";
 import { exportAutoCategoryReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 
@@ -128,18 +128,21 @@ export default function AutoReports({
   // Aggregated totals for displayed loans
   const displayedTotals = useMemo(() => {
     const totalDisbursed = displayedLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
-    const totalCollected = displayedLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+    const totalLoanRepayments = displayedLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
+    const totalFineCollected = displayedLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
+    const totalCollected = totalLoanRepayments + totalFineCollected;
     const totalRemaining = displayedLoans.reduce(
       (sum, l) => sum + Math.max(0, Number(l.loan_amount || 0) - Number(l.total_paid || 0)),
       0
     );
     const activeCount = displayedLoans.filter((l) => l.status === "ACTIVE").length;
     const completedCount = displayedLoans.filter((l) => l.status === "COMPLETED").length;
-    const recoveryRate = totalDisbursed > 0 ? Math.round((totalCollected / totalDisbursed) * 100) : 0;
+    const recoveryRate = totalDisbursed > 0 ? Math.round((totalLoanRepayments / totalDisbursed) * 100) : 0;
 
     return {
       totalDisbursed,
       totalCollected,
+      totalFineCollected,
       totalRemaining,
       activeCount,
       completedCount,
@@ -148,9 +151,9 @@ export default function AutoReports({
   }, [displayedLoans]);
 
   return (
-    <section className="content">
+    <section className="content autoModulePage autoReportsPage">
       {/* Intro Header */}
-      <div className="intro" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+      <div className="intro autoModuleHero">
         <div>
           <span className="overline autoBadgeTag">REPORTS</span>
           <h2>Auto Finance Financial Reports</h2>
@@ -162,21 +165,7 @@ export default function AutoReports({
         {/* ONLY ONE PRIMARY EXCEL REPORT FOR AUTO FINANCE */}
         <button
           type="button"
-          className="autoBtn"
-          style={{
-            background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
-            borderColor: "#0284c7",
-            color: "#ffffff",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            fontWeight: "700",
-            padding: "10px 18px",
-            fontSize: "13.5px",
-            borderRadius: "10px",
-            boxShadow: "0 2px 8px rgba(2, 132, 199, 0.25)",
-            cursor: "pointer",
-          }}
+          className="autoBtn autoReportDownload"
           onClick={handleExportAutoCategoryReport}
           disabled={downloadingAutoReport}
           title="Download complete Auto Finance Category Report (4 Essential Sheets · latest.xlsx)"
@@ -187,7 +176,7 @@ export default function AutoReports({
       </div>
 
       {/* Control / Filter Bar matching Daily pattern */}
-      <div className="reportBar" style={{ flexWrap: "wrap", gap: "10px", marginBottom: "22px" }}>
+      <div className="reportBar autoReportsToolbar">
         {/* Preset Buttons */}
         <div className="presetButtons">
           <button
@@ -294,8 +283,7 @@ export default function AutoReports({
         {/* Generate Report Button */}
         <button
           type="button"
-          className="primary"
-          style={{ background: "#0284c7", borderColor: "#0284c7" }}
+          className="primary autoBtn"
           onClick={handleRunReport}
         >
           Generate report
@@ -303,7 +291,7 @@ export default function AutoReports({
       </div>
 
       {/* Metric Cards Grid */}
-      <div className="metricGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "20px" }}>
+      <div className="metricGrid autoReportsMetrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "20px" }}>
         <div className="metric autoMetric blue">
           <span>Loans Disbursed</span>
           <b>{money(displayedTotals.totalDisbursed)}</b>
@@ -312,10 +300,20 @@ export default function AutoReports({
           </small>
         </div>
         <div className="metric autoMetric green">
-          <span>EMI Recovered</span>
+          <span>Collected Amount</span>
           <b>{money(displayedTotals.totalCollected)}</b>
           <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
             {displayedTotals.recoveryRate}% Recovery Rate
+          </small>
+          {displayedTotals.totalFineCollected > 0 && <small style={{ color: "#0f766e", fontSize: "11px", fontWeight: 650, marginTop: "3px", display: "block" }}>
+            Includes {money(displayedTotals.totalFineCollected)} in fines
+          </small>}
+        </div>
+        <div className="metric autoMetric teal">
+          <span>Fine Collected</span>
+          <b>{money(displayedTotals.totalFineCollected)}</b>
+          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            From {displayedLoans.filter((loan) => Number(loan.total_fine_paid || 0) > 0).length} loans in view
           </small>
         </div>
         <div className="metric autoMetric red">
@@ -398,6 +396,7 @@ export default function AutoReports({
                 <th>Interest Amount</th>
                 <th>Tenure</th>
                 <th>EMI Collected</th>
+                <th>Last Collected</th>
                 <th>Remaining</th>
                 <th>Status</th>
               </tr>
@@ -449,6 +448,7 @@ export default function AutoReports({
                     <td>{money(l.total_interest)}</td>
                     <td>{l.tenure_months} Mo</td>
                     <td className="greenText">{money(l.total_paid)}</td>
+                    <td>{l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</td>
                     <td style={{ color: rem > 0 ? "#dc2626" : "#059669", fontWeight: 600 }}>
                       {money(rem)}
                     </td>
