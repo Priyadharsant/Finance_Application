@@ -1,6 +1,6 @@
 {
     "name": "finance-application-backend",
-    "version": "3.0.1",
+    "version": "3.0.2",
     "private": true,
     "type": "module",
     "scripts": {
@@ -13,6 +13,7 @@
         "bump": "node ../scripts/bump-version.js"
     },
     "dependencies": {
+        "@supabase/server": "^1.9.2",
         "@supabase/supabase-js": "^2.117.2",
         "bcrypt": "^6.0.0",
         "dotenv": "^17.4.2",
