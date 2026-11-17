@@ -14,7 +14,7 @@ This directory contains complete SQL files with all local database tables and da
 | [`import-database.js`](./import-database.js) | Node import utility script to apply the SQL files to any target database. | Run to import data into local or remote databases. |
 | [`reset-database.js`](./reset-database.js) | Node script that truncates all tables and resets sequences without dropping tables. | Run `pnpm db:reset` or `npm run db:reset` to clear all data. |
 
-> **Note:** These files are also mirrored in the project root [`docs/`](../../docs/) folder.
+These are the canonical SQL snapshots used by the import scripts and Docker Compose.
 
 ---
 

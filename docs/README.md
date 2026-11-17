@@ -1,6 +1,6 @@
 # Database Export & Import Guide
 
-This directory contains complete SQL files with all local database tables and data (1,256 rows across 40 tables) ready to be inserted into any fresh database.
+Database snapshots are stored once in [`Backend/docs/`](../Backend/docs/). This guide explains how to import them.
 
 ---
 
@@ -8,8 +8,8 @@ This directory contains complete SQL files with all local database tables and da
 
 | File | Description | When to Use |
 | :--- | :--- | :--- |
-| [`finance_database.sql`](./finance_database.sql) | **Complete Database Dump**<br>Contains `pgcrypto` extension, complete schema (40 tables, indexes, constraints) and all **1,256 rows of local data**. | Use when provisioning a **completely fresh, empty database** (Docker, fresh local Postgres, or new cloud DB instance). |
-| [`finance_data_inserts.sql`](./finance_data_inserts.sql) | **Data-Only Insert Script**<br>Contains clean `INSERT INTO table (...) VALUES (...)` statements with replication role bypass. | Use when tables **already exist** in your database and you only want to populate/insert all local records. |
+| [`finance_database.sql`](../Backend/docs/finance_database.sql) | Complete schema and data dump. | Use when provisioning a fresh, empty database. |
+| [`finance_data_inserts.sql`](../Backend/docs/finance_data_inserts.sql) | Data-only inserts. | Use when tables already exist and you only need to populate records. |
 
 ---
 
@@ -42,10 +42,10 @@ npm run db:import:data
 $env:PGPASSWORD="your_password"
 
 # Full database creation (Schema + Data):
-psql -h <host> -p <port> -U <user> -d <database> -f docs/finance_database.sql
+psql -h <host> -p <port> -U <user> -d <database> -f Backend/docs/finance_database.sql
 
 # Data-only insert into existing tables:
-psql -h <host> -p <port> -U <user> -d <database> -f docs/finance_data_inserts.sql
+psql -h <host> -p <port> -U <user> -d <database> -f Backend/docs/finance_data_inserts.sql
 ```
 
 ---
@@ -63,14 +63,14 @@ docker compose up -d postgres
 ### Option 4: Cloud Databases & GUI Tools (DBeaver, pgAdmin, Supabase, Render, Neon)
 
 1. Open your database in **DBeaver**, **pgAdmin**, or your cloud provider's **SQL Editor**.
-2. Open [`docs/finance_database.sql`](./finance_database.sql) (or [`docs/finance_data_inserts.sql`](./finance_data_inserts.sql) if tables already exist).
+2. Open [`Backend/docs/finance_database.sql`](../Backend/docs/finance_database.sql) (or [`Backend/docs/finance_data_inserts.sql`](../Backend/docs/finance_data_inserts.sql) if tables already exist).
 3. Execute the script.
 
 ---
 
 ## 🔄 Re-exporting from Local DB
 
-Whenever you want to refresh the files in `docs/` from your local database:
+Whenever you want to refresh the canonical SQL snapshots in `Backend/docs/` from your local database:
 ```powershell
 cd Backend
 pnpm db:export

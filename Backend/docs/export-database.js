@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const backendDocsDir = __dirname;
-const rootDocsDir = path.resolve(__dirname, "../../docs");
 
 const host = process.env.POSTGRES_HOST || "localhost";
 const port = String(process.env.POSTGRES_PORT || 5432);
@@ -58,7 +57,6 @@ async function main() {
   console.log(`Connecting to local PostgreSQL database "${database}" on ${host}:${port}...`);
 
   await mkdir(backendDocsDir, { recursive: true });
-  await mkdir(rootDocsDir, { recursive: true });
 
   // 1. Full database dump (Schema + Data)
   console.log("Exporting complete schema and data (finance_database.sql)...");
@@ -71,12 +69,8 @@ async function main() {
   }
 
   const backendFullDumpPath = path.join(backendDocsDir, "finance_database.sql");
-  const rootFullDumpPath = path.join(rootDocsDir, "finance_database.sql");
   await writeFile(backendFullDumpPath, fullSql, "utf8");
-  await writeFile(rootFullDumpPath, fullSql, "utf8");
-  console.log(`✓ Saved complete database dump to:`);
-  console.log(`  - ${backendFullDumpPath}`);
-  console.log(`  - ${rootFullDumpPath}`);
+  console.log(`✓ Saved complete database dump to ${backendFullDumpPath}`);
 
   // 2. Data-only inserts (INSERT INTO statements only)
   console.log("Exporting data-only inserts (finance_data_inserts.sql)...");
@@ -102,12 +96,8 @@ async function main() {
   ].join("\n");
 
   const backendDataPath = path.join(backendDocsDir, "finance_data_inserts.sql");
-  const rootDataPath = path.join(rootDocsDir, "finance_data_inserts.sql");
   await writeFile(backendDataPath, wrappedDataSql, "utf8");
-  await writeFile(rootDataPath, wrappedDataSql, "utf8");
-  console.log(`✓ Saved data-only inserts to:`);
-  console.log(`  - ${backendDataPath}`);
-  console.log(`  - ${rootDataPath}`);
+  console.log(`✓ Saved data-only inserts to ${backendDataPath}`);
 
   const insertCount = (wrappedDataSql.match(/^INSERT INTO /gm) || []).length;
   console.log(`\nExport complete! Exported ${insertCount} total rows of data across all tables.`);

@@ -16,6 +16,14 @@ const { Pool } = pg;
 pg.types.setTypeParser(1082, (value) => value);
 
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+const configuredHost = process.env.POSTGRES_HOST;
+if (process.env.NODE_ENV === 'production' && !connectionString && !configuredHost) {
+  throw new Error(
+    'PostgreSQL is not configured. Set POSTGRES_URL or DATABASE_URL to your PostgreSQL connection string. ' +
+      'SUPABASE_URL configures file storage and cannot be used as the database connection.'
+  );
+}
+
 const isRemote =
   connectionString &&
   !connectionString.includes('localhost') &&
@@ -33,7 +41,7 @@ export const pool = new Pool(
         keepAliveInitialDelayMillis: 10000,
       }
     : {
-        host: process.env.POSTGRES_HOST || 'localhost',
+        host: configuredHost || 'localhost',
         port: process.env.POSTGRES_PORT ? parseInt(process.env.POSTGRES_PORT, 10) : 5432,
         database: process.env.POSTGRES_DB || 'finance',
         user: process.env.POSTGRES_USER || 'postgres',
@@ -51,7 +59,7 @@ pool.on('connect', (client) => {
   if (!hasLoggedConnection) {
     const target = connectionString
       ? new URL(connectionString).host
-      : `${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || 5432}`;
+      : `${configuredHost || 'localhost'}:${process.env.POSTGRES_PORT || 5432}`;
     console.log(`Connected to PostgreSQL database (${target}).`);
     hasLoggedConnection = true;
   }
