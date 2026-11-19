@@ -66,20 +66,101 @@ function renderEmail(details) {
 function getTargetAction(req) {
   const method = req.method.toUpperCase();
   const path = (req.originalUrl || req.url || "").split("?")[0].toLowerCase();
+  const verb = method === "POST" ? "Create" : method === "PUT" || method === "PATCH" ? "Update" : method === "DELETE" ? "Delete" : "View";
+
+  if (path.endsWith("/auth/login")) return "Sign in";
+  if (path.endsWith("/auth/logout")) return "Sign out";
+  if (path.endsWith("/app-auth/verify")) return "Verify app session";
+
+  if (path.endsWith("/loans/dashboard")) return "View Auto Finance Dashboard";
+  if (path.endsWith("/loans/reports/monthly")) return "View Auto Loan Monthly Report";
+  if (path.endsWith("/loans") && method === "GET") return "List Auto Loans";
   if (path.endsWith("/loans/pay-emi")) return "Collect Auto Loan EMI";
-  if (path.endsWith("/loans") && method === "POST") return "Create Auto Loan";
-  if (path.includes("/close")) return "Close Auto Loan";
-  if (path.includes("/customers")) {
-    const verb = method === "POST" ? "Create" : method === "PUT" || method === "PATCH" ? "Update" : method === "DELETE" ? "Delete" : "View";
-    return `${verb} Customer`;
+  if (/\/loans\/[^/]+\/close$/.test(path)) return "Close Auto Loan";
+  if (/\/loans\/[^/]+\/vehicle$/.test(path)) return "Update Auto Loan Vehicle";
+  if (path.includes("/loans/") && path.includes("/documents")) {
+    return method === "DELETE" ? "Delete Auto Loan Document" : method === "POST" ? "Upload Auto Loan Document" : "View Auto Loan Documents";
   }
-  if (path.includes("/loans")) {
-    const verb = method === "POST" ? "Create" : method === "PUT" || method === "PATCH" ? "Update" : method === "DELETE" ? "Delete" : "View";
-    return `${verb} Auto Loan`;
+  if (path.endsWith("/loans") && method === "POST") return "Disburse Auto Loan";
+  if (path.includes("/loans")) return `${verb} Auto Loan`;
+
+  if (path.endsWith("/daily-finance/collections") || path.endsWith("/daily-finance/payments")) {
+    return method === "POST" ? "Collect Daily Finance Payment" : "View Daily Finance Collections";
   }
-  if (path.includes("/daily-finance")) return `${method} Daily Finance`;
-  if (path.includes("/global-cash")) return `${method} Global Cash`;
-  if (path.includes("/auth/login")) return "Sign in";
+  if (/\/daily-finance\/payments\/[^/]+$/.test(path)) return "Update Daily Finance Collection";
+  if (path.endsWith("/daily-finance/customers-with-finance") && method === "POST") return "Disburse Daily Finance Loan";
+  if (/\/daily-finance\/customers-with-finance\/[^/]+$/.test(path)) return "Update Daily Finance Loan";
+  if (/\/daily-finance\/accounts\/[^/]+\/close$/.test(path)) return "Close Daily Finance Loan";
+  if (/\/daily-finance\/accounts\/[^/]+\/increase-amount$/.test(path)) return "Increase Daily Finance Loan Amount";
+  if (path.includes("/daily-finance/reports/")) return "View Daily Finance Report";
+  if (path.endsWith("/daily-finance/dashboard")) return "View Daily Finance Dashboard";
+  if (path.endsWith("/daily-finance/daily-entry")) return "View Daily Collection Entry";
+  if (path.endsWith("/daily-finance/capital/balance")) return "View Daily Finance Capital Balance";
+  if (path.endsWith("/daily-finance/capital")) return "Record Daily Finance Capital";
+  if (path.endsWith("/daily-finance/daily-closing")) return "Close Daily Finance Day";
+  if (path.endsWith("/daily-finance/audit")) return "View Daily Finance Audit Log";
+  if (path.endsWith("/daily-finance/customers")) return "View Daily Finance Customers";
+  if (path.includes("/daily-finance/customers/")) return "View Daily Finance Customer";
+  if (path.endsWith("/daily-finance/customers-with-finance")) return "View Daily Finance Accounts";
+  if (path.includes("/daily-finance")) return `${verb} Daily Finance`;
+
+  if (path.endsWith("/customers")) return `${verb} Auto Finance Customer`;
+  if (path.includes("/customers/")) return `${verb} Auto Finance Customer`;
+  if (path.includes("/loan-types")) return `${verb} Auto Loan Type`;
+
+  if (path.includes("/table-editor/loan/") || (/\/table-editor\/data\/(daily_finance_accounts|autofinance_loans)\//.test(path) && method === "DELETE")) return "Delete Finance Loan";
+  if (path.includes("/table-editor/loan-archive-details")) return "View Deleted Loan Archive";
+  if (path.endsWith("/table-editor/tables")) return "View Table Editor Tables";
+  const tableEditorData = path.match(/\/table-editor\/data\/([^/]+)/);
+  if (tableEditorData) {
+    const tableName = tableEditorData[1].replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return `${verb} ${tableName} Record`;
+  }
+
+  if (path.includes("/global-cash/partner-transactions/contribution") || path.endsWith("/global-cash/contributions")) return "Record Capital Contribution";
+  if (path.includes("/global-cash/partner-transactions/withdrawal") || path.endsWith("/global-cash/withdrawals")) return "Record Capital Withdrawal";
+  if (path.endsWith("/global-cash/expenses/sync-legacy")) return "Sync Legacy Expenses";
+  if (path.includes("/global-cash/expenses")) return `${verb} Global Cash Expense`;
+  if (path.includes("/global-cash/partners/" ) && path.endsWith("/current-capital")) return "View Partner Current Capital";
+  if (path.includes("/global-cash/partners/") && path.endsWith("/capital-weight")) return "View Partner Capital Weight";
+  if (path.includes("/global-cash/partners")) return `${verb} Capital Partner`;
+  if (path.includes("/global-cash/monthly-closings") && path.endsWith("/finalize")) return "Finalize Monthly Closing";
+  if (path.includes("/global-cash/monthly-closings") && path.endsWith("/draft")) return "Create Monthly Closing Draft";
+  if (path.includes("/global-cash/monthly-closings/") && path.endsWith("/allocations")) return "View Monthly Closing Allocations";
+  if (path.includes("/global-cash/monthly-closings")) return "View Monthly Closings";
+  if (path.includes("/global-cash/profit-calculations") && path.endsWith("/preview")) return "Preview Profit Calculation";
+  if (path.includes("/global-cash/profit-calculations") && path.endsWith("/finalize")) return "Finalize Profit Calculation";
+  if (path.includes("/global-cash/profit-calculations") && path.endsWith("/payments")) return "Record Profit Payment";
+  if (path.includes("/global-cash/profit-calculations")) return `${verb} Profit Calculation`;
+  if (path.endsWith("/global-cash/partner-profit-payments")) return "Record Partner Profit Payment";
+  if (path.endsWith("/global-cash/partner-transactions")) return "View Partner Transactions";
+  if (path.includes("/global-cash/reports/")) return "View Global Finance Report";
+  if (path.endsWith("/global-cash/monthly-stats")) return "View Monthly Finance Statistics";
+  if (path.endsWith("/global-cash/period-financials")) return "View Period Financial Summary";
+  if (path.endsWith("/global-cash/this-month-estimate")) return "View Monthly Collection Estimate";
+  if (path.endsWith("/global-cash/daily-profit-logs")) return "View Daily Profit Logs";
+  if (path.endsWith("/global-cash/cron/status")) return "View Finance Job Status";
+  if (path.includes("/global-cash/cron/")) {
+    if (path.endsWith("/run-monthly-closing")) return "Run Monthly Closing Job";
+    if (path.endsWith("/run-daily-calculation")) return "Run Daily Profit Calculation";
+    if (path.endsWith("/sync-daily-logs")) return "Sync Daily Profit Logs";
+    return "Run Finance Background Job";
+  }
+  if (path.includes("/global-cash/transaction-details/") || /\/global-cash\/ledger\/[^/]+$/.test(path)) return "View Cash Transaction Details";
+  if (path.endsWith("/global-cash/ledger")) return "View Cash Ledger";
+  if (path.includes("/global-cash")) return `${verb} Cash Ledger`;
+
+  if (path.includes("/backup/")) {
+    if (path.endsWith("/run-now")) return "Run Database Backup";
+    if (path.includes("/download/")) return "Download Database Backup";
+    if (path.endsWith("/status")) return "View Backup Status";
+    if (path.endsWith("/list")) return "List Database Backups";
+    if (path.endsWith("/latest")) return "View Latest Database Backup";
+    return `${verb} Database Backup`;
+  }
+  if (path.endsWith("/health") || path.endsWith("/api/health")) return "Check API Health";
+  if (path.endsWith("/version") || path.endsWith("/api/version")) return "Check App Version";
+  if (path === "/" || path === "/api/") return "Check API Status";
   return `${method} ${path}`;
 }
 
@@ -88,10 +169,49 @@ async function findTargetRecords(req) {
   const params = req.params || {};
   const path = (req.originalUrl || req.url || "").split("?")[0];
   const pathId = path.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)?.[0];
+  const dailyCustomerPath = path.includes("/customers/") || path.includes("/daily_finance_customers/");
   const loanId = body.loanId || body.loan_id || params.id || params.loanId || (!path.includes("/customers") ? pathId : null);
   const emiId = body.emiId || body.emi_id || params.emiId;
   const customerId = body.customerId || body.customer_id || params.customerId || (path.includes("/customers") ? pathId : null);
   const customerCode = body.customerCode || body.customer_code;
+  const financeRecordId = path.includes("/table-editor/data/autofinance_") ? pathId : null;
+  if (path.includes("/daily-finance") || /\/daily_finance_(customers|accounts|payments)\//.test(path)) {
+    const financeId = body.financeId || body.finance_id || body.accountId || body.account_id || params.financeId || (!dailyCustomerPath ? pathId : null);
+    const dailyCustomerId = customerId || (dailyCustomerPath ? pathId : null);
+    if (!financeId && !dailyCustomerId) return { records: [], installment: null };
+    try {
+      const result = await pool.query(
+        `SELECT a.finance_id, a.status AS loan_status, a.gross_finance_amount,
+                a.agreed_total_payable, a.finance_date, a.daily_agreed_due,
+                c.customer_id, c.customer_name, c.mobile_number, c.address
+         FROM daily_finance_customers c
+         LEFT JOIN daily_finance_accounts a ON a.customer_id = c.customer_id
+         WHERE ($1::uuid IS NOT NULL AND (a.finance_id = $1::uuid OR c.customer_id = $1::uuid))
+            OR ($1::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM daily_finance_payments p WHERE p.payment_id = $1::uuid AND p.customer_id = c.customer_id))
+            OR ($2::uuid IS NOT NULL AND c.customer_id = $2::uuid)
+         ORDER BY a.finance_date DESC NULLS LAST LIMIT 10`,
+        [financeId || null, dailyCustomerId || null],
+      );
+      return {
+        records: result.rows.map((row) => ({
+          customer: {
+            id: row.customer_id, name: row.customer_name,
+            phone: row.mobile_number, address: row.address,
+          },
+          loan: row.finance_id ? {
+            id: row.finance_id, type: "Daily Finance", status: row.loan_status,
+            principal: row.gross_finance_amount, totalPayable: row.agreed_total_payable,
+            financeDate: row.finance_date, dailyDue: row.daily_agreed_due,
+          } : null,
+          vehicle: null,
+        })),
+        installment: null,
+      };
+    } catch (error) {
+      console.error("[API Error Alert] Could not load Daily Finance context:", error.message);
+      return { lookupError: error.message, records: [], installment: null };
+    }
+  }
   if (!loanId && !customerId && !customerCode) return { loan: null, customer: null, vehicle: null, installment: null };
 
   try {
@@ -107,8 +227,13 @@ async function findTargetRecords(req) {
        WHERE ($1::uuid IS NOT NULL AND l.id = $1::uuid)
           OR ($2::uuid IS NOT NULL AND c.id = $2::uuid)
           OR ($3::text IS NOT NULL AND c.customer_code = $3::text)
+          OR ($4::uuid IS NOT NULL AND (
+            EXISTS (SELECT 1 FROM autofinance_payments p WHERE p.id = $4::uuid AND p.loan_id = l.id)
+            OR EXISTS (SELECT 1 FROM autofinance_emi_schedules s WHERE s.id = $4::uuid AND s.loan_id = l.id)
+            OR EXISTS (SELECT 1 FROM autofinance_vehicles v2 WHERE v2.id = $4::uuid AND v2.loan_id = l.id)
+          ))
        ORDER BY l.created_at DESC NULLS LAST LIMIT 10`,
-      [loanId || null, customerId || null, customerCode || null],
+      [loanId || null, customerId || null, customerCode || null, financeRecordId || null],
     );
     const targets = loanResult.rows.map((row) => ({
       loan: row.loan_id ? {

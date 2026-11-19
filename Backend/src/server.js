@@ -18,8 +18,8 @@ import { initHourlyBackupCron } from './services/backupService.js';
 import { apiErrorAlertMiddleware, sendApiErrorAlert } from './services/errorAlertService.js';
 
 const app = express();
-app.use(express.json({limit:'1mb'}));
 app.use(apiErrorAlertMiddleware);
+app.use(express.json({limit:'1mb'}));
 app.use(session({
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'fallback_secret',
   resave: false,
