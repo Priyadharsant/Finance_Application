@@ -81,6 +81,14 @@ app.use('/api/version', versionRoutes);
 app.use('/api/app-auth', appAuthRoutes);
 app.use('/api/table-editor', tableEditorRoutes);
 app.use('/api/backup', backupRoutes);
+// Send unmatched routes through the monitored JSON response path so 404s are reported too.
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl || req.url,
+  });
+});
 app.use((error,req,res,next)=>{console.error(error);res.status(500).json({error:'Internal server error'});});
 app.listen(Number(process.env.API_PORT||3000),()=>{
   console.log('Daily Finance API running');
