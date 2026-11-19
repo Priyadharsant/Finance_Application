@@ -472,6 +472,16 @@ export default function LoanDetailsModal({
                       {/* TOTAL EMI COLUMN */}
                       <td>
                         <b>{money(s.scheduled_emi)}</b>
+                        {Number(s.pending_amount || 0) > 0 && (
+                          <small style={{ display: "block", color: "#b45309", fontWeight: "bold", fontSize: "11px" }}>
+                            Previous month pending: {money(s.pending_amount)}
+                          </small>
+                        )}
+                        {Number(s.pending_amount_forwarded || 0) > 0 && (
+                          <small style={{ display: "block", color: "#b45309", fontWeight: "bold", fontSize: "11px" }}>
+                            Pending amount: {money(s.pending_amount_forwarded)}
+                          </small>
+                        )}
                         {s.status === "PARTIAL" && (
                           <small style={{ display: "block", color: "#d97706", fontWeight: "bold", fontSize: "11px" }}>
                             Bal Due: {money(s.remaining_emi_amount)}
@@ -555,10 +565,16 @@ export default function LoanDetailsModal({
                                   emiId: earliestUnpaid.id,
                                   totalEmi: earliestUnpaid.total_emi,
                                   instNo: earliestUnpaid.installment_number,
-                                  remainingEmi: earliestUnpaid.status === "PARTIAL" ? earliestUnpaid.remaining_emi_amount : earliestUnpaid.total_emi,
+                                  remainingEmi: earliestUnpaid.remaining_emi_amount ?? earliestUnpaid.total_emi,
+                                  carriedAmount: Number(earliestUnpaid.pending_amount || 0),
+                                  remainingInterest: earliestUnpaid.remaining_interest,
+                                  remainingPrincipal: earliestUnpaid.remaining_principal,
                                 });
                                 setPayForm({
-                                  amountPaid: earliestUnpaid.status === "PARTIAL" ? earliestUnpaid.remaining_emi_amount : earliestUnpaid.total_emi,
+                                  interestPaid: Number(earliestUnpaid.remaining_interest ?? earliestUnpaid.interest_component ?? 0),
+                                  principalPaid: Number(earliestUnpaid.remaining_principal ?? earliestUnpaid.principal_component ?? 0),
+                                  carriedAmount: String(earliestUnpaid.pending_amount || 0),
+                                  pendingAmount: "0",
                                   fineAmount: "0",
                                   collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                                   paymentMethod: "CASH",
@@ -573,10 +589,16 @@ export default function LoanDetailsModal({
                                 emiId: s.id,
                                 totalEmi: s.total_emi,
                                 instNo: s.installment_number,
-                                remainingEmi: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
+                                remainingEmi: s.remaining_emi_amount ?? s.total_emi,
+                                carriedAmount: Number(s.pending_amount || 0),
+                                remainingInterest: s.remaining_interest,
+                                remainingPrincipal: s.remaining_principal,
                               });
                               setPayForm({
-                                amountPaid: s.status === "PARTIAL" ? s.remaining_emi_amount : s.total_emi,
+                                interestPaid: Number(s.remaining_interest ?? s.interest_component ?? 0),
+                                principalPaid: Number(s.remaining_principal ?? s.principal_component ?? 0),
+                                carriedAmount: String(s.pending_amount || 0),
+                                pendingAmount: "0",
                                 fineAmount: "0",
                                 collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                                 paymentMethod: "CASH",

@@ -752,6 +752,9 @@ export default function ExcelTableEditorView({ onClose }) {
 
   const currentTableMeta = tables.find((t) => t.name === selectedTable);
   const totalModified = Object.keys(modifiedRows).length;
+  const footerTotal = Number(tableData?.totalCount || 0);
+  const footerFirstRow = footerTotal > 0 ? (page - 1) * limit + 1 : 0;
+  const footerLastRow = Math.min(page * limit, footerTotal);
 
   // Helper formatter for cell values
   const formatCellValue = (val, colName, dataType) => {
@@ -1928,100 +1931,57 @@ export default function ExcelTableEditorView({ onClose }) {
           {/* ========================================================================= */}
           {/* 3. FOOTER BAR */}
           {/* ========================================================================= */}
-          <footer
-            style={{
-              background: "#0c1322",
-              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-              padding: "6px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: "11.5px",
-              color: "#94a3b8",
-              flexShrink: 0,
-              height: "40px",
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span>
-                Total: <strong style={{ color: "#38bdf8" }}>{tableData?.totalCount || 0}</strong>
-                {partnerGroups && (
-                  <span style={{ color: "#a855f7", marginLeft: "6px", fontWeight: "700" }}>
-                    ({partnerGroups.groups.length} Partners)
-                  </span>
-                )}
+          <footer className="tableStudioFooter">
+            <div className="tableStudioFooterStats">
+              <span className="tableStudioFooterBadge">
+                <Database size={14} />
+                <strong>{footerTotal.toLocaleString("en-IN")}</strong>
+                <small>records</small>
               </span>
-              <span>
-                Showing: <strong style={{ color: "#e2e8f0" }}>{visibleColumns.length}</strong> columns
+              <span className="tableStudioFooterBadge">
+                <Table size={14} />
+                <strong>{visibleColumns.length}</strong>
+                <small>columns</small>
               </span>
+              {partnerGroups && (
+                <span className="tableStudioFooterBadge partnerCount">
+                  <Users size={14} />
+                  <strong>{partnerGroups.groups.length}</strong>
+                  <small>partners</small>
+                </span>
+              )}
               {totalModified > 0 && (
-                <span style={{ color: "#10b981", fontWeight: "700" }}>
-                  ● {totalModified} unsaved row(s)
+                <span className="tableStudioUnsavedBadge">
+                  <span className="tableStudioUnsavedDot" />
+                  {totalModified} unsaved {totalModified === 1 ? "row" : "rows"}
                 </span>
               )}
             </div>
 
-            {/* PAGINATION */}
             {tableData && (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                  <span>Rows:</span>
+              <div className="tableStudioFooterPager">
+                <span className="tableStudioRowRange">{footerFirstRow}–{footerLastRow} of {footerTotal}</span>
+                <label className="tableStudioPageSize">
+                  <span>Rows</span>
                   <select
                     value={limit}
                     onChange={(e) => {
                       setLimit(Number(e.target.value));
                       setPage(1);
                     }}
-                    style={{
-                      background: "#070b12",
-                      color: "#ffffff",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
-                      borderRadius: "5px",
-                      padding: "2px 4px",
-                      fontSize: "11px",
-                    }}
                   >
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
-                </div>
-
-                <span>
-                  Page {tableData.page} / {Math.max(1, tableData.totalPages)}
-                </span>
-
-                <div style={{ display: "inline-flex", gap: "3px" }}>
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                    style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      color: page <= 1 ? "#475569" : "#ffffff",
-                      borderRadius: "5px",
-                      padding: "3px 6px",
-                      cursor: page <= 1 ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    <ChevronLeft size={13} />
+                </label>
+                <div className="tableStudioPageControls">
+                  <span>Page {tableData.page} of {Math.max(1, tableData.totalPages)}</span>
+                  <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft size={16} />
                   </button>
-                  <button
-                    type="button"
-                    disabled={page >= tableData.totalPages}
-                    onClick={() => setPage(page + 1)}
-                    style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      color: page >= tableData.totalPages ? "#475569" : "#ffffff",
-                      borderRadius: "5px",
-                      padding: "3px 6px",
-                      cursor: page >= tableData.totalPages ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    <ChevronRight size={13} />
+                  <button type="button" aria-label="Next page" disabled={page >= tableData.totalPages} onClick={() => setPage(page + 1)}>
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               </div>

@@ -15,9 +15,11 @@ import tableEditorRoutes from './routes/tableEditorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
 import { initHourlyBackupCron } from './services/backupService.js';
+import { apiErrorAlertMiddleware, sendApiErrorAlert } from './services/errorAlertService.js';
 
 const app = express();
 app.use(express.json({limit:'1mb'}));
+app.use(apiErrorAlertMiddleware);
 app.use(session({
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'fallback_secret',
   resave: false,
@@ -88,9 +90,13 @@ app.listen(Number(process.env.API_PORT||3000),()=>{
 
 process.on('unhandledRejection', (reason) => {
   console.error('[Unhandled Rejection]', reason);
+  sendApiErrorAlert({ type: 'Unhandled Promise Rejection', timestamp: new Date().toISOString(), error: reason?.stack || reason?.message || String(reason) })
+    .catch((error) => console.error('[API Error Alert] Failed to send alert email:', error.message));
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[Uncaught Exception]', err);
+  sendApiErrorAlert({ type: 'Uncaught Exception', timestamp: new Date().toISOString(), error: err?.stack || err?.message || String(err) })
+    .catch((error) => console.error('[API Error Alert] Failed to send alert email:', error.message));
 });
 

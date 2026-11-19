@@ -11,6 +11,14 @@ export default function PayEmiModal({
   submitting = false,
 }) {
   if (!payEmiModal) return null;
+  const remainingInterest = Number(payEmiModal.remainingInterest || 0);
+  const remainingPrincipal = Number(payEmiModal.remainingPrincipal || 0);
+  const enteredInterest = Number(payForm.interestPaid || 0);
+  const enteredPrincipal = Number(payForm.principalPaid || 0);
+  const carriedAmount = Number(payEmiModal.carriedAmount || 0);
+  const enteredCarry = Number(payForm.carriedAmount || 0);
+  const pendingAmount = Math.max(0, remainingInterest + remainingPrincipal - enteredInterest - enteredPrincipal);
+  const totalAmountDue = remainingInterest + remainingPrincipal + carriedAmount;
 
   return (
     <div
@@ -35,26 +43,64 @@ export default function PayEmiModal({
         </button>
         <span className="overline autoBadgeTag">COLLECT EMI</span>
         <h2>Installment #{payEmiModal.instNo}</h2>
-        {payEmiModal.remainingEmi !== payEmiModal.totalEmi && (
-          <p style={{ margin: "-5px 0 15px 0", fontSize: "13px", color: "#64748b" }}>
-            Remaining Amount: <b style={{ color: "#ef4444" }}>{money(payEmiModal.remainingEmi)}</b>
-          </p>
+        {payEmiModal.remainingInterest !== undefined && (
+          <div className={`autoPayDueSummary${carriedAmount > 0 ? " hasCarry" : ""}`}>
+            <div className="autoPayDueBreakdown">
+              <span>Principal <b>{money(payEmiModal.remainingPrincipal)}</b></span>
+              <span>Interest <b>{money(payEmiModal.remainingInterest)}</b></span>
+            </div>
+            {carriedAmount > 0 && (
+              <div className="autoPayCarryLine">
+                <span>Previous month pending</span>
+                <b>{money(carriedAmount)}</b>
+              </div>
+            )}
+            <div className="autoPayTotalLine">
+              <span>Total due</span>
+              <b>{money(totalAmountDue)}</b>
+            </div>
+          </div>
         )}
         <div className="autoPayEmiFields">
           <label>
-            EMI Amount (₹)
+            Interest Collected (₹)
             <input
               type="number"
-              min="0.01"
+              min="0"
               step="0.01"
-              required
               disabled={submitting}
-              value={payForm.amountPaid}
+              value={payForm.interestPaid ?? "0"}
               onChange={(e) =>
-                setPayForm({ ...payForm, amountPaid: e.target.value })
+                setPayForm({ ...payForm, interestPaid: e.target.value })
               }
             />
           </label>
+          <label>
+            Principal Collected (₹)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              disabled={submitting}
+              value={payForm.principalPaid ?? "0"}
+              onChange={(e) =>
+                setPayForm({ ...payForm, principalPaid: e.target.value })
+              }
+            />
+          </label>
+          <div style={{ color: "#64748b", fontSize: "12px", gridColumn: "1 / -1" }}>
+            Total collected: <b>{money(enteredInterest + enteredPrincipal + enteredCarry)}</b>
+          </div>
+          {pendingAmount > 0 && (
+            <div style={{ color: "#b45309", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
+              Pending amount: {money(pendingAmount)} · Will be added to next month
+            </div>
+          )}
+          {Number(payEmiModal.pendingAmountForwarded || 0) > 0 && (
+            <div style={{ color: "#b45309", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
+              Pending amount: {money(payEmiModal.pendingAmountForwarded)} · Will carry into the following month
+            </div>
+          )}
           <label>
             Fine Amount (₹)
             <input

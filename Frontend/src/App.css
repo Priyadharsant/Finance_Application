@@ -124,7 +124,25 @@ body {
 .tableStudioRoot .tableStudioFieldMarker.isEditable:hover { border-color: #b8dbe5; background: #eaf6f9; color: #075f78; }
 .tableStudioRoot .tableStudioFieldMarker.isReadOnly { color: #b4bec7; cursor: not-allowed; }
 .tableStudioRoot .tableStudioFieldMarker:focus-visible { outline: 2px solid #3da4bd; outline-offset: 1px; }
-.tableStudioRoot > footer { min-height: 48px; height: auto !important; padding: 9px 20px !important; background: #fff !important; border-top: 1px solid #dce5ed !important; color: #61778a !important; }
+.tableStudioRoot > footer:not(.tableStudioFooter) { min-height: 48px; height: auto !important; padding: 9px 20px !important; background: #fff !important; border-top: 1px solid #dce5ed !important; color: #61778a !important; }
+.tableStudioRoot .tableStudioFooter { display: flex; min-height: 62px; height: auto; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 18px; box-sizing: border-box; padding: 10px 18px; border-top: 1px solid #dce6ed; background: linear-gradient(180deg, #fff, #f8fbfd); color: #61778a; box-shadow: 0 -5px 16px rgba(22, 54, 78, .035); }
+.tableStudioFooterStats, .tableStudioFooterPager { display: flex; align-items: center; gap: 10px; }
+.tableStudioFooterBadge { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #e2eaf0; border-radius: 10px; background: #fff; color: #7890a2; white-space: nowrap; }
+.tableStudioFooterBadge > svg { color: #23859a; }
+.tableStudioFooterBadge strong { color: #173b55; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tableStudioFooterBadge small { color: #8193a2; font-size: 10.5px; }
+.tableStudioFooterBadge.partnerCount > svg { color: #8b5bb2; }
+.tableStudioUnsavedBadge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #bce8d3; border-radius: 10px; background: #effaf4; color: #18764c; font-size: 11px; font-weight: 750; white-space: nowrap; }
+.tableStudioUnsavedDot { width: 7px; height: 7px; border-radius: 50%; background: #22a36a; box-shadow: 0 0 0 3px rgba(34, 163, 106, .12); }
+.tableStudioFooterPager { justify-content: flex-end; gap: 14px; color: #647d90; font-size: 11px; }
+.tableStudioRowRange { min-width: 74px; color: #516e83; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.tableStudioPageSize { display: inline-flex; align-items: center; gap: 7px; color: #8192a0; white-space: nowrap; }
+.tableStudioRoot .tableStudioPageSize select { min-height: 32px; padding: 3px 23px 3px 9px !important; border-color: #d9e4eb !important; border-radius: 9px !important; background: #fff !important; color: #26475e !important; font-size: 11px !important; }
+.tableStudioPageControls { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.tableStudioPageControls > span { min-width: 76px; color: #516e83; font-weight: 650; text-align: center; }
+.tableStudioPageControls button { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #dce6ed; border-radius: 9px; background: #fff; color: #41627a; cursor: pointer; transition: border-color .15s, background .15s, color .15s, transform .15s; }
+.tableStudioPageControls button:hover:not(:disabled) { transform: translateY(-1px); border-color: #a8d1dd; background: #eef8fa; color: #126b80; }
+.tableStudioPageControls button:disabled { background: #f5f8fa; color: #bcc8d1; cursor: not-allowed; }
 .tableStudioRoot > header form input { width: clamp(170px, 20vw, 290px) !important; min-height: 38px; padding: 7px 30px 7px 11px !important; background: #fff !important; color: #18354d !important; }
 .tableStudioNotification { z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 48px; box-sizing: border-box; padding: 8px 20px; border-bottom: 1px solid; font-size: 13px; font-weight: 700; }
 .tableStudioNotification.isSuccess { border-color: #a8dfc0; background: #eaf8ef; color: #176b3b; }
@@ -136,6 +154,10 @@ body {
 @media (max-width: 760px) {
   .tableStudioRoot > header { padding: 8px 10px !important; }
   .tableStudioRoot .studioSidebarNav { width: 205px !important; min-width: 205px !important; max-width: 205px !important; }
+  .tableStudioRoot .tableStudioFooter { align-items: flex-start; flex-direction: column; gap: 10px; padding: 10px 12px; }
+  .tableStudioFooterStats, .tableStudioFooterPager { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+  .tableStudioFooterStats { gap: 6px; }
+  .tableStudioFooterBadge { min-height: 29px; padding: 0 8px; }
 }
 
 /* Final shared sidebar state overrides for every module */
@@ -763,6 +785,162 @@ header h1 {
 
 .formGrid textarea, .paymentCard textarea { min-height: 85px; resize: vertical; line-height: 1.5; }
 .wide { grid-column: 1 / -1; }
+
+/* Plain-language app update dialog */
+.appUpdateOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 24, 39, .62);
+  backdrop-filter: blur(9px);
+  animation: appUpdateFadeIn .2s ease-out;
+}
+.appUpdateOverlay.isRequired { background: rgba(10, 24, 39, .74); }
+.appUpdateCard {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 480px);
+  padding: 30px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, .9);
+  border-radius: 24px;
+  background: linear-gradient(155deg, #fff 0%, #f8fbff 100%);
+  box-shadow: 0 32px 90px rgba(6, 25, 43, .28), 0 5px 16px rgba(6, 25, 43, .08);
+  animation: appUpdateLiftIn .28s cubic-bezier(.2,.8,.2,1);
+}
+.appUpdateCard::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, #0d9488, #38bdf8);
+  content: "";
+}
+.appUpdateHeader { display: flex; align-items: flex-start; gap: 15px; padding-right: 22px; }
+.appUpdateIcon {
+  display: grid;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #ccebe8;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #e6fffb, #d9f4ff);
+  color: #087f78;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.appUpdateIcon.hasUpdate { border-color: #c9e5fb; background: linear-gradient(145deg, #e9f6ff, #e5eaff); color: #1674b8; }
+.appUpdateHeading { min-width: 0; }
+.appUpdateEyebrow { color: #0f8a83; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; }
+.appUpdateHeading h2 { margin: 5px 0 4px; color: #132d43; font-size: 22px; line-height: 1.2; letter-spacing: -.45px; }
+.appUpdateHeading p { margin: 0; color: #6b7c8e; font-size: 13px; line-height: 1.5; }
+.appUpdateClose { position: absolute; top: 20px; right: 20px; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #e1e8ee; border-radius: 11px; background: #fff; color: #607487; cursor: pointer; transition: background .15s, color .15s, transform .15s; }
+.appUpdateClose:hover { transform: translateY(-1px); background: #f1f7fa; color: #183a53; }
+.appUpdateStatus { position: relative; display: flex; align-items: center; gap: 12px; margin-top: 25px; padding: 16px; border: 1px solid #d6e9f4; border-radius: 16px; background: linear-gradient(120deg, #f2f9ff, #f5fbff); color: #2578ad; }
+.appUpdateStatus.isReady { border-color: #cdebe1; background: linear-gradient(120deg, #f0fbf6, #f6fcf9); color: #11806c; }
+.appUpdateStatus.hasError { border-color: #f4d6d2; background: linear-gradient(120deg, #fff7f5, #fffafa); color: #c04a43; }
+.appUpdateStatusIcon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: 11px; background: rgba(255,255,255,.8); }
+.appUpdateStatusCopy { display: grid; min-width: 0; gap: 3px; color: #203d53; }
+.appUpdateStatusCopy strong { font-size: 13px; font-weight: 750; }
+.appUpdateStatusCopy span { color: #718294; font-size: 11.5px; line-height: 1.45; }
+.appUpdatePercent { margin-left: auto; color: #1875ae; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.appUpdateProgress { flex: 0 0 100%; height: 5px; margin-top: 4px; overflow: hidden; border-radius: 9px; background: #dcecf6; }
+.appUpdateProgress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #149b91, #43b3e7); transition: width .25s ease; }
+.appUpdateDownloadDetails { display: flex; flex: 0 0 100%; justify-content: space-between; gap: 12px; margin-top: -3px; color: #718294; font-size: 11px; font-variant-numeric: tabular-nums; }
+.appUpdateDownloadDetails strong { color: #486176; font-weight: 750; }
+.appUpdateActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 23px; padding-top: 18px; border-top: 1px solid #e8eef2; }
+.appUpdateButton { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1px solid transparent; border-radius: 12px; font: 700 12.5px var(--font-main); cursor: pointer; transition: transform .15s, box-shadow .15s, background .15s; }
+.appUpdateButton:hover:not(:disabled) { transform: translateY(-1px); }
+.appUpdateButton:disabled { cursor: wait; opacity: .65; }
+.appUpdateButton.primary { background: linear-gradient(135deg, #0f8f86, #1174a8); color: #fff; box-shadow: 0 8px 18px rgba(15, 132, 143, .2); }
+.appUpdateButton.primary:hover:not(:disabled) { box-shadow: 0 10px 22px rgba(15, 132, 143, .28); }
+.appUpdateButton.secondary { border-color: #dce6ed; background: #fff; color: #415b70; }
+.appUpdateFooter { margin-top: 19px; color: #8797a5; font-size: 11px; text-align: center; }
+/* Keep the in-app updater aligned with update-popup.html. */
+.appUpdateOverlay {
+  overflow: auto;
+  background: linear-gradient(135deg, #0e263a, #153b50 58%, #0e6871);
+}
+.appUpdateOverlay::before,
+.appUpdateOverlay::after {
+  position: fixed;
+  z-index: 0;
+  width: 430px;
+  height: 430px;
+  border-radius: 50%;
+  background: rgba(78, 195, 190, .13);
+  filter: blur(2px);
+  content: "";
+  pointer-events: none;
+}
+.appUpdateOverlay::before { top: -210px; right: -120px; }
+.appUpdateOverlay::after { bottom: -290px; left: -150px; width: 600px; height: 600px; background: rgba(60, 153, 204, .14); }
+.appUpdateOverlay.isRequired { background: linear-gradient(135deg, #0e263a, #153b50 58%, #0e6871); }
+.appUpdateCard {
+  z-index: 1;
+  width: min(470px, calc(100vw - 48px));
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.82);
+  border-radius: 24px;
+  background: linear-gradient(155deg, #fff 0%, #fbfdff 72%, #f3fafb 100%);
+  box-shadow: 0 30px 90px rgba(4, 18, 31, .34), 0 4px 15px rgba(4, 18, 31, .09);
+}
+.appUpdateCard::before { background: linear-gradient(90deg, #0d9488, #42b6c6 55%, #59a8d5); }
+.appUpdateTop { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.appUpdateBrand { display: inline-flex; align-items: center; gap: 10px; color: #26465c; font-size: 12px; font-weight: 800; letter-spacing: .55px; }
+.appUpdateBrandMark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; background: linear-gradient(145deg, #0d978d, #176d92); color: #fff; font-size: 18px; box-shadow: 0 5px 12px rgba(17,120,135,.23); }
+.appUpdateClose { position: static; flex: 0 0 32px; width: 32px; height: 32px; border-color: #e3ebf0; border-radius: 10px; color: #8192a0; font-size: 19px; }
+.appUpdateContent { padding: 28px 2px 0; text-align: center; }
+/* The global finance layout targets every nested <main>; reset it inside this modal. */
+.appUpdateOverlay main.appUpdateContent { width: 100%; min-height: 0; margin: 0; padding-left: 2px; padding-right: 2px; background: transparent; }
+.appUpdateHeroIcon { display: grid; width: 70px; height: 70px; place-items: center; margin: 0 auto 18px; border: 1px solid #cae8e7; border-radius: 22px; background: linear-gradient(145deg, #e9fbf7, #e9f5fc); color: #087f78; box-shadow: inset 0 1px 0 #fff, 0 8px 20px rgba(17,120,135,.09); }
+.appUpdateEyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #d3ece9; border-radius: 999px; background: #f0fbf8; color: #128278; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.appUpdateContent h2 { margin: 13px 0 7px; color: #15344a; font-size: clamp(23px, 5vw, 27px); line-height: 1.16; letter-spacing: -.65px; }
+.appUpdateIntro { margin: 0; color: #748596; font-size: 13px; line-height: 1.5; }
+.appUpdateVersions { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 18px 0 23px; }
+.appUpdateVersion { display: grid; gap: 3px; min-width: 105px; padding: 9px 13px; border: 1px solid #e5edf1; border-radius: 12px; background: #fff; }
+.appUpdateVersion small { color: #91a0ad; font-size: 9px; font-weight: 750; letter-spacing: .65px; text-transform: uppercase; }
+.appUpdateVersion strong { color: #486176; font-size: 13px; font-variant-numeric: tabular-nums; }
+.appUpdateVersion.isNew { border-color: #cbe8e2; background: linear-gradient(140deg, #f5fcf9, #f0f9fb); }
+.appUpdateVersion.isNew strong { color: #108176; }
+.appUpdateVersionArrow { color: #9aabb6; font-size: 19px; }
+.appUpdateProgressCard { display: block; padding: 16px; border: 1px solid #dce9ef; border-radius: 16px; background: linear-gradient(125deg, #f5faff, #f5fbfb); text-align: left; color: #2578ad; }
+.appUpdateProgressCard.hasError { border-color: #f4d6d2; background: linear-gradient(120deg, #fff7f5, #fffafa); color: #c04a43; }
+.appUpdateProgressCard.isReady { border-color: #cdebe1; background: linear-gradient(120deg, #f0fbf6, #f6fcf9); color: #11806c; }
+.appUpdateProgressTop { display: flex; align-items: center; gap: 11px; }
+.appUpdateProgressIcon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border: 1px solid #cce6e5; border-radius: 11px; background: #fff; color: #14867f; }
+.appUpdateProgressCopy { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.appUpdateProgressCopy strong { color: #25465c; font-size: 12.5px; }
+.appUpdateProgressCopy span { color: #8293a1; font-size: 11px; line-height: 1.4; }
+.appUpdatePercent { margin-left: auto; color: #128078; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.appUpdateProgress { height: 7px; margin-top: 14px; border-radius: 99px; background: #deebef; }
+.appUpdateProgress span { background: linear-gradient(90deg, #159b8c, #40b7bc 60%, #4b9fc6); box-shadow: 0 1px 4px rgba(17,126,131,.25); }
+.appUpdateDownloadDetails { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: #758997; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.appUpdateDownloadDetails strong { color: #486176; font-weight: 750; }
+.appUpdateHelper { margin: 10px 0 0; color: #8796a2; font-size: 10.5px; text-align: center; }
+.appUpdateFooter { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 21px; padding-top: 17px; border-top: 1px solid #eaf0f3; color: #8494a1; font-size: 10.5px; }
+.appUpdateFooter svg { flex: 0 0 auto; color: #239487; }
+.appUpdatePlainState { min-height: 245px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.appUpdatePlainState .appUpdateActions { width: 100%; }
+.appUpdateCard .appUpdateActions { margin-top: 18px; padding-top: 15px; }
+@keyframes appUpdateFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes appUpdateLiftIn { from { opacity: 0; transform: translateY(9px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (max-width: 520px) {
+  .appUpdateCard { width: min(470px, calc(100vw - 32px)); padding: 23px 19px; border-radius: 20px; }
+  .appUpdateContent { padding-top: 23px; }
+  .appUpdateHeroIcon { width: 62px; height: 62px; border-radius: 19px; }
+  .appUpdateVersions { gap: 7px; }
+  .appUpdateVersion { min-width: 96px; padding: 8px 10px; }
+  .appUpdateContent h2 { font-size: 23px; }
+  .appUpdateClose { width: 30px; height: 30px; flex-basis: 30px; }
+  .appUpdateActions { flex-direction: column-reverse; }
+  .appUpdateButton { width: 100%; }
+}
 
 .formSectionHeader {
   grid-column: 1 / -1;

@@ -1,19 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   X,
-  Sparkles,
-  ArrowUpCircle,
   CheckCircle2,
   Download,
   RefreshCw,
-  ExternalLink,
-  ShieldCheck,
-  PackageCheck,
   AlertTriangle,
-  Lock,
   Loader2,
 } from "lucide-react";
-import { APP_VERSION, APP_BUILD_DATE, checkForAppUpdates } from "../version.js";
+import { APP_VERSION, checkForAppUpdates } from "../version.js";
 
 export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propMandatory, initialUpdateData }) {
   const [checking, setChecking] = useState(!initialUpdateData);
@@ -27,20 +21,8 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
   const hasUpdate = Boolean(updateData?.hasUpdate);
   const isMandatory = hasUpdate || propMandatory || Boolean(updateData?.isMandatory);
   const latestVersion = updateData?.latestVersion || APP_VERSION;
-  const releaseNotes = updateData?.releaseNotes || [
-    "Strict Version Enforcement: Exe operates exclusively on latest verified releases",
-    "Supabase Cloud Storage: Secure cloud uploads for Aadhaar, RC Book, and loan dossiers with instant previews",
-    "Unified Categorized Excel Reports: Clean single-report exports for Auto Finance, Daily Finance, and Global Capital",
-    "Live Financial Forecasting: Opening in-hand cash and next-month projected collection analytics",
-    "Master Business Ledger: Multi-category unified audit trail and balance reconciliation",
-  ];
-
-  const formatBytes = (bytes) => {
-    if (!bytes || isNaN(bytes)) return "0 MB";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
-
+  const updateSize = Number(downloadProgress.total || updateData?.downloadSizeBytes || 0);
+  const checkFailed = !checking && updateData?.success === false;
   const fetchUpdateInfo = async () => {
     setChecking(true);
     try {
@@ -145,368 +127,99 @@ export default function VersionUpdateModal({ isOpen, onClose, isMandatory: propM
 
   if (!isOpen) return null;
 
+  const formatSize = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes < 0) return "0 MB";
+    const mb = bytes / (1024 * 1024);
+    return `${mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+  };
+
   return (
     <div
-      className="modal"
+      className={`appUpdateOverlay${isMandatory && hasUpdate ? " isRequired" : ""}`}
       onClick={(e) => {
-        if (e.target === e.currentTarget && (!isMandatory || !hasUpdate) && !downloading) {
+        if (e.target === e.currentTarget && (!isMandatory || !hasUpdate || downloadError) && !downloading) {
           handleModalClose();
         }
       }}
-      style={{
-        zIndex: 999999,
-        position: "fixed",
-        inset: 0,
-        backgroundColor: isMandatory && hasUpdate ? "rgba(15, 23, 42, 0.88)" : "rgba(15, 23, 42, 0.6)",
-        backdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
     >
-      <div
-        className="detailsCard"
+      <section
+        className="appUpdateCard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-update-title"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(92vw, 560px)",
-          maxWidth: "560px",
-          borderRadius: "16px",
-          padding: "26px",
-          background: "#ffffff",
-          boxShadow: isMandatory && hasUpdate ? "0 25px 50px -12px rgba(220, 38, 38, 0.25)" : "0 20px 40px -15px rgba(0,0,0,0.15)",
-          border: isMandatory && hasUpdate ? "2px solid #ef4444" : "1px solid #e2e8f0",
-        }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "46px",
-                height: "46px",
-                borderRadius: "12px",
-                background: hasUpdate ? "#fee2e2" : "#ecfdf5",
-                color: hasUpdate ? "#dc2626" : "#059669",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {hasUpdate ? <Lock size={24} /> : <PackageCheck size={24} />}
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: "19px", color: "#0f172a", fontWeight: 700 }}>
-                {hasUpdate ? "New Version Available" : "KAMBAM FINANCE Up to Date"}
-              </h3>
-              <p style={{ margin: "3px 0 0 0", fontSize: "12px", color: "#64748b" }}>
-                Installed: <strong style={{ color: hasUpdate ? "#dc2626" : "#0f766e" }}>v{APP_VERSION}</strong> · Latest: <strong style={{ color: "#0284c7" }}>v{latestVersion}</strong>
-              </p>
-            </div>
-          </div>
-
-          {/* Close button only visible if NO mandatory update and not currently downloading */}
-          {(!hasUpdate || !isMandatory) && !downloading && (
-            <button
-              className="close"
-              onClick={handleModalClose}
-              style={{
-                background: "#f1f5f9",
-                border: "none",
-                borderRadius: "8px",
-                padding: "6px",
-                cursor: "pointer",
-                color: "#475569",
-              }}
-            >
-              <X size={16} />
+        <header className="appUpdateTop">
+          <div className="appUpdateBrand"><span className="appUpdateBrandMark">₹</span><span>KAMBAM FINANCE</span></div>
+          {(!hasUpdate || !isMandatory || downloadError) && !downloading && (
+            <button type="button" className="appUpdateClose" onClick={handleModalClose} aria-label="Close">
+              <X size={18} />
             </button>
           )}
-        </div>
+        </header>
 
-        {/* STATUS BANNER */}
-        <div
-          style={{
-            padding: "14px 16px",
-            borderRadius: "12px",
-            background: hasUpdate ? (downloadError ? "#fef2f2" : "#f0fdf4") : "#f0fdf4",
-            border: `1px solid ${hasUpdate ? (downloadError ? "#fecaca" : "#bbf7d0") : "#bbf7d0"}`,
-            marginBottom: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {hasUpdate ? (
-              downloadError ? (
-                <AlertTriangle size={22} color="#dc2626" />
-              ) : (
-                <Loader2 size={22} className="spin" color="#059669" />
-              )
-            ) : (
-              <CheckCircle2 size={20} color="#16a34a" />
+        {hasUpdate ? (
+          <main className="appUpdateContent">
+            <div className="appUpdateHeroIcon" aria-hidden="true"><Download size={30} strokeWidth={1.8} /></div>
+            <span className="appUpdateEyebrow">App update</span>
+            <h2 id="app-update-title">A better version is ready</h2>
+            <p className="appUpdateIntro">A few improvements are on their way to your app.</p>
+
+            <div className="appUpdateVersions" aria-label={`Version ${APP_VERSION} updating to version ${latestVersion}`}>
+              <div className="appUpdateVersion"><small>Current</small><strong>Version {APP_VERSION}</strong></div>
+              <span className="appUpdateVersionArrow" aria-hidden="true">→</span>
+              <div className="appUpdateVersion isNew"><small>New</small><strong>Version {latestVersion}</strong></div>
+            </div>
+
+            <div className={`appUpdateProgressCard${downloadError ? " hasError" : readyToInstall ? " isReady" : ""}`}>
+              <div className="appUpdateProgressTop">
+                <div className="appUpdateProgressIcon" aria-hidden="true">
+                  {downloadError ? <AlertTriangle size={18} /> : readyToInstall ? <CheckCircle2 size={18} /> : <RefreshCw size={17} className="spin" />}
+                </div>
+                <div className="appUpdateProgressCopy">
+                  <strong>{downloadError ? "We couldn’t get the update" : readyToInstall ? "Update downloaded" : "Downloading update"}</strong>
+                  <span>{downloadError ? "Please try again, or download it using your browser." : readyToInstall ? "Your app is ready to restart." : "Your app will restart when it’s ready."}</span>
+                </div>
+                {!downloadError && <span className="appUpdatePercent">{readyToInstall ? "100%" : `${downloadProgress.percent}%`}</span>}
+              </div>
+              {!downloadError && (
+                <>
+                  <div className="appUpdateProgress" role="progressbar" aria-label="Update download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={downloadProgress.percent}>
+                    <span style={{ width: `${Math.max(readyToInstall ? 100 : 3, downloadProgress.percent)}%` }} />
+                  </div>
+                  {!readyToInstall && (
+                    <div className="appUpdateDownloadDetails" aria-live="polite">
+                      <span><strong>{formatSize(downloadProgress.transferred)}</strong> of <strong>{updateSize > 0 ? formatSize(updateSize) : "Size unavailable"}</strong></span>
+                      <span><strong>{downloadProgress.speed || "0 MB/s"}</strong></span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="appUpdateHelper">This should only take a little while.</p>
+            {downloadError && (
+              <div className="appUpdateActions">
+                <button type="button" className="appUpdateButton secondary" onClick={handleRetryAutoUpdate}><RefreshCw size={16} /> Try again</button>
+                <button type="button" className="appUpdateButton primary" onClick={handleManualBrowserDownload}><Download size={16} /> Download update</button>
+              </div>
             )}
-            <div>
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: "13px",
-                  color: hasUpdate ? (downloadError ? "#991b1b" : "#065f46") : "#166534",
-                }}
-              >
-                {hasUpdate
-                  ? downloadError
-                    ? `Automatic Update Failed (v${latestVersion})`
-                    : readyToInstall
-                    ? `Update Downloaded — Installing v${latestVersion}...`
-                    : `Updating to v${latestVersion} Automatically...`
-                  : "You are running the latest official release"}
-              </div>
-              <small
-                style={{
-                  color: hasUpdate ? (downloadError ? "#b91c1c" : "#047857") : "#15803d",
-                  fontSize: "11px",
-                  display: "block",
-                  marginTop: "2px",
-                }}
-              >
-                {hasUpdate
-                  ? downloadError
-                    ? "Automatic download encountered an issue. You can retry or download manually below."
-                    : readyToInstall
-                    ? "Opening installer window... Installation will be visible on screen."
-                    : "High-speed multi-stream download in progress. No clicks needed."
-                  : "All daily finance, vehicle loans, and capital ledgers are synchronized."}
-              </small>
-            </div>
-          </div>
-          {!downloading && !hasUpdate && (
-            <button
-              type="button"
-              onClick={fetchUpdateInfo}
-              disabled={checking}
-              style={{
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                padding: "6px 10px",
-                fontSize: "12px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                color: "#334155",
-                fontWeight: 600,
-              }}
-            >
-              <RefreshCw size={12} className={checking ? "spin" : ""} />
-              {checking ? "Checking..." : "Re-check"}
-            </button>
-          )}
-        </div>
-
-        {/* LIVE IN-APP DOWNLOAD PROGRESS SECTION */}
-        {hasUpdate && !downloadError && (
-          <div
-            style={{
-              padding: "16px",
-              borderRadius: "12px",
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              marginBottom: "16px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Loader2 size={16} className="spin" color="#059669" />
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "#065f46" }}>
-                  {readyToInstall
-                    ? "Download complete! Opening installer window..."
-                    : downloadProgress.percent > 0
-                    ? `Downloading update v${latestVersion}...`
-                    : "Connecting to server & allocating download streams..."}
-                </span>
-              </div>
-              <span style={{ fontSize: "13px", fontWeight: 800, color: "#059669" }}>
-                {downloadProgress.percent}%
-              </span>
-            </div>
-
-            {/* Progress Track & Fill */}
-            <div
-              style={{
-                width: "100%",
-                height: "10px",
-                background: "#dcfce7",
-                borderRadius: "999px",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.max(4, downloadProgress.percent)}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #10b981 0%, #059669 100%)",
-                  borderRadius: "999px",
-                  transition: "width 0.25s ease",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontSize: "11px", color: "#047857" }}>
-              <span>
-                {downloadProgress.total > 0
-                  ? `${formatBytes(downloadProgress.transferred)} / ${formatBytes(downloadProgress.total)}`
-                  : "Connecting..."}
-                {downloadProgress.speed && ` · ⚡ ${downloadProgress.speed}`}
-                {downloadProgress.streams && ` · 🚀 ${downloadProgress.streams} Multi-Streams`}
-              </span>
-              <span>{readyToInstall ? "Closing app to run installer..." : "Installer window opens automatically when downloaded"}</span>
-            </div>
-          </div>
-        )}
-
-        {/* ERROR BANNER */}
-        {downloadError && (
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#991b1b",
-              fontSize: "12.5px",
-              marginBottom: "16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, marginBottom: "4px" }}>
-              <AlertTriangle size={16} color="#dc2626" />
-              <span>Auto-download failed: {downloadError}</span>
-            </div>
-            <p style={{ margin: 0, fontSize: "12px", color: "#b91c1c", lineHeight: 1.5 }}>
-              Could not complete the automatic download. You can download the setup exe manually via your browser using the button below, or retry the automatic download.
-            </p>
-          </div>
-        )}
-
-        {/* RELEASE HIGHLIGHTS */}
-        <div style={{ marginBottom: "20px" }}>
-          <h4 style={{ margin: "0 0 10px 0", fontSize: "13px", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
-            <ShieldCheck size={16} color="#0f766e" /> Release Highlights (v{latestVersion}):
-          </h4>
-          <ul
-            style={{
-              margin: 0,
-              paddingLeft: "18px",
-              fontSize: "12px",
-              color: "#475569",
-              lineHeight: 1.6,
-            }}
-          >
-            {releaseNotes.map((note, idx) => (
-              <li key={idx} style={{ marginBottom: "6px" }}>
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* ACTIONS */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", paddingTop: "14px", borderTop: "1px solid #e2e8f0" }}>
-          {hasUpdate ? (
-            downloadError ? (
-              <>
-                <div style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>
-                  Please choose a download method:
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    type="button"
-                    className="secondary autoBtn"
-                    onClick={handleRetryAutoUpdate}
-                    style={{
-                      padding: "8px 14px",
-                      fontSize: "12.5px",
-                      borderRadius: "8px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#334155",
-                      fontWeight: 600,
-                    }}
-                  >
-                    <RefreshCw size={13} /> Retry Auto Download
-                  </button>
-
-                  <button
-                    type="button"
-                    className="primary autoBtn"
-                    onClick={handleManualBrowserDownload}
-                    style={{
-                      padding: "8px 18px",
-                      fontSize: "12.5px",
-                      borderRadius: "8px",
-                      background: "#dc2626",
-                      borderColor: "#dc2626",
-                      color: "#ffffff",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      boxShadow: "0 4px 12px rgba(220, 38, 38, 0.3)",
-                    }}
-                  >
-                    <Download size={14} /> Download Setup Exe Manually
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#059669", fontSize: "12.5px", fontWeight: 700 }}>
-                  <Loader2 size={16} className="spin" color="#059669" />
-                  <span>
-                    {readyToInstall
-                      ? "Download complete! Applying update & restarting..."
-                      : `Downloading update package (${downloadProgress.percent}%)...`}
-                  </span>
-                </div>
-                <span style={{ fontSize: "11px", color: "#64748b" }}>
-                  Installs automatically · No click required
-                </span>
-              </>
-            )
-          ) : (
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", width: "100%" }}>
-              <button
-                type="button"
-                className="secondary autoBtn"
-                onClick={handleModalClose}
-                style={{ padding: "8px 16px", fontSize: "13px", borderRadius: "8px" }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="secondary autoBtn"
-                onClick={handleManualBrowserDownload}
-                style={{
-                  padding: "8px 16px",
-                  fontSize: "13px",
-                  borderRadius: "8px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <ExternalLink size={13} /> View Releases
+          </main>
+        ) : (
+          <main className="appUpdateContent appUpdatePlainState">
+            <div className="appUpdateHeroIcon" aria-hidden="true">{checking ? <Loader2 size={29} className="spin" /> : checkFailed ? <AlertTriangle size={29} /> : <CheckCircle2 size={29} />}</div>
+            <h2 id="app-update-title">{checking ? "Checking for updates" : checkFailed ? "Couldn’t check for updates" : "You’re up to date"}</h2>
+            <p className="appUpdateIntro">{checking ? "Please wait a moment." : checkFailed ? "Please try again when you’re back online." : `You’re using the latest version, ${APP_VERSION}.`}</p>
+            <div className="appUpdateActions">
+              {checkFailed ? <button type="button" className="appUpdateButton secondary" onClick={handleModalClose}>Close</button> : null}
+              <button type="button" className="appUpdateButton primary" onClick={checkFailed ? fetchUpdateInfo : handleModalClose} disabled={checking}>
+                {checkFailed ? <><RefreshCw size={16} /> Try again</> : checking ? "Checking…" : "Done"}
               </button>
             </div>
-          )}
-        </div>
-      </div>
+          </main>
+        )}
+
+        <footer className="appUpdateFooter"><CheckCircle2 size={14} /><span>Your information stays safe while the app updates.</span></footer>
+      </section>
     </div>
   );
 }

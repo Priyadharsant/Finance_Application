@@ -96,7 +96,11 @@ export async function recordEmiPayment(req, res) {
     const {
       loanId,
       emiId,
-      amountPaid,
+      amountPaid: rawAmountPaid,
+      interestPaid: rawInterestPaid,
+      principalPaid: rawPrincipalPaid,
+      carriedAmount: rawCarriedAmount = 0,
+      pendingAmount: rawPendingAmount = 0,
       fineAmount: rawFineAmount = 0,
       collectedDate,
       paymentMethod,
@@ -104,21 +108,24 @@ export async function recordEmiPayment(req, res) {
       receiptNumber,
     } = req.body;
 
-    const paidAmount = Number(amountPaid);
+    const componentMode = rawInterestPaid !== undefined || rawPrincipalPaid !== undefined;
+    const interestAmount = Number(rawInterestPaid || 0);
+    const principalAmount = Number(rawPrincipalPaid || 0);
+    const carriedAmount = Number(rawCarriedAmount || 0);
+    const pendingAmount = Number(rawPendingAmount || 0);
+    const paidAmount = componentMode ? interestAmount + principalAmount + carriedAmount : Number(rawAmountPaid);
     const fineAmount = Number(rawFineAmount);
     const validCollectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(collectedDate || ""))
       && !Number.isNaN(Date.parse(`${collectedDate}T00:00:00Z`))
       && new Date(`${collectedDate}T00:00:00Z`).toISOString().slice(0, 10) === collectedDate;
 
-    if (
-      !loanId ||
-      !emiId ||
-      !Number.isFinite(paidAmount) ||
-      paidAmount <= 0
-    ) {
-      throw new Error(
-        "loanId, emiId and a valid positive amountPaid are required"
-      );
+    if (!loanId) throw new Error("Loan reference is missing; refresh the loan and retry");
+    if (!emiId) throw new Error("Installment reference is missing; refresh the loan and retry");
+    if (componentMode && (!Number.isFinite(interestAmount) || interestAmount < 0 || !Number.isFinite(principalAmount) || principalAmount < 0 || !Number.isFinite(carriedAmount) || carriedAmount < 0 || !Number.isFinite(pendingAmount) || pendingAmount < 0)) {
+      throw new Error("Interest, principal, and carried amounts must be valid non-negative numbers");
+    }
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      throw new Error("Enter a positive amount for the EMI payment");
     }
     if (!Number.isFinite(fineAmount) || fineAmount < 0) {
       throw new Error("Fine amount must be zero or greater");
@@ -284,6 +291,7 @@ export async function recordEmiPayment(req, res) {
         paid_principal,
         paid_interest,
         extra_principal_paid,
+        pending_amount,
         status
       FROM autofinance_emi_schedules
       WHERE id = $1
@@ -334,6 +342,51 @@ export async function recordEmiPayment(req, res) {
     const previousPaidPrincipal = Number(emi.paid_principal || 0);
     const previousPaidInterest = Number(emi.paid_interest || 0);
     const previousExtraPrincipal = Number(emi.extra_principal_paid || 0);
+    const scheduledCarry = Number(emi.pending_amount || 0);
+    if (componentMode && Math.abs(carriedAmount - scheduledCarry) > 0.01) {
+      throw new Error("The previous month pending amount must be collected with this installment.");
+    }
+
+    // A carried amount settles the unpaid components on the earlier EMI that
+    // generated it. Allocate it there so future principal/interest schedules
+    // remain based on the actual loan balance instead of spreading the shortfall.
+    if (componentMode && carriedAmount > 0) {
+      const carrySources = await client.query(
+        `SELECT id, principal_component, interest_component, paid_principal, paid_interest,
+                pending_amount_forwarded
+         FROM autofinance_emi_schedules
+         WHERE loan_id = $1 AND installment_number < $2
+           AND COALESCE(pending_amount_forwarded, 0) > 0
+         ORDER BY installment_number ASC
+         FOR UPDATE`,
+        [loanId, emi.installment_number]
+      );
+      let carryToAllocate = carriedAmount;
+      for (const source of carrySources.rows) {
+        if (carryToAllocate <= 0.01) break;
+        const unpaidInterest = Math.max(0, Number(source.interest_component || 0) - Number(source.paid_interest || 0));
+        const unpaidPrincipal = Math.max(0, Number(source.principal_component || 0) - Number(source.paid_principal || 0));
+        const sourceCarry = Number(source.pending_amount_forwarded || 0);
+        let sourceAllocation = Math.min(carryToAllocate, sourceCarry);
+        const interestAllocation = Math.min(sourceAllocation, unpaidInterest);
+        sourceAllocation -= interestAllocation;
+        const principalAllocation = Math.min(sourceAllocation, unpaidPrincipal);
+        const allocated = interestAllocation + principalAllocation;
+        if (allocated <= 0) continue;
+        await client.query(
+          `UPDATE autofinance_emi_schedules
+           SET paid_interest = COALESCE(paid_interest, 0) + $1,
+               paid_principal = COALESCE(paid_principal, 0) + $2,
+               pending_amount_forwarded = GREATEST(0, COALESCE(pending_amount_forwarded, 0) - $3)
+           WHERE id = $4`,
+          [interestAllocation, principalAllocation, allocated, source.id]
+        );
+        carryToAllocate = Number((carryToAllocate - allocated).toFixed(2));
+      }
+      if (carryToAllocate > 0.01) {
+        throw new Error("Previous month pending does not match the earlier installment balance.");
+      }
+    }
 
     // =====================================================
     // 2. CHECK REMAINING AMOUNT FOR CURRENT EMI
@@ -355,19 +408,27 @@ export async function recordEmiPayment(req, res) {
 
     let remainingPayment = roundMoney(paidAmount);
 
-    const interestPaidNow = roundMoney(
-      Math.min(remainingPayment, remainingInterest)
-    );
+    const interestPaidNow = componentMode
+      ? roundMoney(interestAmount)
+      : roundMoney(Math.min(remainingPayment, remainingInterest));
+    if (!componentMode) remainingPayment = roundMoney(remainingPayment - interestPaidNow);
 
-    remainingPayment = roundMoney(remainingPayment - interestPaidNow);
+    const principalPaidCurrent = componentMode
+      ? roundMoney(principalAmount)
+      : roundMoney(Math.min(remainingPayment, remainingPrincipal));
+    if (!componentMode) remainingPayment = roundMoney(remainingPayment - principalPaidCurrent);
 
-    const principalPaidCurrent = roundMoney(
-      Math.min(remainingPayment, remainingPrincipal)
-    );
+    if (componentMode && (interestPaidNow > remainingInterest + 0.01 || principalPaidCurrent > remainingPrincipal + 0.01)) {
+      throw new Error("Collected interest or principal exceeds the remaining installment component.");
+    }
+    if (!componentMode && remainingPayment > 0.01) {
+      throw new Error("Collection cannot exceed the installment due. Only fine and previous month pending are collected separately.");
+    }
+    const extraPrincipalPaymentNow = 0;
 
-    remainingPayment = roundMoney(remainingPayment - principalPaidCurrent);
-
-    const extraPrincipalPaymentNow = roundMoney(remainingPayment); 
+    if (componentMode && (interestPaidNow > remainingInterest + 0.01 || principalPaidCurrent > remainingPrincipal + 0.01 || interestPaidNow + principalPaidCurrent + pendingAmount > remainingInterest + remainingPrincipal + 0.01)) {
+      throw new Error("Collected interest, principal, and pending amount must equal the remaining installment due.");
+    }
 
     // =====================================================
     // CUMULATIVE EMI STATE
@@ -379,7 +440,7 @@ export async function recordEmiPayment(req, res) {
     
     // Only scheduled EMI collection belongs in collected_amount.
     const scheduledPaymentNow = roundMoney(
-      interestPaidNow + principalPaidCurrent
+      interestPaidNow + principalPaidCurrent + carriedAmount
     );
 
     const totalCollected = roundMoney(
@@ -393,6 +454,7 @@ export async function recordEmiPayment(req, res) {
     const allocatedPayment = roundMoney(
       interestPaidNow +
       principalPaidCurrent +
+      carriedAmount +
       extraPrincipalPaymentNow
     );
 
@@ -402,15 +464,24 @@ export async function recordEmiPayment(req, res) {
       );
     }
 
+    if (componentMode && pendingAmount > 0) {
+      const nextExists = await client.query(
+        `SELECT 1 FROM autofinance_emi_schedules WHERE loan_id = $1 AND installment_number > $2 AND status = 'PENDING' LIMIT 1`,
+        [loanId, emi.installment_number]
+      );
+      if (!nextExists.rows.length) throw new Error("There is no next month available to carry this pending amount.");
+    }
+
     // =====================================================
     // 4. DETERMINE EMI STATUS
     // =====================================================
 
     const currentEmiFullyPaid =
       totalInterestPaid >= scheduledInterest &&
-      totalPrincipalPaid >= scheduledPrincipal;
+      totalPrincipalPaid >= scheduledPrincipal &&
+      carriedAmount >= scheduledCarry;
 
-    const newStatus = currentEmiFullyPaid ? "PAID" : "PARTIAL";
+    const newStatus = currentEmiFullyPaid || (componentMode && pendingAmount > 0) ? "PAID" : "PARTIAL";
 
     // =====================================================
     // 5. UPDATE CURRENT EMI
@@ -424,7 +495,8 @@ export async function recordEmiPayment(req, res) {
         paid_interest = $3,
         paid_principal = $4,
         extra_principal_paid = $5,
-        status = $6
+        status = $6,
+        pending_amount = GREATEST(0, COALESCE(pending_amount, 0) - $7)
       WHERE id = $1
       `,
       [
@@ -434,8 +506,33 @@ export async function recordEmiPayment(req, res) {
         totalPrincipalPaid,
         totalExtraPrincipalPaid,
         newStatus,
+        carriedAmount,
       ],
     );
+
+    if (componentMode && pendingAmount > 0) {
+      const nextScheduleRes = await client.query(
+        `SELECT id, principal_component, interest_component, total_emi
+         FROM autofinance_emi_schedules
+         WHERE loan_id = $1 AND installment_number > $2 AND status = 'PENDING'
+         ORDER BY installment_number ASC LIMIT 1 FOR UPDATE`,
+        [loanId, emi.installment_number]
+      );
+      const next = nextScheduleRes.rows[0];
+      const nextTotalEmi = Number(next.total_emi || 0) + pendingAmount;
+      await client.query(
+        `UPDATE autofinance_emi_schedules
+         SET total_emi = $1, pending_amount = COALESCE(pending_amount, 0) + $2
+         WHERE id = $3`,
+        [nextTotalEmi, pendingAmount, next.id]
+      );
+      await client.query(
+        `UPDATE autofinance_emi_schedules
+         SET pending_amount_forwarded = COALESCE(pending_amount_forwarded, 0) + $1
+         WHERE id = $2`,
+        [pendingAmount, emiId]
+      );
+    }
 
     // =====================================================
     // 6. INSERT PAYMENT RECORD (AUDITABLE)
@@ -498,7 +595,11 @@ export async function recordEmiPayment(req, res) {
     // =====================================================
     
     // This strictly recomputes future pending schedules using global outstanding principal tracking.
-    await rescheduleFutureEMIs(client, loanId);
+    // Keep the contractual future EMIs unchanged when a shortfall is carried.
+    // It will be allocated to its source EMI when collected next month.
+    if (!(componentMode && pendingAmount > 0)) {
+      await rescheduleFutureEMIs(client, loanId);
+    }
 
     await client.query("COMMIT");
 

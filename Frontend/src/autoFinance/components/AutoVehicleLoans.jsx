@@ -9,6 +9,7 @@ export default function AutoVehicleLoans({
   overview = {},
   loans = [],
   vehiclePageLoans = [],
+  loanSerialById = new Map(),
   loanTabFilter,
   setLoanTabFilter,
   loanMonthFilter = "",
@@ -249,13 +250,13 @@ export default function AutoVehicleLoans({
             </tr>
           </thead>
           <tbody>
-            {vehiclePageLoans.map((l, idx) => (
+            {vehiclePageLoans.map((l) => (
               <tr
                 key={l.id}
                 className="clickable"
                 onClick={() => openLoanDetails(l.id)}
               >
-                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{loanSerialById.get(String(l.id)) || "—"}</td>
                 <td>
                   <div className="customerNameCell">
                     <div>

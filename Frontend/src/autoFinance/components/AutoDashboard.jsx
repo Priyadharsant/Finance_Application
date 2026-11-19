@@ -22,6 +22,7 @@ import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi"
 export default function AutoDashboard({
   overview = {},
   dashboardLoans = [],
+  loanSerialById = new Map(),
   dashboardData = {},
   statusFilter,
   setStatusFilter,
@@ -372,7 +373,7 @@ export default function AutoDashboard({
             </tr>
           </thead>
           <tbody>
-            {dashboardLoans.map((l, idx) => {
+            {dashboardLoans.map((l) => {
               const getLocalDateString = (d) => {
                 if (!d) return "";
                 const dt = new Date(d);
@@ -405,6 +406,10 @@ export default function AutoDashboard({
               const dueStatus = dashDue?.status || l.next_emi_status || "";
               const paidSoFar = Number(dashDue?.collected_amount || l.next_emi_collected || 0);
               const fullInstallmentEmi = Number(dashDue?.total_emi || l.next_emi_total || (monthlyDueAmount + paidSoFar));
+              const carriedAmount = Number(dashDue?.pending_amount || l.next_emi_pending_amount || 0);
+              const currentMonthDueAmount = Math.max(0, monthlyDueAmount - carriedAmount);
+              const remainingInterest = Number(dashDue?.remaining_interest ?? Math.max(0, Number(dashDue?.interest_component ?? l.next_emi_interest ?? 0) - Number(dashDue?.paid_interest ?? l.next_emi_paid_interest ?? 0)));
+              const remainingPrincipal = Number(dashDue?.remaining_principal ?? Math.max(0, Number(dashDue?.principal_component ?? l.next_emi_principal ?? 0) - Number(dashDue?.paid_principal ?? l.next_emi_paid_principal ?? 0)));
 
               const isPartial = dueStatus === "PARTIAL" || (paidSoFar > 0 && monthlyDueAmount > 0);
               // Only consider pending if due date is strictly in the past (< current date)
@@ -416,7 +421,7 @@ export default function AutoDashboard({
                   className="clickable"
                   onClick={() => openLoanDetails(l.id)}
                 >
-                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{idx + 1}</td>
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{loanSerialById.get(String(l.id)) || "—"}</td>
                   <td>
                     <div className="customerNameCell">
                       <div>
@@ -549,6 +554,16 @@ export default function AutoDashboard({
                         >
                           Inst #{instNo} {isPartial && paidSoFar > 0 ? `· Paid: ${money(paidSoFar)}` : hasUpcoming ? `· Due: ${dateLabel(l.next_due_date)}` : ""}
                         </small>
+                        {carriedAmount > 0 && (
+                          <small style={{ color: "#92400e", fontSize: "11px" }}>
+                            Previous month pending: {money(carriedAmount)}
+                          </small>
+                        )}
+                        {Number(dashDue?.pending_amount_forwarded || 0) > 0 && (
+                          <small style={{ color: "#b45309", fontSize: "11px", fontWeight: 700 }}>
+                            Pending amount: {money(dashDue.pending_amount_forwarded)}
+                          </small>
+                        )}
                       </div>
                     ) : (
                       <span
@@ -607,9 +622,17 @@ export default function AutoDashboard({
                             totalEmi: fullInstallmentEmi,
                             instNo: instNo,
                             remainingEmi: monthlyDueAmount,
+                            currentMonthDue: currentMonthDueAmount,
+                            carriedAmount,
+                            pendingAmountForwarded: Number(dashDue?.pending_amount_forwarded || 0),
+                            remainingInterest,
+                            remainingPrincipal,
                           });
                           setPayForm({
-                            amountPaid: monthlyDueAmount,
+                            interestPaid: remainingInterest,
+                            principalPaid: remainingPrincipal,
+                            carriedAmount: String(carriedAmount),
+                            pendingAmount: "0",
                             fineAmount: "0",
                             collectedDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
                             paymentMethod: "CASH",

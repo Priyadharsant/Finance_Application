@@ -129,6 +129,9 @@ export async function createLoanWithVehicle(data) {
     // Ensure columns exist and expenses table exists
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';`);
     await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS fees_details JSONB DEFAULT '{}'::jsonb;`);
+    await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);`);
+    await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+    await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS expenses (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -189,6 +192,7 @@ export async function createLoanWithVehicle(data) {
       feesDetailsObj
     ]);
     const loan = loanRes.rows[0];
+    await client.query(`UPDATE autofinance_loans SET total_payable = $1 WHERE id = $2`, [Number(data.totalPayable) || null, loan.id]);
 
     // Record this Auto loan's actual customer payout from the Auto cash balance.
     if (inHandAmount > 0) {
@@ -249,11 +253,29 @@ export async function createLoanWithVehicle(data) {
     const ratePercent = parseFloat(interestRate);
     const n = parseInt(tenureMonths);
     const method = (interestType || 'FLAT').toUpperCase();
+    const enteredTotalPayable = Number(data.totalPayable);
+    const derivedInterest = method === 'FLAT'
+      ? P * (ratePercent / 100) * n
+      : (() => {
+          if (ratePercent <= 0) return 0;
+          const rate = ratePercent / 100;
+          const emi = (P * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1);
+          return emi * n - P;
+        })();
+    const scheduleTotalPayable = Number.isFinite(enteredTotalPayable) && enteredTotalPayable > 0
+      ? enteredTotalPayable
+      : P + derivedInterest;
+    if (scheduleTotalPayable < P) throw new Error('Total payable cannot be less than the loan principal.');
+    const totalInterestPayable = scheduleTotalPayable - P;
+    await client.query(`UPDATE autofinance_loans SET total_payable = $1 WHERE id = $2`, [scheduleTotalPayable, loan.id]);
 
     if (method === 'REDUCING') {
       const r = (ratePercent / 100);
+      const hasTotalPayableOverride = Number.isFinite(Number(data.totalPayable)) && Number(data.totalPayable) > 0;
       let emi = 0;
-      if (r > 0) {
+      if (hasTotalPayableOverride) {
+        emi = scheduleTotalPayable / n;
+      } else if (r > 0) {
         emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
       } else {
         emi = P / n;
@@ -263,8 +285,8 @@ export async function createLoanWithVehicle(data) {
       for (let i = 1; i <= n; i++) {
         const dueDateStr = addMonthsSafe(startStr, i);
 
-        let interestComp = r > 0 ? balance * r : 0;
-        let principalComp = emi - interestComp;
+        let interestComp = hasTotalPayableOverride ? totalInterestPayable / n : (r > 0 ? balance * r : 0);
+        let principalComp = hasTotalPayableOverride ? (P / n) : (emi - interestComp);
 
         // Absorb minor rounding discrepancy on final installment
         if (i === n) {
@@ -291,7 +313,7 @@ export async function createLoanWithVehicle(data) {
       }
     } else {
       // FLAT INTEREST
-      const totalInterest = P * (ratePercent / 100) * n;
+      const totalInterest = totalInterestPayable;
       const monthlyPrincipal = P / n;
       const monthlyInterest = totalInterest / n;
       const monthlyEMI = monthlyPrincipal + monthlyInterest;
@@ -327,6 +349,8 @@ export async function createLoanWithVehicle(data) {
 
 export async function getAllLoans() {
   await ensureAutoPaymentColumns();
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
   const query = `
     SELECT 
       l.*,
@@ -351,7 +375,12 @@ export async function getAllLoans() {
       CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_installment_number END as next_installment_number,
       CASE WHEN l.status = 'COMPLETED' THEN NULL ELSE next_emi.next_emi_status END as next_emi_status,
       CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_total END as next_emi_total,
-      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_collected END as next_emi_collected
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_pending_amount END as next_emi_pending_amount,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_collected END as next_emi_collected,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_interest END as next_emi_interest,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_principal END as next_emi_principal,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_paid_interest END as next_emi_paid_interest,
+      CASE WHEN l.status = 'COMPLETED' THEN 0 ELSE next_emi.next_emi_paid_principal END as next_emi_paid_principal
     FROM autofinance_loans l
     JOIN autofinance_customers c ON l.customer_id = c.id
     LEFT JOIN autofinance_loan_types lt ON l.loan_type_id = lt.id
@@ -389,12 +418,17 @@ export async function getAllLoans() {
         (array_agg(installment_number ORDER BY due_date ASC))[1] as next_installment_number,
         (array_agg(status ORDER BY due_date ASC))[1] as next_emi_status,
         (array_agg(total_emi ORDER BY due_date ASC))[1] as next_emi_total,
-        (array_agg(COALESCE(collected_amount, 0) ORDER BY due_date ASC))[1] as next_emi_collected
+        (array_agg(COALESCE(pending_amount, 0) ORDER BY due_date ASC))[1] as next_emi_pending_amount,
+        (array_agg(COALESCE(collected_amount, 0) ORDER BY due_date ASC))[1] as next_emi_collected,
+        (array_agg(interest_component ORDER BY due_date ASC))[1] as next_emi_interest,
+        (array_agg(principal_component ORDER BY due_date ASC))[1] as next_emi_principal,
+        (array_agg(COALESCE(paid_interest, 0) ORDER BY due_date ASC))[1] as next_emi_paid_interest,
+        (array_agg(COALESCE(paid_principal, 0) ORDER BY due_date ASC))[1] as next_emi_paid_principal
       FROM autofinance_emi_schedules
       WHERE status IN ('PENDING', 'PARTIAL')
       GROUP BY loan_id
     ) next_emi ON l.id = next_emi.loan_id
-    ORDER BY l.created_at DESC;
+    ORDER BY l.start_date ASC, l.created_at ASC;
   `;
   const result = await pool.query(query);
   return result.rows;
@@ -402,6 +436,9 @@ export async function getAllLoans() {
 
 export async function getLoanDetails(loanId) {
   await ensureAutoPaymentColumns();
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);`);
   const loanQuery = `
     SELECT 
       l.*,
@@ -431,19 +468,11 @@ export async function getLoanDetails(loanId) {
       
       GREATEST(COALESCE(interest_component, 0) - COALESCE(paid_interest, 0), 0) AS remaining_interest,
       
-      GREATEST(
-        COALESCE(total_emi, 0) - 
-        (
-          LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
-          LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0))
-        ), 
-        0
-      ) AS remaining_emi_amount,
+      GREATEST(COALESCE(total_emi, 0) - COALESCE(collected_amount, 0), 0) AS remaining_emi_amount,
+      GREATEST(COALESCE(total_emi, 0) - COALESCE(collected_amount, 0), 0) AS remaining_collection_amount,
       
       (
-        LEAST(COALESCE(paid_principal, 0), COALESCE(principal_component, 0)) +
-        LEAST(COALESCE(paid_interest, 0), COALESCE(interest_component, 0)) +
-        COALESCE(extra_principal_paid, 0)
+        COALESCE(collected_amount, 0) + COALESCE(extra_principal_paid, 0)
       ) AS total_cash_collected
 
     FROM autofinance_emi_schedules
@@ -476,11 +505,17 @@ export async function getLoanDetails(loanId) {
 
 export async function getDueInstallments() {
   await pool.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';`);
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);`);
   const query = `
     SELECT 
       s.*,
       GREATEST(0, s.total_emi - COALESCE(s.collected_amount, 0)) AS remaining_emi_amount,
+      GREATEST(0, s.interest_component - COALESCE(s.paid_interest, 0)) AS remaining_interest,
+      GREATEST(0, s.principal_component - COALESCE(s.paid_principal, 0)) AS remaining_principal,
       l.customer_id, l.loan_amount, l.tenure_months,
+      l.total_payable,
       c.first_name, c.last_name, c.phone, c.customer_code,
       v.make, v.model, v.registration_number, v.vehicle_type,
       COALESCE(ls.pending_dues_count, 0) as pending_dues_count,
@@ -626,9 +661,12 @@ export async function getAutoFinanceOverview() {
 }
 
 export async function rescheduleFutureEMIs(client, loanId) {
+  await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);`);
   // 1. Fetch Loan Details
   const loanRes = await client.query(
-    `SELECT loan_amount, interest_rate, tenure_months, interest_type FROM autofinance_loans WHERE id = $1`,
+    `SELECT loan_amount, interest_rate, tenure_months, interest_type, total_payable FROM autofinance_loans WHERE id = $1`,
     [loanId]
   );
   if (!loanRes.rows[0]) return;
@@ -638,6 +676,8 @@ export async function rescheduleFutureEMIs(client, loanId) {
   const ratePercent = parseFloat(loan.interest_rate);
   const n_total = parseInt(loan.tenure_months);
   const isReducing = loan.interest_type === 'REDUCING';
+  const storedTotalPayable = Number(loan.total_payable || 0);
+  const isTotalOverride = storedTotalPayable > 0;
 
   // 2. Fetch all schedules
   const schedRes = await client.query(
@@ -702,6 +742,9 @@ export async function rescheduleFutureEMIs(client, loanId) {
   const n_pending = pendingSchedules.length;
   if (n_pending === 0) return; // Nothing to reschedule
 
+  // Carried shortfalls are collected as an add-on in their next installment.
+  // They are not principal and must not reduce the loan principal distributed
+  // across later installments.
   let principalToDistribute = P_initial - totalPrincipalPaid - unpaidPrincipalInPartials;
   if (principalToDistribute < 0) principalToDistribute = 0;
 
@@ -711,7 +754,9 @@ export async function rescheduleFutureEMIs(client, loanId) {
     let newEmi = 0;
     
     if (principalToDistribute > 0) {
-      if (r > 0) {
+      if (isTotalOverride) {
+        newEmi = (principalToDistribute + Math.max(0, storedTotalPayable - P_initial - totalInterestPaid - unpaidInterestInPartials)) / n_pending;
+      } else if (r > 0) {
         newEmi = (principalToDistribute * r * Math.pow(1 + r, n_pending)) / (Math.pow(1 + r, n_pending) - 1);
       } else {
         newEmi = principalToDistribute / n_pending;
@@ -722,7 +767,7 @@ export async function rescheduleFutureEMIs(client, loanId) {
     
     for (let i = 0; i < n_pending; i++) {
       const pending = pendingSchedules[i];
-      let interestComp = r > 0 ? currentBalance * r : 0;
+      let interestComp = isTotalOverride ? Math.max(0, (storedTotalPayable - P_initial - totalInterestPaid - unpaidInterestInPartials) / n_pending) : (r > 0 ? currentBalance * r : 0);
       let principalComp = principalToDistribute > 0 ? newEmi - interestComp : 0;
       
       // Handle the final installment to absorb rounding differences
@@ -736,14 +781,14 @@ export async function rescheduleFutureEMIs(client, loanId) {
       
       await client.query(
         `UPDATE autofinance_emi_schedules 
-         SET principal_component = $1, interest_component = $2, total_emi = $3 
+         SET principal_component = $1, interest_component = $2, total_emi = $3 + COALESCE(pending_amount, 0)
          WHERE id = $4`,
         [principalComp.toFixed(2), interestComp.toFixed(2), totalEmi.toFixed(2), pending.id]
       );
     }
   } else {
     // FLAT INTEREST
-    const totalContractualInterest = P_initial * (ratePercent / 100) * n_total;
+    const totalContractualInterest = isTotalOverride ? storedTotalPayable - P_initial : P_initial * (ratePercent / 100) * n_total;
     let interestToDistribute = totalContractualInterest - totalInterestPaid - unpaidInterestInPartials;
     if (interestToDistribute < 0) interestToDistribute = 0;
 
@@ -772,7 +817,7 @@ export async function rescheduleFutureEMIs(client, loanId) {
 
       await client.query(
         `UPDATE autofinance_emi_schedules 
-         SET principal_component = $1, interest_component = $2, total_emi = $3 
+         SET principal_component = $1, interest_component = $2, total_emi = $3 + COALESCE(pending_amount, 0)
          WHERE id = $4`,
         [monthlyPrincipal.toFixed(2), monthlyInterest.toFixed(2), newTotalEmi.toFixed(2), pending.id]
       );

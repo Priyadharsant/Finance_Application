@@ -1050,7 +1050,18 @@ form.paymentCard.autoPayEmiForm {
 }
 .autoPayEmiForm > .overline { display: inline-flex; margin-bottom: 6px; }
 .autoPayEmiForm h2 { margin: 0 34px 8px 0; color: #17334d; font-size: 22px; }
-.autoPayEmiForm > p { margin: 0 0 18px !important; padding: 10px 12px; border: 1px solid #f4d8d6; border-radius: 10px; background: #fff7f6; }
+.autoPayDueSummary { display: grid; gap: 9px; margin: 0 0 18px; padding: 12px 14px; border: 1px solid #f4d8d6; border-radius: 10px; background: #fff7f6; color: #64748b; font-size: 13px; }
+.autoPayDueMain, .autoPayCarryLine, .autoPayTotalLine { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.autoPayDueMain > span, .autoPayCarryLine > span { min-width: 0; }
+.autoPayDueMain > b { color: #ef4444; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.autoPayDueBreakdown { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; font-size: 12px; }
+.autoPayDueBreakdown > span { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.autoPayDueBreakdown b { color: #475569; font-variant-numeric: tabular-nums; }
+.autoPayCarryLine { color: #92400e; font-size: 12px; }
+.autoPayCarryLine > b { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.autoPayCarryLine input { box-sizing: border-box; width: 112px; height: 34px; padding: 6px 9px; border: 1px solid #e7c8a8; border-radius: 7px; background: #fff; color: #78350f; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
+.autoPayTotalLine { padding-top: 8px; border-top: 1px solid #f4d8d6; color: #17334d; font-size: 13px; font-weight: 800; }
+.autoPayTotalLine > b { color: #17334d; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .autoPayEmiFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
 .autoPayEmiFields label { min-width: 0; color: #4a6073; font-size: 11px; letter-spacing: .45px; }
 .autoPayEmiFields input, .autoPayEmiFields select { box-sizing: border-box; height: 44px; margin-top: 6px; padding: 9px 11px; }

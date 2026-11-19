@@ -110,6 +110,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     loanTypeId: "",
     interestType: "FLAT",
     loanAmount: "",
+    totalPayable: "",
     interestRate: "12",
     tenureMonths: "12",
     startDate: new Date().toISOString().slice(0, 10),
@@ -149,9 +150,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       other: null
     }
   });
+  const [totalPayableEdited, setTotalPayableEdited] = useState(false);
 
   const [payForm, setPayForm] = useState({
-    amountPaid: "",
+    interestPaid: "0",
+    principalPaid: "0",
+    pendingAmount: "0",
     fineAmount: "0",
     collectedDate: getLocalDateInputValue(),
     paymentMethod: "CASH",
@@ -284,6 +288,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           : "Vehicle loan created with EMI schedule and documents!",
       });
       setShowCreateLoan(false);
+      setTotalPayableEdited(false);
       setLoanForm({
         customerId: "",
         firstName: "",
@@ -296,6 +301,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         loanTypeId: "",
         interestType: "FLAT",
         loanAmount: "",
+        totalPayable: "",
         interestRate: "12",
         tenureMonths: "12",
         startDate: new Date().toISOString().slice(0, 10),
@@ -347,14 +353,32 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
   const handlePayEmi = async (e) => {
     e.preventDefault();
     if (!payEmiModal || actionLoading) return;
+    const loanId = payEmiModal.loanId;
+    const emiId = payEmiModal.emiId;
+    const interestPaid = Number(payForm.interestPaid || 0);
+    const principalPaid = Number(payForm.principalPaid || 0);
+    const carriedAmount = Number(payEmiModal.carriedAmount || 0);
+    if (!loanId || !emiId) {
+      setNotice?.({ type: "error", text: "Cannot record this payment: loan or installment reference is missing. Close this form and reopen the loan." });
+      return;
+    }
+    if (![interestPaid, principalPaid, carriedAmount].every(Number.isFinite) || interestPaid < 0 || principalPaid < 0 || carriedAmount < 0 || interestPaid + principalPaid + carriedAmount <= 0) {
+      setNotice?.({ type: "error", text: "Enter a positive amount for interest, principal, or carried dues." });
+      return;
+    }
     setActionLoading("Recording EMI Payment...");
     try {
       await apiCall("/loans/pay-emi", {
         method: "POST",
         body: JSON.stringify({
-          loanId: payEmiModal.loanId,
-          emiId: payEmiModal.emiId,
-          amountPaid: payForm.amountPaid,
+          loanId,
+          emiId,
+          interestPaid: payForm.interestPaid,
+          principalPaid: payForm.principalPaid,
+          carriedAmount: payEmiModal.carriedAmount ?? 0,
+          pendingAmount: payEmiModal.remainingInterest !== undefined
+            ? Math.max(0, Number(payEmiModal.remainingInterest || 0) + Number(payEmiModal.remainingPrincipal || 0) - Number(payForm.interestPaid || 0) - Number(payForm.principalPaid || 0))
+            : payForm.pendingAmount,
           fineAmount: payForm.fineAmount,
           collectedDate: payForm.collectedDate,
           paymentMethod: payForm.paymentMethod,
@@ -365,7 +389,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       setNotice?.({ type: "success", text: "EMI Payment recorded!" });
       setPayEmiModal(null);
       setPayForm({
-        amountPaid: "",
+        interestPaid: "0",
+        principalPaid: "0",
+        pendingAmount: "0",
         fineAmount: "0",
         collectedDate: getLocalDateInputValue(),
         paymentMethod: "CASH",
@@ -373,14 +399,9 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         receiptNumber: "",
       });
       setActionLoading(null);
-      if (selectedLoan) {
-        loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
-        apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
-          if (details?.success) {
-            loanDetailsCacheRef.current.set(selectedLoan.loan.id, details.data);
-            setSelectedLoan(details.data);
-          }
-        });
+      loanDetailsCacheRef.current.delete(loanId);
+      if (selectedLoan?.loan?.id && String(selectedLoan.loan.id) === String(loanId)) {
+        await openLoanDetails(loanId);
       }
       loadData(false);
     } catch (err) {
@@ -634,6 +655,18 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     exportTotalPortfolio(dashboardLoans, dashboardMonthFilter ? `Dues_${dashboardMonthFilter}` : "Active_Dues");
   };
 
+  const loanSerialById = useMemo(() => {
+    const orderedLoans = [...loans].sort((a, b) => {
+      const startA = String(a.start_date || "").slice(0, 10);
+      const startB = String(b.start_date || "").slice(0, 10);
+      if (startA !== startB) return startA.localeCompare(startB);
+      const createdA = new Date(a.created_at || 0).getTime();
+      const createdB = new Date(b.created_at || 0).getTime();
+      return createdA - createdB;
+    });
+    return new Map(orderedLoans.map((loan, index) => [String(loan.id), index + 1]));
+  }, [loans]);
+
   const filteredCustomers = useMemo(() => {
     return customers.filter((c) => {
       if (customerMonthFilter) {
@@ -683,12 +716,17 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     });
 
     result.sort((a, b) => {
+      const compareLoanDate = () => {
+        const startA = String(a.start_date || "").slice(0, 10);
+        const startB = String(b.start_date || "").slice(0, 10);
+        if (startA !== startB) return startA.localeCompare(startB);
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+      };
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
 
       if (sortConfig.key === "date") {
-        aVal = new Date(a.created_at || a.start_date || 0).getTime();
-        bVal = new Date(b.created_at || b.start_date || 0).getTime();
+        return compareLoanDate();
       } else if (sortConfig.key === "due_date") {
         aVal = a.next_due_date ? new Date(a.next_due_date).getTime() : Infinity;
         bVal = b.next_due_date ? new Date(b.next_due_date).getTime() : Infinity;
@@ -702,7 +740,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
 
       if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
       if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
+      return compareLoanDate();
     });
 
     return result;
@@ -729,16 +767,12 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
     });
 
     list.sort((a, b) => {
-      // 1. Show ACTIVE loans first, then COMPLETED loans
-      const isActiveA = a.status === "ACTIVE" ? 1 : 0;
-      const isActiveB = b.status === "ACTIVE" ? 1 : 0;
-      if (isActiveA !== isActiveB) {
-        return isActiveB - isActiveA;
-      }
-
-      // 2. Within each group, sort older to newest
+      // Stable serial numbering follows loan date, then creation time.
       const dateA = new Date(a.created_at || a.start_date || 0).getTime();
       const dateB = new Date(b.created_at || b.start_date || 0).getTime();
+      const startA = String(a.start_date || "").slice(0, 10);
+      const startB = String(b.start_date || "").slice(0, 10);
+      if (startA !== startB) return startA.localeCompare(startB);
       return dateA - dateB;
     });
 
@@ -778,6 +812,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
             <AutoDashboard
               overview={overview}
               dashboardLoans={dashboardLoans}
+              loanSerialById={loanSerialById}
               dashboardData={dashboardData}
               statusFilter={statusFilter}
               setStatusFilter={setStatusFilter}
@@ -820,6 +855,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               overview={overview}
               loans={loans}
               vehiclePageLoans={vehiclePageLoans}
+              loanSerialById={loanSerialById}
               loanTabFilter={loanTabFilter}
               setLoanTabFilter={setLoanTabFilter}
               loanMonthFilter={loanMonthFilter}
@@ -857,6 +893,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         partners={partners}
         submitting={Boolean(actionLoading)}
         uploadProgress={createLoanUploadProgress}
+        totalPayableEdited={totalPayableEdited}
+        setTotalPayableEdited={setTotalPayableEdited}
       />
 
       {/* MODAL: LOAN DETAILS & EMI SCHEDULE TABLE */}
@@ -868,7 +906,13 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         handleEditVehicle={handleEditVehicle}
         handleUploadDocument={handleUploadDocument}
         handleDeleteDocument={handleDeleteDocument}
-        setPayEmiModal={setPayEmiModal}
+        setPayEmiModal={(modal) => {
+          if (modal && (!modal.loanId || !modal.emiId)) {
+            setNotice?.({ type: "error", text: "This installment is missing its loan or schedule reference. Refresh the Auto Finance page and try again." });
+            return;
+          }
+          setPayEmiModal(modal);
+        }}
         setPayForm={setPayForm}
         setNotice={setNotice}
       />

@@ -502,6 +502,7 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
 
     // Sorting
     let orderClause = '';
+    let sortJoinClause = '';
     if (sortBy && columns.some((c) => c.column_name === sortBy)) {
       if (enrichment?.extraColumns?.some((ec) => ec.column_name === sortBy)) {
         orderClause = `ORDER BY "${sortBy}" ${sortOrder}`;
@@ -511,6 +512,46 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
     } else if (tableName === 'partner_capital_transactions') {
       // Order partner transactions: Partner name, then OWN first, then date
       orderClause = `ORDER BY gp.name ASC, CASE WHEN t.fund_source_type = 'OWN' OR t.fund_source_type IS NULL THEN 1 ELSE 2 END ASC, t.effective_date DESC`;
+    } else if (tableName === 'autofinance_loans') {
+      // Match the Dashboard: loan date first, then actual disbursement time.
+      sortJoinClause = `LEFT JOIN LATERAL (
+        SELECT g.created_at AS distributed_at
+        FROM global_cash_ledger g
+        WHERE g.type = 'AUTO_LOAN_DISBURSEMENT'
+          AND g.reference_type = 'AUTO_LOAN'
+          AND g.reference_id = t.id
+        ORDER BY g.created_at ASC
+        LIMIT 1
+      ) loan_distribution ON TRUE`;
+      orderClause = `ORDER BY t.start_date ASC NULLS FIRST, COALESCE(loan_distribution.distributed_at, t.created_at) ASC NULLS FIRST, t.id ASC`;
+    } else if (tableName === 'autofinance_customers') {
+      // Sort customers by their earliest linked loan and its disbursement time.
+      sortJoinClause = `LEFT JOIN LATERAL (
+        SELECT l.start_date,
+               COALESCE(distribution.distributed_at, l.created_at) AS distributed_at
+        FROM autofinance_loans l
+        LEFT JOIN LATERAL (
+          SELECT g.created_at AS distributed_at
+          FROM global_cash_ledger g
+          WHERE g.type = 'AUTO_LOAN_DISBURSEMENT'
+            AND g.reference_type = 'AUTO_LOAN'
+            AND g.reference_id = l.id
+          ORDER BY g.created_at ASC
+          LIMIT 1
+        ) distribution ON TRUE
+        WHERE l.customer_id = t.id
+        ORDER BY l.start_date ASC NULLS FIRST,
+                 COALESCE(distribution.distributed_at, l.created_at) ASC NULLS FIRST,
+                 l.id ASC
+        LIMIT 1
+      ) customer_loan_order ON TRUE`;
+      orderClause = `ORDER BY customer_loan_order.start_date ASC NULLS FIRST, customer_loan_order.distributed_at ASC NULLS FIRST, t.id ASC`;
+    } else if (tableName === 'autofinance_emi_schedules') {
+      // Collected installments follow the latest collection's date and timestamp.
+      orderClause = `ORDER BY
+        (SELECT p.payment_date FROM autofinance_payments p WHERE p.emi_id = t.id ORDER BY p.payment_date DESC, p.created_at DESC LIMIT 1) ASC NULLS LAST,
+        (SELECT p.created_at FROM autofinance_payments p WHERE p.emi_id = t.id ORDER BY p.payment_date DESC, p.created_at DESC LIMIT 1) ASC NULLS LAST,
+        t.id ASC`;
     } else if (columns.some((c) => c.column_name === 'created_at')) {
       orderClause = `ORDER BY t."created_at" DESC`;
     } else {
@@ -522,6 +563,7 @@ router.get('/data/:tableName', requireAuth, async (req, res) => {
       SELECT t.* ${selectExtra}
       FROM "${tableName}" t
       ${joinClause}
+      ${sortJoinClause}
       ${whereClause} 
       ${orderClause} 
       LIMIT $${params.length + 1} OFFSET $${params.length + 2};
@@ -937,26 +979,50 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
       if (lRes.rows.length > 0) {
         const curL = lRes.rows[0];
 
-        // Update customer name & phone if provided
+        // A name or phone edit from the loan table belongs to that loan only.
+        // Clone the linked customer record before changing it so other loans
+        // that share the same customer/phone are not renamed as a side effect.
         if (curL.cust_id && (updates.customer_name !== undefined || updates.customer_phone !== undefined)) {
-          const cSet = [];
-          const cVals = [];
-          let ci = 1;
-          if (updates.customer_name !== undefined && updates.customer_name.trim()) {
-            const parts = updates.customer_name.trim().split(' ');
-            const first = parts[0];
-            const last = parts.slice(1).join(' ') || null;
-            cSet.push(`first_name = $${ci++}`, `last_name = $${ci++}`);
-            cVals.push(first, last);
-          }
-          if (updates.customer_phone !== undefined) {
-            cSet.push(`phone = $${ci++}`);
-            cVals.push(updates.customer_phone ? updates.customer_phone.trim() : null);
-          }
-          if (cSet.length > 0) {
-            cSet.push(`updated_at = NOW()`);
-            cVals.push(curL.cust_id);
-            await db.query(`UPDATE autofinance_customers SET ${cSet.join(', ')} WHERE id = $${ci}`, cVals);
+          const currentCustomerRes = await db.query(
+            `SELECT * FROM autofinance_customers WHERE id = $1`,
+            [curL.cust_id]
+          );
+          const currentCustomer = currentCustomerRes.rows[0];
+          if (currentCustomer) {
+            const fullName = updates.customer_name !== undefined && updates.customer_name.trim()
+              ? updates.customer_name.trim()
+              : [currentCustomer.first_name, currentCustomer.last_name].filter(Boolean).join(' ').trim();
+            const nameParts = fullName.split(/\s+/);
+            const firstName = nameParts.shift() || currentCustomer.first_name;
+            const lastName = nameParts.join(' ') || null;
+            const phone = updates.customer_phone !== undefined
+              ? (updates.customer_phone ? updates.customer_phone.trim() : null)
+              : currentCustomer.phone;
+            const customerCode = `AUTO-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+
+            const splitCustomerRes = await db.query(
+              `WITH loan_customer AS (
+                 INSERT INTO autofinance_customers (
+                   id, customer_code, first_name, last_name, phone, alternate_phone,
+                   email, date_of_birth, gender, address, city, state, pincode
+                 )
+                 SELECT gen_random_uuid(), $2, $3, $4, $5, c.alternate_phone,
+                        c.email, c.date_of_birth, c.gender, c.address, c.city,
+                        c.state, c.pincode
+                 FROM autofinance_customers c
+                 WHERE c.id = $1
+                 RETURNING id
+               )
+               UPDATE autofinance_loans l
+               SET customer_id = loan_customer.id, updated_at = NOW()
+               FROM loan_customer
+               WHERE l.id = $6
+               RETURNING l.id`,
+              [curL.cust_id, customerCode, firstName, lastName, phone, id]
+            );
+            if (!splitCustomerRes.rowCount) {
+              throw new Error('Could not save the separate customer name for this loan.');
+            }
           }
         }
 

@@ -13,8 +13,15 @@ export default function CreateLoanModal({
   partners = [],
   submitting = false,
   uploadProgress = null,
+  totalPayableEdited = false,
+  setTotalPayableEdited = () => {},
 }) {
   if (!showCreateLoan) return null;
+
+  const updateRepaymentInput = (field, value) => {
+    setTotalPayableEdited(false);
+    setLoanForm((current) => ({ ...current, [field]: value, totalPayable: "" }));
+  };
 
   return (
     <div
@@ -141,9 +148,7 @@ export default function CreateLoanModal({
             Interest Method / Type *
             <select
               value={loanForm.interestType}
-              onChange={(e) =>
-                setLoanForm({ ...loanForm, interestType: e.target.value })
-              }
+              onChange={(e) => updateRepaymentInput("interestType", e.target.value)}
             >
               <option value="FLAT">Flat Interest Rate</option>
               <option value="REDUCING">Reducing Balance Rate</option>
@@ -158,9 +163,7 @@ export default function CreateLoanModal({
               required
               placeholder="e.g. 75000"
               value={loanForm.loanAmount}
-              onChange={(e) =>
-                setLoanForm({ ...loanForm, loanAmount: e.target.value })
-              }
+              onChange={(e) => updateRepaymentInput("loanAmount", e.target.value)}
             />
           </label>
 
@@ -172,9 +175,7 @@ export default function CreateLoanModal({
               required
               placeholder="e.g. 12"
               value={loanForm.interestRate}
-              onChange={(e) =>
-                setLoanForm({ ...loanForm, interestRate: e.target.value })
-              }
+              onChange={(e) => updateRepaymentInput("interestRate", e.target.value)}
             />
           </label>
 
@@ -187,9 +188,7 @@ export default function CreateLoanModal({
               required
               placeholder="e.g. 12"
               value={loanForm.tenureMonths}
-              onChange={(e) =>
-                setLoanForm({ ...loanForm, tenureMonths: e.target.value })
-              }
+              onChange={(e) => updateRepaymentInput("tenureMonths", e.target.value)}
             />
           </label>
 
@@ -317,6 +316,11 @@ export default function CreateLoanModal({
                 totalPay = P + totalInt;
                 monthlyEmi = n > 0 ? totalPay / n : 0;
               }
+              if (totalPayableEdited && Number(loanForm.totalPayable) >= P) {
+                totalPay = Number(loanForm.totalPayable);
+                totalInt = totalPay - P;
+                monthlyEmi = n > 0 ? totalPay / n : 0;
+              }
 
               return (
                 <div className="breakdown loanEmiPreview">
@@ -334,7 +338,7 @@ export default function CreateLoanModal({
                   </div>
                   <div>
                     <span>Total Payable</span>
-                    <b>{money(totalPay)}</b>
+                    <input type="number" min={P} step="0.01" value={totalPayableEdited ? loanForm.totalPayable : totalPay.toFixed(2)} onChange={(e) => { setTotalPayableEdited(true); setLoanForm({ ...loanForm, totalPayable: e.target.value }); }} style={{ width: 150 }} />
                   </div>
                 </div>
               );
