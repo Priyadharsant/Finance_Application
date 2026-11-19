@@ -65,6 +65,7 @@ export async function checkForAppUpdates() {
         isMandatory: hasUpdate,
         releaseDate: ghData.published_at ? ghData.published_at.slice(0, 10) : "",
         downloadUrl,
+        downloadSizeBytes: Number(exeAsset?.size) || 0,
         releaseNotes: ghData.body
           ? ghData.body.split("\n").filter((l) => l.trim())
           : ["Latest performance, security, and feature updates"],
