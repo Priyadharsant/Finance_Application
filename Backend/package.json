@@ -1,6 +1,6 @@
 {
     "name": "finance-application-backend",
-    "version": "3.0.10",
+    "version": "3.0.12",
     "private": true,
     "type": "module",
     "scripts": {
