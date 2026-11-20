@@ -769,6 +769,7 @@ export const exportDLSummaryXL = ({
   endDate = "",
   loans = [],
   dateCollections = [], // array of { date, dailyList = [], expenses = [] }
+  dashboardPosition = {},
 }) => {
   const workbook = XLSX.utils.book_new();
 
@@ -886,23 +887,24 @@ export const exportDLSummaryXL = ({
   ]);
 
   // Bottom Summary Cards matching Dashboard Analytics
-  const netDisbursedInPeriod = sumGiven;
-  const netInHandPeriod = (totalCollectionsInPeriod + sumDeduction) - (netDisbursedInPeriod + totalPeriodExpenses);
+  const totalCapitalVal = Number(dashboardPosition.total_capital || 1202000);
+  const kaiIruppuVal = Number(dashboardPosition.kai_iruppu !== undefined ? dashboardPosition.kai_iruppu : (dashboardPosition.in_hand !== undefined ? dashboardPosition.in_hand : (totalCapitalVal + sumCollected - sumGiven - totalPeriodExpenses)));
+  const dailyExpensesVal = Number(dashboardPosition.expenses !== undefined ? dashboardPosition.expenses : totalPeriodExpenses);
 
   loanSheetRows.push([]);
-  loanSheetRows.push(["DASHBOARD ANALYTICS - PERIOD SUMMARY", ""]);
-  loanSheetRows.push(["Total Accounts / Loans", sortedLoans.length]);
+  loanSheetRows.push(["DASHBOARD ANALYTICS SUMMARY", ""]);
+  loanSheetRows.push(["Total Capital (₹)", totalCapitalVal]);
+  loanSheetRows.push(["Kai Iruppu (Cash in Hand) (₹)", kaiIruppuVal]);
+  loanSheetRows.push(["Expense on Daily Finance (₹)", dailyExpensesVal]);
+  loanSheetRows.push(["Total Customers / Accounts", sortedLoans.length || Number(dashboardPosition.total_accounts || 0)]);
   loanSheetRows.push(["Active Loans", activeCount]);
   loanSheetRows.push(["Completed / Closed Loans", completedCount]);
-  loanSheetRows.push(["Total Finance Given (Gross)", sumGross]);
-  loanSheetRows.push(["Interest (Profit)", sumDeduction]);
-  loanSheetRows.push(["Amount Given (Disbursed)", sumGiven]);
-  loanSheetRows.push(["Total Return (Expected)", sumExpected]);
-  loanSheetRows.push(["Collection Amount (In Period)", totalCollectionsInPeriod]);
-  loanSheetRows.push(["Total Collected Till Date", sumCollected]);
-  loanSheetRows.push(["Remaining Balance", sumRemaining]);
-  loanSheetRows.push(["Expense on Daily Finance", totalPeriodExpenses]);
-  loanSheetRows.push(["Kai Iruppu (Net Period Cash Flow)", netInHandPeriod]);
+  loanSheetRows.push(["Total Finance Given (Gross) (₹)", sumGross]);
+  loanSheetRows.push(["Interest (Profit) (₹)", sumDeduction]);
+  loanSheetRows.push(["Amount Given (Disbursed) (₹)", sumGiven]);
+  loanSheetRows.push(["Total Return (Expected) (₹)", sumExpected]);
+  loanSheetRows.push(["Collection Amount (₹)", sumCollected]);
+  loanSheetRows.push(["Remaining Balance (₹)", sumRemaining]);
 
   const loanWs = XLSX.utils.aoa_to_sheet(loanSheetRows);
   

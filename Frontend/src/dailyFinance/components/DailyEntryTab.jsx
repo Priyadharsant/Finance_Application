@@ -436,6 +436,7 @@ export default function DailyEntryTab({
       endDate,
       loans: loansInPeriod,
       dateCollections,
+      dashboardPosition: dashboardData?.position || {},
     });
   };
 
