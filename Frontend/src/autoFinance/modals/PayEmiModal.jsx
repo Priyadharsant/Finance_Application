@@ -93,6 +93,11 @@ export default function PayEmiModal({
           <div style={{ color: "#64748b", fontSize: "12px", gridColumn: "1 / -1" }}>
             Total collected: <b>{money(enteredInterest + enteredPrincipal + enteredCarry)}</b>
           </div>
+          {enteredInterest > remainingInterest && remainingInterest > 0 && (
+            <div style={{ color: "#059669", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
+              Extra Interest: {money(enteredInterest - remainingInterest)} · Will reduce future interest dues
+            </div>
+          )}
           {extraPrincipalPaid > 0 && (
             <div style={{ color: "#059669", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
               Extra Principal: {money(extraPrincipalPaid)} · Will reduce remaining future installments

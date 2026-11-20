@@ -21,11 +21,13 @@ import { dailyFinanceApi, money, dateLabel } from "../services/dailyFinanceApi.j
 import {
   exportMonthlyGroupedCollections,
   exportDailyCollectionsSheet,
+  exportDLSummaryXL,
 } from "../services/dailyExportUtils.js";
 import { exportDailyMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils.js";
 import { globalCapitalApi } from "../../globalCapital/services/globalCapitalApi.js";
 import { matchesSearch } from "../../utils/search.js";
 import MonthFilterModal from "../../components/MonthFilterModal.jsx";
+import DLSummaryFilterModal from "../../components/DLSummaryFilterModal.jsx";
 
 function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loadingDetailsId, busy, index }) {
   const isCollected = Number(customer.today_collection || 0) > 0;
@@ -351,6 +353,7 @@ export default function DailyEntryTab({
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState("ALL"); // ALL | PENDING | COLLECTED
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const [showDLSummaryModal, setShowDLSummaryModal] = useState(false);
   const [exportingAllDates, setExportingAllDates] = useState(false);
   const [draftDate, setDraftDate] = useState(date);
 
@@ -361,6 +364,79 @@ export default function DailyEntryTab({
   const handleExportMonthlyCollections = async (selectedMonth) => {
     const reportData = await globalCapitalApi.getMasterBusinessLedger();
     exportDailyMonthlyCollectionReport(reportData, {}, selectedMonth);
+  };
+
+  const handleExportDLSummary = async ({ mode, selectedMonth, startDate, endDate }) => {
+    // 1. Fetch both Master Ledger and Daily Dashboard to ensure complete loan metadata (mobile, pitibu, etc.)
+    const [reportData, dashboardData] = await Promise.all([
+      globalCapitalApi.getMasterBusinessLedger().catch(() => ({})),
+      dailyFinanceApi.getDashboard().catch(() => ({})),
+    ]);
+
+    const dfData = reportData?.dailyFinance || {};
+    const ledgerLoans = dfData.loans || [];
+    const dashCustomers = dashboardData?.customers || [];
+
+    // Build lookup map from dashboard customers for full metadata (mobile_number, initial_deduction, etc.)
+    const metaMap = new Map();
+    dashCustomers.forEach((c) => {
+      const idKey = c.finance_id || c.customer_id;
+      if (idKey) metaMap.set(String(idKey), c);
+      const nameKey = (c.customer_name || "").trim().toLowerCase();
+      if (nameKey) metaMap.set(nameKey, c);
+    });
+
+    // Merge loans from ledger and dashboard
+    const allLoans = (ledgerLoans.length ? ledgerLoans : dashCustomers).map((l) => {
+      const meta = metaMap.get(String(l.finance_id || l.financeId || l.customer_id)) ||
+                   metaMap.get((l.customerName || l.customer_name || "").trim().toLowerCase()) || {};
+      return {
+        ...meta,
+        ...l,
+        mobile_number: l.mobile_number || l.phone || l.mobileNumber || meta.mobile_number || meta.phone || "—",
+        initial_deduction: Number(l.initial_deduction ?? l.pitibu ?? l.profit ?? meta.initial_deduction ?? meta.profit ?? 0),
+        net_disbursement: Number(l.net_disbursement ?? l.byHand ?? meta.net_disbursement ?? 0),
+        profit: Number(l.profit ?? l.initial_deduction ?? l.pitibu ?? meta.profit ?? meta.initial_deduction ?? 0),
+        finance_date: l.finance_date || l.date || meta.finance_date || l.account_created_at,
+      };
+    });
+
+    // Filter loans whose finance_date falls in the period
+    const loansInPeriod = allLoans.filter((l) => {
+      const fDate = String(l.finance_date || l.date || l.account_created_at || "").slice(0, 10);
+      if (!fDate) return false;
+      return (!startDate || fDate >= startDate) && (!endDate || fDate <= endDate);
+    });
+
+    // 2. Fetch all collection dates within the period
+    const { dates = [] } = await dailyFinanceApi.getCollectionDates();
+    const filteredDates = dates.map(d => String(d).slice(0, 10)).filter(d => {
+      return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+    });
+
+    // Fetch daily entry & expenses for each date in period
+    const dateCollections = await Promise.all(
+      filteredDates.map(async (collectionDate) => {
+        const entryData = await dailyFinanceApi.getDailyEntry(collectionDate);
+        return {
+          date: collectionDate,
+          dailyList: entryData.customers || [],
+          expenses: entryData.expenses || [],
+        };
+      })
+    );
+
+    const periodLabel = mode === "month"
+      ? selectedMonth
+      : `${dateLabel(startDate)} to ${dateLabel(endDate)}`;
+
+    exportDLSummaryXL({
+      periodLabel,
+      startDate,
+      endDate,
+      loans: loansInPeriod,
+      dateCollections,
+    });
   };
 
   const handleExportSelectedDate = () => {
@@ -746,10 +822,10 @@ export default function DailyEntryTab({
             <button
               type="button"
               className="unifiedReportBtn"
-              onClick={() => setShowMonthModal(true)}
-              title="Download monthly collection summary (.xlsx)"
+              onClick={() => setShowDLSummaryModal(true)}
+              title="Download DL Summary XL (.xlsx) with Loan Distribution, Collections, and Expenses"
             >
-              <FileSpreadsheet size={14} /> Monthly Collection Summary
+              <FileSpreadsheet size={14} /> DL Summary XL
             </button>
           </div>
         </div>
@@ -804,6 +880,14 @@ export default function DailyEntryTab({
         onClose={() => setShowMonthModal(false)}
         onExport={handleExportMonthlyCollections}
         title="Monthly Collection Summary"
+        themeColor="#059669"
+      />
+
+      <DLSummaryFilterModal
+        isOpen={showDLSummaryModal}
+        onClose={() => setShowDLSummaryModal(false)}
+        onExport={handleExportDLSummary}
+        title="DL Summary XL Export"
         themeColor="#059669"
       />
     </section>

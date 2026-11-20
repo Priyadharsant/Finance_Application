@@ -757,3 +757,285 @@ export const exportMonthlyGroupedCollections = (dateCollections = []) => {
 
   XLSX.writeFile(workbook, `Monthly_Grouped_Collections_${new Date().toISOString().slice(0, 10)}.xlsx`, { cellStyles: true });
 };
+
+/**
+ * Export DL Summary XL:
+ * Sheet 1: Loan Distribution (Loans given in the period with clear bottom summary)
+ * Sheet 2: Collections & Expenses (Date-wise grouped collections, expenses, and net position)
+ */
+export const exportDLSummaryXL = ({
+  periodLabel = "",
+  startDate = "",
+  endDate = "",
+  loans = [],
+  dateCollections = [], // array of { date, dailyList = [], expenses = [] }
+}) => {
+  const workbook = XLSX.utils.book_new();
+
+  // ==========================================
+  // SHEET 1: LOAN DISTRIBUTION
+  // ==========================================
+  const sortedLoans = [...loans].sort((a, b) => {
+    const da = new Date(a.finance_date || a.date || 0).getTime();
+    const db = new Date(b.finance_date || b.date || 0).getTime();
+    if (da !== db) return da - db;
+    return (a.customer_name || "").localeCompare(b.customer_name || "");
+  });
+
+  const loanSheetRows = [
+    ["DAILY FINANCE - LOAN DISTRIBUTION REPORT", ""],
+    ["Period", periodLabel || `${dateLabel(startDate)} to ${dateLabel(endDate)}`],
+    ["Total Loans Disbursed", sortedLoans.length],
+    [],
+    [
+      "S.No",
+      "Finance Date",
+      "Customer Name",
+      "Mobile Number",
+      "Finance Amount (₹)",
+      "Interest (₹)",
+      "Amount Given (₹)",
+      "Total Return (₹)",
+      "Collected (₹)",
+      "Remaining (₹)",
+      "Profit (₹)",
+      "Status",
+    ],
+  ];
+
+  let sumGross = 0;
+  let sumDeduction = 0;
+  let sumGiven = 0;
+  let sumExpected = 0;
+  let sumCollected = 0;
+  let sumRemaining = 0;
+  let sumProfit = 0;
+  let activeCount = 0;
+  let completedCount = 0;
+
+  sortedLoans.forEach((loan, idx) => {
+    const gross = Number(loan.gross_finance_amount || loan.loanAmount || 0);
+    const deduction = Number(loan.initial_deduction || loan.profit || 0);
+    const given = Number(loan.net_disbursement !== undefined ? loan.net_disbursement : (gross - deduction));
+    const agreed = Number(loan.agreed_total_payable || 0);
+    const collected = Number(loan.total_collected || 0);
+    const remaining = Number(loan.remaining !== undefined ? loan.remaining : (agreed - collected));
+    const profit = Number(loan.profit !== undefined ? loan.profit : deduction);
+    const status = (loan.status || "ACTIVE").toUpperCase();
+
+    if (status === "COMPLETED" || remaining <= 0) {
+      completedCount++;
+    } else {
+      activeCount++;
+    }
+
+    sumGross += gross;
+    sumDeduction += deduction;
+    sumGiven += given;
+    sumExpected += agreed;
+    sumCollected += collected;
+    sumRemaining += remaining;
+    sumProfit += profit;
+
+    loanSheetRows.push([
+      idx + 1,
+      dateLabel(loan.finance_date || loan.date),
+      loan.customer_name || loan.customerName || "—",
+      loan.mobile_number || loan.phone || "—",
+      gross,
+      deduction,
+      given,
+      agreed,
+      collected,
+      remaining,
+      profit,
+      status,
+    ]);
+  });
+
+  // Bottom Summary Table
+  loanSheetRows.push([]);
+  loanSheetRows.push([
+    "TOTAL",
+    `Total Loans: ${sortedLoans.length}`,
+    "",
+    "",
+    sumGross,
+    sumDeduction,
+    sumGiven,
+    sumExpected,
+    sumCollected,
+    sumRemaining,
+    sumProfit,
+    "",
+  ]);
+
+  loanSheetRows.push([]);
+  loanSheetRows.push(["LOAN DISTRIBUTION SUMMARY", ""]);
+  loanSheetRows.push(["Total Loans Issued", sortedLoans.length]);
+  loanSheetRows.push(["Active Loans", activeCount]);
+  loanSheetRows.push(["Completed / Closed Loans", completedCount]);
+  loanSheetRows.push(["Total Finance Amount (₹)", sumGross]);
+  loanSheetRows.push(["Total Interest (₹)", sumDeduction]);
+  loanSheetRows.push(["Total Amount Given (₹)", sumGiven]);
+  loanSheetRows.push(["Total Return (₹)", sumExpected]);
+  loanSheetRows.push(["Total Collected (₹)", sumCollected]);
+  loanSheetRows.push(["Total Remaining (₹)", sumRemaining]);
+  loanSheetRows.push(["Total Profit (₹)", sumProfit]);
+
+  const loanWs = XLSX.utils.aoa_to_sheet(loanSheetRows);
+  
+  // Calculate fit-content column widths dynamically based on max cell text length
+  const loanColWidths = [];
+  loanSheetRows.forEach((row) => {
+    (row || []).forEach((val, cIdx) => {
+      const len = val != null ? String(val).length : 0;
+      loanColWidths[cIdx] = Math.max(loanColWidths[cIdx] || 10, len + 3);
+    });
+  });
+  loanWs["!cols"] = loanColWidths.map((w) => ({ wch: Math.min(Math.max(w, 12), 48) }));
+
+  XLSX.utils.book_append_sheet(workbook, loanWs, "Loan Distribution");
+
+  // ==========================================
+  // SHEET 2: COLLECTIONS & EXPENSES
+  // ==========================================
+  // Filter date collections within the period
+  const periodCollections = dateCollections.filter(c => {
+    const d = String(c.date).slice(0, 10);
+    return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+  }).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const collSheetRows = [
+    ["DAILY FINANCE - COLLECTIONS & EXPENSES", ""],
+    ["Period", periodLabel || `${dateLabel(startDate)} to ${dateLabel(endDate)}`],
+    [],
+  ];
+
+  let totalPeriodCollection = 0;
+  let totalPeriodExpenses = 0;
+  let allExpensesList = [];
+
+  // 1. Grouped Collections By Date
+  collSheetRows.push(["COLLECTIONS GROUPED BY DATE", ""]);
+  collSheetRows.push([
+    "S.No",
+    "Finance Date",
+    "Customer Name",
+    "Mobile Number",
+    "Gross Finance Amount (₹)",
+    "Net Amount Given (₹)",
+    "Total Agreed Return (₹)",
+    "Already Returned (₹)",
+    "Remaining Balance (₹)",
+    "Today Collection (₹)",
+    "Payment Status",
+  ]);
+
+  periodCollections.forEach(({ date, dailyList = [], expenses = [] }) => {
+    // Record expenses for this date
+    (expenses || []).forEach(exp => {
+      totalPeriodExpenses += Number(exp.amount || 0);
+      allExpensesList.push({
+        date,
+        description: exp.description || "Expense",
+        amount: Number(exp.amount || 0),
+      });
+    });
+
+    const paidOnlyList = dailyList.filter(c => Number(c.today_collection || 0) > 0);
+    if (!paidOnlyList.length) return;
+
+    const dateCollection = paidOnlyList.reduce((sum, c) => sum + Number(c.today_collection || 0), 0);
+    totalPeriodCollection += dateCollection;
+
+    collSheetRows.push([]);
+    collSheetRows.push([`COLLECTION DATE: ${dateLabel(date)}`, "", "", "", "", "", "", "", "", "", ""]);
+
+    paidOnlyList.forEach((customer, idx) => {
+      const amount = Number(customer.today_collection || 0);
+      const isCompleted = Number(customer.remaining || 0) <= 0 || customer.status === "COMPLETED";
+      collSheetRows.push([
+        idx + 1,
+        dateLabel(customer.finance_date),
+        customer.customer_name || "—",
+        customer.mobile_number || "—",
+        Number(customer.gross_finance_amount || 0),
+        Number(customer.net_disbursement !== undefined ? customer.net_disbursement : (Number(customer.gross_finance_amount || 0) - Number(customer.initial_deduction || 0))),
+        Number(customer.agreed_total_payable || 0),
+        Number(customer.total_collected || 0),
+        Number(customer.remaining || 0),
+        amount,
+        isCompleted ? "COMPLETED" : "PAID",
+      ]);
+    });
+
+    collSheetRows.push([
+      "DATE TOTAL",
+      "",
+      `${paidOnlyList.length} customers collected`,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      dateCollection,
+      "",
+    ]);
+  });
+
+  // 2. Expenses Section
+  collSheetRows.push([]);
+  collSheetRows.push([]);
+  collSheetRows.push(["DAILY EXPENSES DETAILS", ""]);
+  collSheetRows.push(["S.No", "Expense Date", "Expense Description", "Amount (₹)"]);
+
+  if (allExpensesList.length > 0) {
+    allExpensesList.forEach((exp, idx) => {
+      collSheetRows.push([
+        idx + 1,
+        dateLabel(exp.date),
+        exp.description,
+        exp.amount,
+      ]);
+    });
+  } else {
+    collSheetRows.push(["—", "—", "No expenses recorded for this period", 0]);
+  }
+
+  collSheetRows.push([
+    "EXPENSES TOTAL",
+    "",
+    `Total Expense Items: ${allExpensesList.length}`,
+    totalPeriodExpenses,
+  ]);
+
+  // 3. Grand Net Position Summary
+  const netInHand = totalPeriodCollection - totalPeriodExpenses;
+  collSheetRows.push([]);
+  collSheetRows.push([]);
+  collSheetRows.push(["NET POSITION SUMMARY (PERIOD TOTALS)", ""]);
+  collSheetRows.push(["Total Collections Received (₹)", totalPeriodCollection]);
+  collSheetRows.push(["Total Operational Expenses Incurred (₹)", totalPeriodExpenses]);
+  collSheetRows.push(["Net Cash Flow / In-Hand (₹)", netInHand]);
+
+  const collWs = XLSX.utils.aoa_to_sheet(collSheetRows);
+
+  // Calculate fit-content column widths dynamically based on max cell text length
+  const collColWidths = [];
+  collSheetRows.forEach((row) => {
+    (row || []).forEach((val, cIdx) => {
+      const len = val != null ? String(val).length : 0;
+      collColWidths[cIdx] = Math.max(collColWidths[cIdx] || 10, len + 3);
+    });
+  });
+  collWs["!cols"] = collColWidths.map((w) => ({ wch: Math.min(Math.max(w, 12), 48) }));
+
+  XLSX.utils.book_append_sheet(workbook, collWs, "Collections & Expenses");
+
+  // Save the complete DL Summary workbook
+  const sanitizedPeriod = (periodLabel || `${startDate}_to_${endDate}`).replace(/[^a-zA-Z0-9_-]/g, "_");
+  XLSX.writeFile(workbook, `DL_Summary_${sanitizedPeriod}.xlsx`, { cellStyles: true });
+};
+

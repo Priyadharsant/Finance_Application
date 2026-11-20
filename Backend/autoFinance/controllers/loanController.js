@@ -418,15 +418,15 @@ export async function recordEmiPayment(req, res) {
       : roundMoney(Math.min(remainingPayment, remainingPrincipal));
     if (!componentMode) remainingPayment = roundMoney(remainingPayment - principalPaidCurrent);
 
-    if (componentMode && interestPaidNow > remainingInterest + 0.01) {
-      throw new Error("Collected interest exceeds the remaining installment interest.");
-    }
-
     const extraPrincipalPaymentNow = componentMode
       ? roundMoney(Math.max(0, principalAmount - remainingPrincipal))
       : roundMoney(Math.max(0, remainingPayment));
 
-    if (componentMode && (interestPaidNow + principalPaidCurrent + pendingAmount > remainingInterest + remainingPrincipal + 0.01)) {
+    const extraInterestPaymentNow = componentMode
+      ? roundMoney(Math.max(0, interestAmount - remainingInterest))
+      : 0;
+
+    if (componentMode && !extraPrincipalPaymentNow && !extraInterestPaymentNow && (interestPaidNow + principalPaidCurrent + pendingAmount > remainingInterest + remainingPrincipal + 0.01)) {
       throw new Error("Collected interest, principal, and pending amount must equal the remaining installment due.");
     }
 

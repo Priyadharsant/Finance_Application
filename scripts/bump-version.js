@@ -290,9 +290,15 @@ async function main() {
     git(`add -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
     git(`commit -m "chore(release): v${nextVersion}" -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
     git(`tag v${nextVersion}`);
+
+    const token = loadEnvToken();
+    const pushRemote = token
+      ? `https://${token}@github.com/Priyadharsant/Finance_Application.git`
+      : "origin";
+
     console.log("\n🚀 Pushing release commit and tag to GitHub origin...");
-    git("push origin main");
-    git("push origin --tags");
+    git(`push ${pushRemote} main`);
+    git(`push ${pushRemote} --tags`);
 
     console.log(`\n🔑 Uploading release v${nextVersion} assets to GitHub...`);
     execSync("node scripts/upload-release.js", { stdio: "inherit", cwd: ROOT_DIR });
