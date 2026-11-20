@@ -288,8 +288,16 @@ async function main() {
 
     console.log("\n📦 Committing only version metadata...");
     git(`add -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
-    git(`commit -m "chore(release): v${nextVersion}" -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
-    git(`tag v${nextVersion}`);
+    try {
+      git(`commit -m "chore(release): v${nextVersion}" -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
+    } catch (commitErr) {
+      console.log("ℹ️ Nothing new to commit for version metadata (already committed). Continuing with release...");
+    }
+    try {
+      git(`tag v${nextVersion}`);
+    } catch (tagErr) {
+      console.log(`ℹ️ Tag v${nextVersion} already exists or failed to create.`);
+    }
 
     const token = loadEnvToken();
     const pushRemote = token
