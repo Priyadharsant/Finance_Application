@@ -414,19 +414,19 @@ export async function recordEmiPayment(req, res) {
     if (!componentMode) remainingPayment = roundMoney(remainingPayment - interestPaidNow);
 
     const principalPaidCurrent = componentMode
-      ? roundMoney(principalAmount)
+      ? roundMoney(Math.min(principalAmount, remainingPrincipal))
       : roundMoney(Math.min(remainingPayment, remainingPrincipal));
     if (!componentMode) remainingPayment = roundMoney(remainingPayment - principalPaidCurrent);
 
-    if (componentMode && (interestPaidNow > remainingInterest + 0.01 || principalPaidCurrent > remainingPrincipal + 0.01)) {
-      throw new Error("Collected interest or principal exceeds the remaining installment component.");
+    if (componentMode && interestPaidNow > remainingInterest + 0.01) {
+      throw new Error("Collected interest exceeds the remaining installment interest.");
     }
-    if (!componentMode && remainingPayment > 0.01) {
-      throw new Error("Collection cannot exceed the installment due. Only fine and previous month pending are collected separately.");
-    }
-    const extraPrincipalPaymentNow = 0;
 
-    if (componentMode && (interestPaidNow > remainingInterest + 0.01 || principalPaidCurrent > remainingPrincipal + 0.01 || interestPaidNow + principalPaidCurrent + pendingAmount > remainingInterest + remainingPrincipal + 0.01)) {
+    const extraPrincipalPaymentNow = componentMode
+      ? roundMoney(Math.max(0, principalAmount - remainingPrincipal))
+      : roundMoney(Math.max(0, remainingPayment));
+
+    if (componentMode && (interestPaidNow + principalPaidCurrent + pendingAmount > remainingInterest + remainingPrincipal + 0.01)) {
       throw new Error("Collected interest, principal, and pending amount must equal the remaining installment due.");
     }
 

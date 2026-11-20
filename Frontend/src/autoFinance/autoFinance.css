@@ -577,7 +577,7 @@
 .autoLoanDossier .loanSummaryGrid {
   grid-area: summary;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
   margin: 0;
 }
@@ -592,14 +592,14 @@
 .autoLoanDossier .loanSummaryMetric.principalMetric { border-top: 3px solid #3d76b5; }
 .autoLoanDossier .loanSummaryMetric.rateMetric { border-top: 3px solid #8b72c7; }
 .autoLoanDossier .loanSummaryMetric.interestMetric { border-top: 3px solid #378f9a; }
+.autoLoanDossier .loanSummaryMetric.totalLoanMetric { border-top: 3px solid #4f46e5; }
 .autoLoanDossier .loanSummaryMetric.tenureMetric { border-top: 3px solid #71869a; }
-.autoLoanDossier .loanSummaryLabel { color: #687d8f; font-size: 11px; font-weight: 700; }
-.autoLoanDossier .loanSummaryMetric strong { display: block; margin-top: 8px; color: #18334d; font-size: clamp(15px, 1.45vw, 20px); line-height: 1.15; overflow-wrap: anywhere; }
-.autoLoanDossier .loanSummaryMetric small { display: block; margin-top: 4px; color: #8493a1; font-size: 10px; }
 .autoLoanDossier .loanSummaryMetric.collected { border-color: #bde8d4; background: linear-gradient(145deg, #fff, #f0fbf5); }
 .autoLoanDossier .loanSummaryMetric.collected strong { color: #14805b; }
 .autoLoanDossier .loanSummaryMetric.remaining { border-color: #f1dfc4; background: linear-gradient(145deg, #fff, #fffaf2); }
 .autoLoanDossier .loanSummaryMetric.remaining strong { color: #a16207; }
+.autoLoanDossier .loanSummaryMetric.fineMetric { border-color: #fecaca; background: linear-gradient(145deg, #fff, #fef2f2); border-top: 3px solid #ef4444; }
+.autoLoanDossier .loanSummaryMetric.fineMetric strong { color: #b91c1c; }
 .autoLoanDossier .loanSummaryLabel > span { color: #16858a; }
 .autoLoanDossier .autoLoanBrokerSection { grid-area: broker; margin: 0; }
 .autoLoanDossier .autoLoanVehicleSection { grid-area: vehicle; margin: 0; }

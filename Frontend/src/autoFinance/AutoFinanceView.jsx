@@ -377,7 +377,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           principalPaid: payForm.principalPaid,
           carriedAmount: payEmiModal.carriedAmount ?? 0,
           pendingAmount: payEmiModal.remainingInterest !== undefined
-            ? Math.max(0, Number(payEmiModal.remainingInterest || 0) + Number(payEmiModal.remainingPrincipal || 0) - Number(payForm.interestPaid || 0) - Number(payForm.principalPaid || 0))
+            ? Math.max(0, Number(payEmiModal.remainingInterest || 0) + Number(payEmiModal.remainingPrincipal || 0) - Number(payForm.interestPaid || 0) - Math.min(Number(payForm.principalPaid || 0), Number(payEmiModal.remainingPrincipal || 0)))
             : payForm.pendingAmount,
           fineAmount: payForm.fineAmount,
           collectedDate: payForm.collectedDate,

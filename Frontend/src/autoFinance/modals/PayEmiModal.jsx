@@ -17,7 +17,9 @@ export default function PayEmiModal({
   const enteredPrincipal = Number(payForm.principalPaid || 0);
   const carriedAmount = Number(payEmiModal.carriedAmount || 0);
   const enteredCarry = Number(payForm.carriedAmount || 0);
-  const pendingAmount = Math.max(0, remainingInterest + remainingPrincipal - enteredInterest - enteredPrincipal);
+  const scheduledInstallmentDue = remainingInterest + remainingPrincipal;
+  const pendingAmount = Math.max(0, scheduledInstallmentDue - enteredInterest - Math.min(enteredPrincipal, remainingPrincipal));
+  const extraPrincipalPaid = Math.max(0, enteredPrincipal - remainingPrincipal);
   const totalAmountDue = remainingInterest + remainingPrincipal + carriedAmount;
 
   return (
@@ -91,6 +93,11 @@ export default function PayEmiModal({
           <div style={{ color: "#64748b", fontSize: "12px", gridColumn: "1 / -1" }}>
             Total collected: <b>{money(enteredInterest + enteredPrincipal + enteredCarry)}</b>
           </div>
+          {extraPrincipalPaid > 0 && (
+            <div style={{ color: "#059669", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
+              Extra Principal: {money(extraPrincipalPaid)} · Will reduce remaining future installments
+            </div>
+          )}
           {pendingAmount > 0 && (
             <div style={{ color: "#b45309", fontSize: "12px", fontWeight: 700, gridColumn: "1 / -1" }}>
               Pending amount: {money(pendingAmount)} · Will be added to next month

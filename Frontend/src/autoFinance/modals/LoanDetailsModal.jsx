@@ -83,6 +83,11 @@ export default function LoanDetailsModal({
       (total, schedule) => total + Number(schedule.scheduled_interest ?? schedule.interest_component ?? 0),
       0,
     );
+  const totalLoanAmount = Number(selectedLoan.loan?.loan_amount || 0) + scheduledInterest;
+  const totalFineAmount = (selectedLoan.payments || []).reduce(
+    (acc, payment) => acc + Number(payment.fine_amount || 0),
+    0,
+  );
   const paymentSummaryByEmi = new Map();
   (selectedLoan.payments || []).forEach((payment) => {
     if (!payment.emi_id) return;
@@ -162,6 +167,16 @@ export default function LoanDetailsModal({
             <strong>{money(scheduledInterest)}</strong>
             <small>Total interest in scheduled installments</small>
           </div>
+          <div className="loanSummaryMetric totalLoanMetric">
+            <div className="loanSummaryLabel">
+              <span>
+                <CircleDollarSign size={15} />
+              </span>{" "}
+              Total loan amount
+            </div>
+            <strong>{money(totalLoanAmount)}</strong>
+            <small>Principal + Scheduled interest</small>
+          </div>
           <div className="loanSummaryMetric tenureMetric">
             <div className="loanSummaryLabel">
               <span>
@@ -205,6 +220,16 @@ export default function LoanDetailsModal({
               )}
             </strong>
             <small>Pending installments</small>
+          </div>
+          <div className="loanSummaryMetric fineMetric">
+            <div className="loanSummaryLabel">
+              <span>
+                <TriangleAlert size={15} />
+              </span>{" "}
+              Total fine collected
+            </div>
+            <strong>{money(totalFineAmount)}</strong>
+            <small>Sum of all month fines</small>
           </div>
         </div>
 
