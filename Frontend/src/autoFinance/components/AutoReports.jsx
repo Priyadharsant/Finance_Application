@@ -61,7 +61,7 @@ export default function AutoReports({
     try {
       setDownloadingAutoReport(true);
       const reportData = await globalCapitalApi.getMasterBusinessLedger();
-      exportAutoCategoryReport(reportData, { loans });
+      exportAutoCategoryReport(reportData, { loans, overview });
     } catch (e) {
       console.error(e);
       alert("Failed to export Auto Finance Report: " + e.message);
@@ -125,22 +125,33 @@ export default function AutoReports({
     });
   }, [loans, appliedRange, scope, search, customerId, status]);
 
-  // Aggregated totals for displayed loans
+  // Aggregated totals for displayed loans matching exact Dashboard analytics
   const displayedTotals = useMemo(() => {
     const totalDisbursed = displayedLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
     const totalLoanRepayments = displayedLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
     const totalFineCollected = displayedLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
     const totalCollected = totalLoanRepayments + totalFineCollected;
-    const totalRemaining = displayedLoans.reduce(
-      (sum, l) => sum + Math.max(0, Number(l.loan_amount || 0) - Number(l.total_paid || 0)),
-      0
-    );
+
+    // Contractual total finance given (Gross = Principal + Scheduled Interest) exactly as in Dashboard Analytics
+    const totalFinanceGross = displayedLoans.reduce((sum, l) => {
+      const gross = Number(
+        l.agreed_total_payable ?? l.total_payable ??
+        (Number(l.loan_amount || 0) + Number(l.total_interest || 0))
+      );
+      return sum + gross;
+    }, 0);
+
+    const totalInterest = Math.max(0, totalFinanceGross - totalDisbursed);
+    // Exact dashboard analytics calculation: Remaining = Total Gross Expected minus Repayments
+    const totalRemaining = Math.max(0, totalFinanceGross - totalLoanRepayments);
     const activeCount = displayedLoans.filter((l) => l.status === "ACTIVE").length;
     const completedCount = displayedLoans.filter((l) => l.status === "COMPLETED").length;
-    const recoveryRate = totalDisbursed > 0 ? Math.round((totalLoanRepayments / totalDisbursed) * 100) : 0;
+    const recoveryRate = totalFinanceGross > 0 ? Math.round((totalLoanRepayments / totalFinanceGross) * 100) : 0;
 
     return {
       totalDisbursed,
+      totalFinanceGross,
+      totalInterest,
       totalCollected,
       totalFineCollected,
       totalRemaining,
@@ -280,27 +291,42 @@ export default function AutoReports({
           />
         </label>
 
-        {/* Generate Report Button */}
+        {/* Apply Date Filter Button */}
         <button
           type="button"
           className="primary autoBtn"
           onClick={handleRunReport}
+          title="Apply custom From & To date range to the report"
         >
-          Generate report
+          Apply Date Filter
         </button>
       </div>
 
-      {/* Metric Cards Grid */}
-      <div className="metricGrid autoReportsMetrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginBottom: "20px" }}>
+      {/* Metric Cards Grid matching exact Dashboard Analytics */}
+      <div className="metricGrid autoReportsMetrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", marginBottom: "20px" }}>
         <div className="metric autoMetric blue">
-          <span>Loans Disbursed</span>
-          <b>{money(displayedTotals.totalDisbursed)}</b>
+          <span>Total Finance Given (Gross)</span>
+          <b>{money(displayedTotals.totalFinanceGross)}</b>
           <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
             {displayedLoans.length} Loans in view
           </small>
         </div>
+        <div className="metric autoMetric">
+          <span>Interest</span>
+          <b>{money(displayedTotals.totalInterest)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+            Scheduled Auto Profit
+          </small>
+        </div>
+        <div className="metric autoMetric blue">
+          <span>Amount Given (Disbursed)</span>
+          <b>{money(displayedTotals.totalDisbursed)}</b>
+          <small style={{ color: "#64748b", fontSize: "11.5px", marginTop: "4px", display: "block" }}>
+            Net Vehicle Principal
+          </small>
+        </div>
         <div className="metric autoMetric green">
-          <span>Collected Amount</span>
+          <span>Collection Amount</span>
           <b>{money(displayedTotals.totalCollected)}</b>
           <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
             {displayedTotals.recoveryRate}% Recovery Rate
@@ -316,17 +342,17 @@ export default function AutoReports({
             From {displayedLoans.filter((loan) => Number(loan.total_fine_paid || 0) > 0).length} loans in view
           </small>
         </div>
-        <div className="metric autoMetric red">
+        <div className="metric autoMetric orange">
           <span>Remaining Receivable</span>
           <b>{money(displayedTotals.totalRemaining)}</b>
-          <small style={{ color: "#dc2626", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
-            Outstanding Balance
+          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+            Total Balance Pending
           </small>
         </div>
-        <div className="metric autoMetric orange">
-          <span>Active Vehicle Assets</span>
+        <div className="metric autoMetric green">
+          <span>Active Accounts</span>
           <b>{displayedTotals.activeCount} Active</b>
-          <small style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
+          <small style={{ color: "#0f766e", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
             {displayedTotals.completedCount} Settled / Completed
           </small>
         </div>
@@ -416,7 +442,11 @@ export default function AutoReports({
                   Number(fees.permit || 0) + Number(fees.brokerageCustomer || 0)
                 ));
                 const inHand = Number(l.byHand || (Number(l.loan_amount || 0) - dedAmt));
-                const rem = Math.max(0, Number(l.loan_amount || 0) - Number(l.total_paid || 0));
+                const totalGross = Number(
+                  l.agreed_total_payable ?? l.total_payable ??
+                  (Number(l.loan_amount || 0) + Number(l.total_interest || 0))
+                );
+                const rem = Math.max(0, totalGross - Number(l.total_paid || 0));
 
                 return (
                   <tr key={l.id}>

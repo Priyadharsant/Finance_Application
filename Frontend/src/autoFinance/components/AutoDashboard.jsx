@@ -42,7 +42,7 @@ export default function AutoDashboard({
     try {
       setDownloadingAutoReport(true);
       const reportData = await globalCapitalApi.getMasterBusinessLedger();
-      exportAutoCategoryReport(reportData, { loans: dashboardLoans });
+      exportAutoCategoryReport(reportData, { loans: dashboardLoans, overview });
     } catch (e) {
       console.error(e);
       alert("Failed to export Auto Finance Report: " + e.message);

@@ -155,6 +155,7 @@ export default function AppFinance() {
     "Dashboard",
     "Customers",
     "Vehicle Loans",
+    "Reports",
   ];
   const globalMenus = [
     "Ledger Overview",

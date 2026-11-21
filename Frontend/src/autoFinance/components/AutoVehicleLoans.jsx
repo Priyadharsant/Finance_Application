@@ -58,8 +58,17 @@ export default function AutoVehicleLoans({
   const filteredCollected = filteredLoanRepayments + filteredFineCollected;
   const filteredActiveCount = vehiclePageLoans.filter((l) => l.status === "ACTIVE").length;
   const filteredCompletedCount = vehiclePageLoans.filter((l) => l.status === "COMPLETED").length;
-  const filteredRecoveryRate = filteredDisbursed > 0 ? Math.round((filteredLoanRepayments / filteredDisbursed) * 100) : 0;
-  const filteredRemaining = Math.max(0, filteredDisbursed - filteredLoanRepayments);
+  
+  // Total contractual expected (Gross = Principal + Scheduled Interest) as in Dashboard Analytics
+  const filteredGrossExpected = vehiclePageLoans.reduce((sum, l) => {
+    const gross = Number(
+      l.agreed_total_payable ?? l.total_payable ??
+      (Number(l.loan_amount || 0) + Number(l.total_interest || 0))
+    );
+    return sum + gross;
+  }, 0);
+  const filteredRecoveryRate = filteredGrossExpected > 0 ? Math.round((filteredLoanRepayments / filteredGrossExpected) * 100) : (filteredDisbursed > 0 ? Math.round((filteredLoanRepayments / filteredDisbursed) * 100) : 0);
+  const filteredRemaining = Math.max(0, filteredGrossExpected - filteredLoanRepayments);
 
 
   return (

@@ -1517,32 +1517,43 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   }
 
   // -------------------------------------------------------------
-  // AUTO FINANCE RECONCILIATION SUMMARY (From Image 1)
+  // AUTO FINANCE DASHBOARD & RECONCILIATION SUMMARY
   // -------------------------------------------------------------
+  const overview = additionalData.overview || {};
   const fcSelavu = Number(autoTotals.fcSelavu || 0);
   const brokerSelavu = Number(autoTotals.broker || totalBrokerage || 0);
   const overheadSelavu = Number(autoTotals.expensesSaleryRentCar || 0);
-  const totalAutoSelavu = Number(autoTotals.totalSelavu || (fcSelavu + brokerSelavu + overheadSelavu));
-  const autoIruppu = Number(autoTotals.iruppu ?? (totalRecovered - totalAutoSelavu));
+  const totalAutoSelavu = Number(overview.expenses || autoTotals.totalSelavu || (fcSelavu + brokerSelavu + overheadSelavu));
+  
+  // Dashboard Analytics Alignment:
+  const displayTotalCapital = Number(overview.total_capital || 0);
+  const displayKaiIruppu = Number(overview.kai_iruppu ?? autoTotals.iruppu ?? (totalRecovered - totalAutoSelavu));
+  const displayRemaining = Number(overview.remaining ?? (Math.max(0, totalRepayable - totalRecovered)));
+  const displayFineCollected = Number(overview.total_fine_collected || 0);
 
   sheet1Data.push([]);
-  sheet1Data.push(["AUTO SUMMARY", "AMOUNT (₹)"]);
-  sheet1Data.push(["Total Loan Principal", totalLoanAmt]);
-  sheet1Data.push(["Total Loan + Interest", totalRepayable]);
-  sheet1Data.push(["Auto Interest", Math.max(0, totalRepayable - totalLoanAmt)]);
-  sheet1Data.push(["Loan Income (Recovered)", totalRecovered]);
-  sheet1Data.push(["Total Deductions", totalDeductions]);
-  sheet1Data.push(["Net Disbursed In-Hand", totalInHand]);
-  sheet1Data.push(["FC Selavu", fcSelavu]);
-  sheet1Data.push(["Brokerage Paid", brokerSelavu]);
-  sheet1Data.push(["Overhead Expenses", overheadSelavu]);
-  sheet1Data.push(["Total Auto Selavu", totalAutoSelavu]);
-  sheet1Data.push(["Cash in Hand (Iruppu)", autoIruppu]);
+  sheet1Data.push(["DASHBOARD ANALYTICS SUMMARY", "AMOUNT (₹)"]);
+  if (displayTotalCapital > 0) {
+    sheet1Data.push(["Total Capital", displayTotalCapital]);
+  }
+  sheet1Data.push(["Kai Iruppu (Cash in Hand)", displayKaiIruppu]);
+  sheet1Data.push(["Expense on Auto Finance", totalAutoSelavu]);
+  sheet1Data.push(["Total Finance Given (Gross)", totalRepayable]);
+  sheet1Data.push(["Interest (Profit)", Math.max(0, totalRepayable - totalLoanAmt)]);
+  sheet1Data.push(["Amount Given (Disbursed)", totalLoanAmt]);
+  sheet1Data.push(["Collection Amount", totalRecovered]);
+  if (displayFineCollected > 0) {
+    sheet1Data.push(["Fine Collected", displayFineCollected]);
+  }
+  sheet1Data.push(["Remaining Balance Pending", displayRemaining]);
+  sheet1Data.push(["Total Accounts / Loans", sortedLoans.length]);
+  sheet1Data.push(["Active Loans", activeLoans.length]);
+  sheet1Data.push(["Completed / Settled Loans", sortedLoans.length - activeLoans.length]);
 
   // -------------------------------------------------------------
   // FORWARD CASH FLOW & NEXT MONTH PROJECTIONS
   // -------------------------------------------------------------
-  const currentInHandCash = autoIruppu;
+  const currentInHandCash = displayKaiIruppu;
   const nextMonthProjectedAmount = currentInHandCash + nextMonthActiveEmis;
 
   sheet1Data.push([]);

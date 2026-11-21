@@ -23,6 +23,7 @@ import AutoDashboard from "./components/AutoDashboard";
 import AutoCustomers from "./components/AutoCustomers";
 import AutoLoanSchemes from "./components/AutoLoanSchemes";
 import AutoVehicleLoans from "./components/AutoVehicleLoans";
+import AutoReports from "./components/AutoReports";
 
 const getLocalDateInputValue = () => {
   const today = new Date();
@@ -455,16 +456,18 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       });
       const discNote = discount > 0 ? ` (₹${discount.toLocaleString()} discount recorded in expenses)` : '';
       setNotice?.({ type: "success", text: `Loan successfully closed early!${discNote}` });
+      const closedLoanId = closeLoanModal.loanId;
       setCloseLoanModal(null);
       setActionLoading(null);
-      if (selectedLoan) {
-        loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
-        apiCall(`/loans/${selectedLoan.loan.id}`).then((details) => {
+      if (closedLoanId) {
+        loanDetailsCacheRef.current.delete(closedLoanId);
+        try {
+          const details = await apiCall(`/loans/${closedLoanId}`);
           if (details?.success) {
-            loanDetailsCacheRef.current.set(selectedLoan.loan.id, details.data);
+            loanDetailsCacheRef.current.set(closedLoanId, details.data);
             setSelectedLoan(details.data);
           }
-        });
+        } catch (_) {}
       }
       loadData(false);
     } catch (err) {
@@ -867,6 +870,14 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               setShowCreateLoan={setShowCreateLoan}
               openLoanDetails={openLoanDetails}
               handleExportVehicleLoans={handleExportVehicleLoans}
+            />
+          )}
+
+          {/* 5. REPORTS */}
+          {activeMenu === "Reports" && (
+            <AutoReports
+              overview={overview}
+              loans={loans}
             />
           )}
         </>

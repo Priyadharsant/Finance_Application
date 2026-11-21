@@ -684,13 +684,13 @@ export async function closeLoanEarly(req, res) {
       referenceNumber,
     } = req.body;
 
-    const paidPrincipal = Number(principalAmount || 0);
-    const paidInterest = Number(interestAmount || 0);
+    const paidPrincipal = Math.max(0, Number(principalAmount || 0));
+    const paidInterest = Math.max(0, Number(interestAmount || 0));
     const discountAmt = Math.max(0, Number(discountAmount || 0));
     const totalPaid = paidPrincipal + paidInterest;
 
-    if (!loanId || (totalPaid <= 0 && discountAmt <= 0)) {
-      throw new Error("loanId and a valid closure amount or discount are required");
+    if (!loanId) {
+      throw new Error("loanId is required");
     }
 
     // 1. Mark loan as COMPLETED
