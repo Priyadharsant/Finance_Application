@@ -64,8 +64,7 @@ export default function EditAutoLoanModal({
     Number(form.fine || 0) +
     Number(form.national_tax || 0) +
     Number(form.permit || 0) +
-    Number(form.brokerage_customer || 0) +
-    Number(form.brokerage_hand || 0);
+    Number(form.brokerage_customer || 0);
 
   const previewNetDisbursed = Math.max(0, principal - totalDeductions);
 
