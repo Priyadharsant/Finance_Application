@@ -82,6 +82,7 @@ pool.on('error', (err) => {
       ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);
       ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS interest_type VARCHAR(50) DEFAULT 'FLAT';
       ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS fees_details JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE autofinance_vehicles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
     `);
   } catch (e) {
     console.warn('[Schema Init Warning]:', e.message);

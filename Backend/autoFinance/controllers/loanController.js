@@ -976,6 +976,9 @@ export async function updateLoanTerms(req, res) {
     // 2. Vehicle registration number
     if (updates.registration_number !== undefined && curL.vehicle_id) {
       await pool.query(
+        `ALTER TABLE autofinance_vehicles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+      ).catch(() => {});
+      await pool.query(
         `UPDATE autofinance_vehicles SET registration_number = $1, updated_at = NOW() WHERE id = $2`,
         [String(updates.registration_number).trim(), curL.vehicle_id]
       );
