@@ -1070,28 +1070,34 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
           if (feesDetails.brokerageHand !== undefined) {
             const newBrokerageHand = Number(feesDetails.brokerageHand || 0);
             const expenseDate = updates.disbursement_date || updates.start_date || curL.disbursement_date || curL.start_date || new Date().toISOString().slice(0, 10);
-            const desc = `Brokerage Hand for Auto Loan ${id}`;
+            const customerDisplayName = (
+              updates.customer_name ||
+              [curL.first_name, curL.last_name].filter(Boolean).join(' ') ||
+              curL.customer_name ||
+              'Customer'
+            ).trim();
+            const desc = `Brokerage Hand - ${customerDisplayName}`;
 
             if (newBrokerageHand > 0) {
               const expCheck = await db.query(
-                `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2 ORDER BY created_at ASC`,
-                [id, desc]
+                `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2 OR description ILIKE $3 ORDER BY created_at ASC`,
+                [id, desc, `Brokerage Hand for Auto Loan ${id}%`]
               );
 
               if (expCheck.rows.length > 0) {
                 const expId = expCheck.rows[0].id;
                 await db.query(
                   `UPDATE expenses
-                   SET amount = $1, expense_date = $2, updated_at = NOW()
-                   WHERE id = $3`,
-                  [newBrokerageHand, expenseDate, expId]
+                   SET amount = $1, expense_date = $2, description = $3, updated_at = NOW()
+                   WHERE id = $4`,
+                  [newBrokerageHand, expenseDate, desc, expId]
                 );
 
                 await db.query(
                   `UPDATE global_cash_ledger
-                   SET amount = $1, effective_date = $2
-                   WHERE reference_type = 'EXPENSE' AND reference_id = $3::uuid`,
-                  [newBrokerageHand, expenseDate, expId]
+                   SET amount = $1, effective_date = $2, notes = $3
+                   WHERE reference_type = 'EXPENSE' AND reference_id = $4::uuid`,
+                  [newBrokerageHand, expenseDate, desc, expId]
                 );
               } else {
                 const insRes = await db.query(

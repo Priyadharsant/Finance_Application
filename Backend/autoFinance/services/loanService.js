@@ -211,10 +211,17 @@ export async function createLoanWithVehicle(data) {
     // Record expense for brokerage provided by hand into expenses table (Category: AUTO)
     if (feesDetailsObj.brokerageHand > 0) {
       try {
+        const customerDisplayName = (
+          (firstName ? `${firstName} ${lastName || ''}` : '') ||
+          data.customerName ||
+          data.name ||
+          'Customer'
+        ).trim();
+        const desc = `Brokerage Hand - ${customerDisplayName}`;
         await client.query(`
           INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by)
           VALUES ($1, $2, $3, 'AUTO', 'BROKERAGE_HAND', $4, null)
-        `, [loan.id, startStr, feesDetailsObj.brokerageHand, `Brokerage Hand for Auto Loan ${loan.id}`]);
+        `, [loan.id, startStr, feesDetailsObj.brokerageHand, desc]);
       } catch(e) {
         console.error("Failed to insert brokerage expense into expenses table", e);
       }
