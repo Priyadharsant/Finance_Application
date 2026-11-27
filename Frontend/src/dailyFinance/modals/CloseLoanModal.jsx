@@ -22,6 +22,7 @@ export default function CloseLoanModal({
   );
 
   const [settlementAmount, setSettlementAmount] = useState(currentRemaining);
+  const [fineAmount, setFineAmount] = useState("");
   const [collectionDate, setCollectionDate] = useState(today());
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [notes, setNotes] = useState("Early loan settlement");
@@ -32,6 +33,7 @@ export default function CloseLoanModal({
   }, [customer, currentRemaining]);
 
   const settleNum = Number(settlementAmount || 0);
+  const fineNum = Number(fineAmount || 0);
   const isDiscounted = settleNum < currentRemaining;
   const discountAmount = Math.max(0, currentRemaining - settleNum);
 
@@ -42,6 +44,7 @@ export default function CloseLoanModal({
       await onSubmit({
         financeId: customer.finance_id,
         settlementAmount: settleNum,
+        fineAmount: fineNum,
         discountAmount,
         collectionDate,
         paymentMethod,
@@ -111,6 +114,25 @@ export default function CloseLoanModal({
                 onChange={(e) => setSettlementAmount(e.target.value)}
               />
             </div>
+          </div>
+        </div>
+
+        <div className="closeLoanField" style={{ marginBottom: "12px" }}>
+          <label className="closeLoanLabel" style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Fine / Penalty Amount (Optional)</span>
+            {fineNum > 0 && <span style={{ color: "#d97706", fontWeight: "700" }}>Total Collection: {money(settleNum + fineNum)}</span>}
+          </label>
+          <div className="closeLoanInputWrap">
+            <span className="closeLoanPrefix">₹</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className="closeLoanInput"
+              placeholder="0.00"
+              value={fineAmount}
+              onChange={(e) => setFineAmount(e.target.value)}
+            />
           </div>
         </div>
 

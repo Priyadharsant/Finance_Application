@@ -154,6 +154,13 @@ export default function CustomerDetailsModal({
               value={customer.total_collected}
               tone="green"
             />
+            {Number(customer.total_fine_collected || customer.total_fine_paid || 0) > 0 && (
+              <Metric
+                title="Fine collected"
+                value={customer.total_fine_collected || customer.total_fine_paid}
+                tone="orange"
+              />
+            )}
             <Metric title="Remaining" value={customer.remaining} tone="orange" />
             <Metric
               title="Profit"
@@ -200,6 +207,11 @@ export default function CustomerDetailsModal({
                     <td>{dateLabel(payment.collection_date)}</td>
                     <td style={{ textAlign: "right", fontWeight: "700", color: "#059669" }}>
                       {money(payment.amount)}
+                      {Number(payment.fine_amount || 0) > 0 && (
+                        <div style={{ fontSize: "11px", color: "#d97706", fontWeight: "700" }}>
+                          + Fine {money(payment.fine_amount)}
+                        </div>
+                      )}
                     </td>
                     <td style={{ textAlign: "right" }} className="redText">{money(payment.remaining)}</td>
                     <td style={{ textAlign: "center" }}>

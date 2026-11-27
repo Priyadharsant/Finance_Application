@@ -128,7 +128,7 @@ const MAIN_TABLES_CONFIG = [
 const TABLE_EDITOR_ALLOWED_FIELDS = {
   daily_finance_accounts: ['customer_name', 'gross_finance_amount', 'interest_value', 'interest_type', 'initial_deduction', 'agreed_total_payable', 'daily_agreed_due', 'mobile_number', 'address', 'finance_date', 'notes'],
   daily_finance_payments: ['amount', 'collection_date', 'payment_method', 'reference_number', 'notes'],
-  autofinance_loans: ['customer_name', 'customer_phone', 'registration_number', 'loan_amount', 'interest_rate', 'interest_type', 'tenure_months', 'start_date', 'disbursement_date', 'income_due', 'document_fee', 'hire_purchase', 'tax_amount', 'insurance', 'insurance_fine', 'green_tax', 'fine', 'national_tax', 'permit', 'brokerage_customer'],
+  autofinance_loans: ['customer_name', 'customer_phone', 'registration_number', 'loan_amount', 'interest_rate', 'interest_type', 'tenure_months', 'start_date', 'disbursement_date', 'income_due', 'document_fee', 'hire_purchase', 'tax_amount', 'insurance', 'insurance_fine', 'green_tax', 'fine', 'national_tax', 'permit', 'brokerage_customer', 'brokerage_hand'],
   autofinance_customers: ['first_name', 'last_name', 'phone', 'email', 'city', 'state', 'address', 'alternate_phone', 'notes'],
   autofinance_emi_schedules: ['collected_amount', 'collected_date', 'fine_amount'],
   expenses: ['expense_date', 'category', 'expense_type', 'amount', 'description'],
@@ -1046,6 +1046,7 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
           national_tax: 'nationalTax',
           permit: 'permit',
           brokerage_customer: 'brokerageCustomer',
+          brokerage_hand: 'brokerageHand',
         };
         const feeUpdates = Object.entries(feeFieldMap).filter(([field]) => updates[field] !== undefined);
         if (feeUpdates.length) {

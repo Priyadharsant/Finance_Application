@@ -61,7 +61,23 @@ export default function AutoReports({
     try {
       setDownloadingAutoReport(true);
       const reportData = await globalCapitalApi.getMasterBusinessLedger();
-      exportAutoCategoryReport(reportData, { loans, overview });
+
+      // Export based on displayed/filtered loans
+      exportAutoCategoryReport(reportData, {
+        loans: displayedLoans,
+        overview,
+        dashboardMetrics: {
+          totalCapital: Number(overview.total_capital || 0),
+          kaiIruppu: Number(overview.kai_iruppu || 0),
+          expenses: Number(overview.expenses || 0),
+          totalFinanceGross: displayedTotals.totalFinanceGross,
+          interest: displayedTotals.totalInterest,
+          amountGiven: displayedTotals.totalDisbursed,
+          collectionAmount: displayedTotals.totalCollected,
+          fineCollected: displayedTotals.totalFineCollected,
+          remaining: displayedTotals.totalRemaining,
+        },
+      });
     } catch (e) {
       console.error(e);
       alert("Failed to export Auto Finance Report: " + e.message);
@@ -130,7 +146,6 @@ export default function AutoReports({
     const totalDisbursed = displayedLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
     const totalLoanRepayments = displayedLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
     const totalFineCollected = displayedLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
-    const totalCollected = totalLoanRepayments + totalFineCollected;
 
     // Contractual total finance given (Gross = Principal + Scheduled Interest) exactly as in Dashboard Analytics
     const totalFinanceGross = displayedLoans.reduce((sum, l) => {
@@ -142,7 +157,7 @@ export default function AutoReports({
     }, 0);
 
     const totalInterest = Math.max(0, totalFinanceGross - totalDisbursed);
-    // Exact dashboard analytics calculation: Remaining = Total Gross Expected minus Repayments
+    // Exact dashboard analytics calculation: Remaining = Total Gross Expected minus Loan Repayments
     const totalRemaining = Math.max(0, totalFinanceGross - totalLoanRepayments);
     const activeCount = displayedLoans.filter((l) => l.status === "ACTIVE").length;
     const completedCount = displayedLoans.filter((l) => l.status === "COMPLETED").length;
@@ -152,7 +167,7 @@ export default function AutoReports({
       totalDisbursed,
       totalFinanceGross,
       totalInterest,
-      totalCollected,
+      totalCollected: totalLoanRepayments,
       totalFineCollected,
       totalRemaining,
       activeCount,
@@ -331,9 +346,6 @@ export default function AutoReports({
           <small style={{ color: "#059669", fontSize: "11.5px", fontWeight: 600, marginTop: "4px", display: "block" }}>
             {displayedTotals.recoveryRate}% Recovery Rate
           </small>
-          {displayedTotals.totalFineCollected > 0 && <small style={{ color: "#0f766e", fontSize: "11px", fontWeight: 650, marginTop: "3px", display: "block" }}>
-            Includes {money(displayedTotals.totalFineCollected)} in fines
-          </small>}
         </div>
         <div className="metric autoMetric teal">
           <span>Fine Collected</span>

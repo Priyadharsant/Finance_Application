@@ -6,6 +6,12 @@ const amountPattern = /^\d+(\.\d{1,2})?$/;
 
 export function createSimpleFinanceRouter(db) {
   const router = Router();
+
+  // Ensure fine_amount column exists on daily_finance_payments
+  db.query(`ALTER TABLE daily_finance_payments ADD COLUMN IF NOT EXISTS fine_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`).catch(err => {
+    console.error('[DailyFinance] Error ensuring fine_amount column:', err.message);
+  });
+
   const customerDetailsCache = new Map();
   const CACHE_TTL_MS = 60 * 1000; // 1 minute TTL
 
@@ -23,13 +29,14 @@ export function createSimpleFinanceRouter(db) {
           COALESCE((SELECT SUM(gross_finance_amount) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_finance_amount,
           COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS total_agreed_return,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS collected,
+          COALESCE((SELECT SUM(COALESCE(fine_amount, 0)) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS fine_collected,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS cash_collected,
           COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) = 'TRANSFER'),0) AS non_cash_settlements,
           COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS disbursed,
           GREATEST(0, COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0)) AS net_capital_invested,
           COALESCE((SELECT SUM(agreed_total_payable) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) - COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'),0) AS receivable,
           COALESCE((SELECT SUM(initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0) AS profit,
-          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS today_collected,
+          COALESCE((SELECT SUM(amount + COALESCE(fine_amount, 0)) FROM daily_finance_payments WHERE collection_date=$1 AND status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0) AS today_collected,
           COALESCE((
             SELECT SUM(CASE 
               WHEN transaction_type IN ('CONTRIBUTION', 'CAPITAL_DEPOSIT', 'ADJUSTMENT_INCREASE') THEN amount 
@@ -46,7 +53,7 @@ export function createSimpleFinanceRouter(db) {
             FROM partner_capital_transactions
             WHERE UPPER(COALESCE(target_module, 'DAILY')) = 'DAILY'
           ), 1202000)
-          + COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID'), 0)
+          + COALESCE((SELECT SUM(amount + COALESCE(fine_amount, 0)) FROM daily_finance_payments WHERE status <> 'VOID'), 0)
           - (
             COALESCE((SELECT SUM(gross_finance_amount - initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'), 0)
             + COALESCE((SELECT SUM(amount) FROM daily_finance_expenses), 0)
@@ -55,18 +62,19 @@ export function createSimpleFinanceRouter(db) {
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status='COMPLETED') AS completed_accounts,
           (SELECT COUNT(*) FROM daily_finance_accounts WHERE status <> 'CANCELLED') AS total_accounts,
           COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS expenses,
-          COALESCE((SELECT SUM(amount) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0)
+          COALESCE((SELECT SUM(amount + COALESCE(fine_amount, 0)) FROM daily_finance_payments WHERE status <> 'VOID' AND UPPER(COALESCE(payment_method, 'CASH')) <> 'TRANSFER'),0)
           - COALESCE((SELECT SUM(gross_finance_amount-initial_deduction) FROM daily_finance_accounts WHERE status <> 'CANCELLED'),0)
           - COALESCE((SELECT SUM(amount) FROM daily_finance_expenses),0) AS in_hand`, [asOf]),
         db.query(`SELECT c.customer_id,c.customer_name,c.mobile_number,c.address,c.notes,a.finance_id,a.finance_date,a.gross_finance_amount,a.initial_deduction,a.interest_type,a.interest_value,a.net_disbursement,a.agreed_total_payable,a.daily_agreed_due,a.status,a.created_at,
           COALESCE(SUM(p.amount),0) AS total_collected,
+          COALESCE(SUM(COALESCE(p.fine_amount, 0)), 0) AS total_fine_collected,
           a.agreed_total_payable-COALESCE(SUM(p.amount),0) AS outstanding_receivable,
           a.agreed_total_payable-COALESCE(SUM(p.amount),0) AS remaining
           FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id
           LEFT JOIN daily_finance_payments p ON p.finance_id=a.finance_id AND p.status <> 'VOID'
           WHERE c.status='ACTIVE' AND a.status <> 'CANCELLED'
           GROUP BY c.customer_id,a.finance_id ORDER BY a.finance_date ASC, a.created_at ASC`),
-        db.query(`SELECT p.payment_id,p.collection_date,p.amount,p.payment_method,c.customer_name FROM daily_finance_payments p JOIN daily_finance_customers c ON c.customer_id=p.customer_id WHERE p.status <> 'VOID' ORDER BY p.collection_date DESC,p.created_at DESC LIMIT 10`),
+        db.query(`SELECT p.payment_id,p.collection_date,p.amount,COALESCE(p.fine_amount, 0) AS fine_amount,p.payment_method,c.customer_name FROM daily_finance_payments p JOIN daily_finance_customers c ON c.customer_id=p.customer_id WHERE p.status <> 'VOID' ORDER BY p.collection_date DESC,p.created_at DESC LIMIT 10`),
       ]);
       res.json({ asOf, position: position.rows[0], customers: customers.rows, recentPayments: recent.rows });
     } catch (error) { next(error); }
@@ -87,11 +95,18 @@ export function createSimpleFinanceRouter(db) {
       const customer = await client.query(`INSERT INTO daily_finance_customers(customer_name,mobile_number,address,notes) VALUES($1,$2,$3,$4) RETURNING *`, [customerName.trim(), mobileNumber || null, address || null, notes || null]);
       const account = await client.query(`INSERT INTO daily_finance_accounts(customer_id,finance_date,gross_finance_amount,initial_deduction,interest_type,interest_value,agreed_total_payable,daily_agreed_due,expected_collection_days,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,'ACTIVE') RETURNING *`, [customer.rows[0].customer_id, datePattern.test(financeDate || '') ? financeDate : new Date().toISOString().slice(0,10), grossFinanceAmount, deduction, normalizedInterestType, interestValue || 0, payable, dailyDue]);
       
+      const rawFinDate = account.rows[0].finance_date;
+      const effectiveDateStr = rawFinDate instanceof Date
+        ? rawFinDate.toISOString().slice(0, 10)
+        : (typeof rawFinDate === 'string' && rawFinDate.length >= 10
+            ? rawFinDate.slice(0, 10)
+            : (datePattern.test(financeDate || '') ? financeDate : new Date().toISOString().slice(0, 10)));
+
       const netDisbursementAmount = Number(grossFinanceAmount) - deduction;
       await validateAndDisburseFunds(client, {
         module: 'DAILY',
         amount: netDisbursementAmount,
-        effectiveDate: account.rows[0].finance_date.toISOString().slice(0, 10),
+        effectiveDate: effectiveDateStr,
         referenceType: 'DAILY_LOAN',
         referenceId: account.rows[0].finance_id,
         notes: `Daily Finance Loan Disbursement for Customer ${customer.rows[0].customer_id}`
@@ -274,10 +289,14 @@ export function createSimpleFinanceRouter(db) {
   router.post('/payments', async (req, res) => {
     const client = await db.connect();
     try {
-      const { customerId, financeId, collectionDate, amount, notes } = req.body;
+      const { customerId, financeId, collectionDate, amount, notes, fineAmount = 0 } = req.body;
       const paymentMethod = String(req.body.paymentMethod || 'CASH').toUpperCase();
+      const parsedFine = Number(fineAmount || 0);
       if (!customerId || !financeId || !datePattern.test(collectionDate) || !amountPattern.test(String(amount))) {
         throw new Error('Customer, date, and a valid amount are required');
+      }
+      if (isNaN(parsedFine) || parsedFine < 0) {
+        throw new Error('Fine amount must be 0 or greater');
       }
       await client.query('BEGIN');
 
@@ -307,8 +326,8 @@ export function createSimpleFinanceRouter(db) {
       }
 
       const payment = await client.query(
-        `INSERT INTO daily_finance_payments(customer_id,finance_id,collection_date,amount,payment_method,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [customerId, financeId, collectionDate, amount, paymentMethod, notes || null]
+        `INSERT INTO daily_finance_payments(customer_id,finance_id,collection_date,amount,payment_method,notes,fine_amount) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [customerId, financeId, collectionDate, amount, paymentMethod, notes || null, parsedFine]
       );
 
       const newTotal = currentCollected + Number(amount);
@@ -332,12 +351,12 @@ export function createSimpleFinanceRouter(db) {
         await createLedgerEntry(client, {
           effectiveDate: collectionDate,
           type: 'DAILY_COLLECTION',
-          amount: Number(amount),
+          amount: Number(amount) + parsedFine,
           direction: 'CREDIT',
           sourceModule: 'DAILY',
           referenceType: 'DAILY_PAYMENT',
           referenceId: payment.rows[0].payment_id,
-          notes: `Daily Finance Cash Collection for Account ${financeId}`
+          notes: `Daily Finance Cash Collection for Account ${financeId}${parsedFine > 0 ? ` (Fine: ₹${parsedFine})` : ''}`
         });
       }
 
@@ -355,7 +374,7 @@ export function createSimpleFinanceRouter(db) {
   router.put('/payments/:paymentId', async (req, res) => {
     const client = await db.connect();
     try {
-      const { collectionDate, amount, notes } = req.body;
+      const { collectionDate, amount, notes, fineAmount } = req.body;
       const paymentMethod = String(req.body.paymentMethod || 'CASH').toUpperCase();
       if (!datePattern.test(String(collectionDate)) || !amountPattern.test(String(amount))) {
         throw new Error('Date and a valid amount are required');
@@ -366,6 +385,10 @@ export function createSimpleFinanceRouter(db) {
         [req.params.paymentId]
       );
       if (!previous.rowCount) throw new Error('Collection entry not found');
+
+      const parsedFine = fineAmount !== undefined && fineAmount !== null && fineAmount !== ''
+        ? Number(fineAmount)
+        : Number(previous.rows[0].fine_amount || 0);
 
       const financeId = previous.rows[0].finance_id;
       const accountRes = await client.query(
@@ -390,8 +413,8 @@ export function createSimpleFinanceRouter(db) {
       }
 
       const result = await client.query(
-        `UPDATE daily_finance_payments SET collection_date=$1,amount=$2,payment_method=$3,notes=$4,updated_at=NOW() WHERE payment_id=$5 RETURNING *`,
-        [collectionDate, amount, paymentMethod, notes || null, req.params.paymentId]
+        `UPDATE daily_finance_payments SET collection_date=$1,amount=$2,payment_method=$3,notes=$4,fine_amount=$5,updated_at=NOW() WHERE payment_id=$6 RETURNING *`,
+        [collectionDate, amount, paymentMethod, notes || null, parsedFine, req.params.paymentId]
       );
 
       const newTotal = otherCollected + Number(amount);
@@ -411,8 +434,8 @@ export function createSimpleFinanceRouter(db) {
         [req.params.paymentId, JSON.stringify(previous.rows[0]), JSON.stringify(result.rows[0])]
       );
 
-      const newAmount = Number(amount);
-      const desiredCashAmount = isCashPaymentMethod(paymentMethod) ? newAmount : 0;
+      const newTotalCollected = Number(amount) + parsedFine;
+      const desiredCashAmount = isCashPaymentMethod(paymentMethod) ? newTotalCollected : 0;
       const ledgerRes = await client.query(`
         SELECT
           effective_date::text AS effective_date,
@@ -475,9 +498,12 @@ export function createSimpleFinanceRouter(db) {
         a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable,
         COALESCE(a.daily_agreed_due, 0) AS daily_agreed_due, a.status, a.created_at,
         COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0) AS total_collected,
+        COALESCE((SELECT SUM(COALESCE(x.fine_amount, 0)) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0) AS total_fine_collected,
         COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID'), 0) AS today_collection,
+        COALESCE((SELECT SUM(COALESCE(x.fine_amount, 0)) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID'), 0) AS today_fine_collection,
         (SELECT x.payment_id FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_payment_id,
         (SELECT x.payment_method FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_payment_method,
+        (SELECT x.notes FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.collection_date=$1 AND x.status <> 'VOID' ORDER BY x.created_at DESC LIMIT 1) AS today_notes,
         GREATEST(a.agreed_total_payable - COALESCE((SELECT SUM(x.amount) FROM daily_finance_payments x WHERE x.finance_id=a.finance_id AND x.status <> 'VOID'), 0), 0) AS remaining
         FROM daily_finance_customers c JOIN daily_finance_accounts a ON a.customer_id=c.customer_id
         WHERE c.status <> 'ARCHIVED'
@@ -527,6 +553,7 @@ export function createSimpleFinanceRouter(db) {
                      a.finance_id, a.finance_date, a.gross_finance_amount, a.initial_deduction,
                      a.interest_type, a.interest_value, a.net_disbursement, a.agreed_total_payable, a.status,
                      COALESCE((SELECT SUM(p.amount) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), 0) AS total_collected,
+                     COALESCE((SELECT SUM(COALESCE(p.fine_amount, 0)) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), 0) AS total_fine_collected,
                      a.agreed_total_payable - COALESCE((SELECT SUM(p.amount) FROM daily_finance_payments p WHERE p.finance_id = a.finance_id AND p.status <> 'VOID'), 0) AS remaining
               FROM daily_finance_customers c
               JOIN daily_finance_accounts a ON a.customer_id = c.customer_id
@@ -536,7 +563,7 @@ export function createSimpleFinanceRouter(db) {
           ), '[]'::json) AS accounts,
           COALESCE((
             SELECT json_agg(pay) FROM (
-              SELECT p.payment_id, p.finance_id, p.collection_date, p.amount, p.payment_method, p.notes, p.created_at, p.updated_at,
+              SELECT p.payment_id, p.finance_id, p.collection_date, p.amount, COALESCE(p.fine_amount, 0) AS fine_amount, p.payment_method, p.notes, p.created_at, p.updated_at,
                      GREATEST(COALESCE(a.agreed_total_payable, 0) - SUM(p.amount) OVER (PARTITION BY p.finance_id ORDER BY p.collection_date, p.created_at, p.payment_id), 0) AS remaining
               FROM daily_finance_payments p
               LEFT JOIN daily_finance_accounts a ON a.finance_id = p.finance_id
@@ -769,7 +796,8 @@ export function createSimpleFinanceRouter(db) {
     const client = await db.connect();
     try {
       const { financeId } = req.params;
-      const { settlementAmount, collectionDate, paymentMethod = 'CASH', notes } = req.body;
+      const { settlementAmount, collectionDate, paymentMethod = 'CASH', notes, fineAmount = 0 } = req.body;
+      const parsedFine = Number(fineAmount || 0);
       const effDate = datePattern.test(String(collectionDate)) ? collectionDate : new Date().toISOString().slice(0, 10);
 
       await client.query('BEGIN');
@@ -794,17 +822,20 @@ export function createSimpleFinanceRouter(db) {
       if (isNaN(settleAmt) || settleAmt < 0) {
         throw new Error('Valid settlement amount is required (0 or greater)');
       }
+      if (isNaN(parsedFine) || parsedFine < 0) {
+        throw new Error('Fine amount must be 0 or greater');
+      }
 
       const discountAmt = req.body.discountAmount !== undefined && req.body.discountAmount !== null && req.body.discountAmount !== ''
         ? Math.max(0, Number(req.body.discountAmount))
         : Math.max(0, currentRemaining - settleAmt);
 
       let payment = null;
-      if (settleAmt > 0) {
+      if (settleAmt > 0 || parsedFine > 0) {
         const payRes = await client.query(
-          `INSERT INTO daily_finance_payments(customer_id, finance_id, collection_date, amount, payment_method, notes)
-           VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
-          [account.customer_id, financeId, effDate, settleAmt, paymentMethod, notes || 'Early Loan Closure Settlement']
+          `INSERT INTO daily_finance_payments(customer_id, finance_id, collection_date, amount, payment_method, notes, fine_amount)
+           VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [account.customer_id, financeId, effDate, settleAmt, paymentMethod, notes || 'Early Loan Closure Settlement', parsedFine]
         );
         payment = payRes.rows[0];
 
@@ -812,12 +843,12 @@ export function createSimpleFinanceRouter(db) {
         await createLedgerEntry(client, {
           effectiveDate: effDate,
           type: 'DAILY_COLLECTION',
-          amount: settleAmt,
+          amount: settleAmt + parsedFine,
           direction: 'CREDIT',
           sourceModule: 'DAILY',
           referenceType: 'LOAN_CLOSURE',
           referenceId: payment.payment_id,
-          notes: `Daily Finance Early Closure Settlement for Customer ${account.customer_id}`
+          notes: `Daily Finance Early Closure Settlement for Customer ${account.customer_id}${parsedFine > 0 ? ` (Fine: ₹${parsedFine})` : ''}`
         });
       }
 

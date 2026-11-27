@@ -20,10 +20,12 @@ import {
   FileText,
   Trash,
   TriangleAlert,
-  LoaderCircle
+  LoaderCircle,
+  Search
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { money, dateLabel, API_BASE } from "../services/autoFinanceApi";
+import EditAutoCollectionModal from "./EditAutoCollectionModal";
 
 export default function LoanDetailsModal({
   selectedLoan,
@@ -33,6 +35,7 @@ export default function LoanDetailsModal({
   handleEditVehicle,
   handleUploadDocument,
   handleDeleteDocument,
+  handleUpdateCollection,
   setPayEmiModal,
   setPayForm,
   setNotice,
@@ -41,6 +44,8 @@ export default function LoanDetailsModal({
   const [vehicleForm, setVehicleForm] = useState({});
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [uploadingDocType, setUploadingDocType] = useState(null);
+  const [scheduleSearch, setScheduleSearch] = useState("");
+  const [editingCollection, setEditingCollection] = useState(null);
 
   const handleEditVehicleToggle = () => {
     if (!isEditingVehicle) {
@@ -84,10 +89,28 @@ export default function LoanDetailsModal({
       0,
     );
   const totalLoanAmount = Number(selectedLoan.loan?.loan_amount || 0) + scheduledInterest;
+
+  // Fines are kept strictly separate from loan collections
   const totalFineAmount = (selectedLoan.payments || []).reduce(
     (acc, payment) => acc + Number(payment.fine_amount || 0),
     0,
   );
+
+  // Total collected (excluding fine) includes ALL payments (regular EMIs + early closure settlement)
+  const totalCollectedLoan = (selectedLoan.payments || []).reduce(
+    (acc, payment) => acc + Number(payment.amount_paid || 0),
+    0,
+  );
+
+  // Check for early closure payment
+  const closurePayment = (selectedLoan.payments || []).find(
+    (p) => !p.emi_id || p.reference_number === "LOAN_CLOSURE"
+  );
+
+  const remainingBalanceVal = selectedLoan.loan?.status === "COMPLETED"
+    ? 0
+    : Math.max(0, totalLoanAmount - totalCollectedLoan);
+
   const paymentSummaryByEmi = new Map();
   (selectedLoan.payments || []).forEach((payment) => {
     if (!payment.emi_id) return;
@@ -194,15 +217,12 @@ export default function LoanDetailsModal({
               </span>{" "}
               Total collected
             </div>
-            <strong>
-              {money(
-                selectedLoan.schedules?.reduce(
-                  (acc, s) => acc + parseFloat(s.total_cash_collected || s.collected_amount || 0),
-                  0,
-                ),
-              )}
-            </strong>
-            <small>Paid installments</small>
+            <strong>{money(totalCollectedLoan)}</strong>
+            <small>
+              {closurePayment
+                ? `Includes ${money(closurePayment.amount_paid)} closure`
+                : "Installments & settlement"}
+            </small>
           </div>
           <div className="loanSummaryMetric remaining">
             <div className="loanSummaryLabel">
@@ -211,15 +231,10 @@ export default function LoanDetailsModal({
               </span>{" "}
               Remaining balance
             </div>
-            <strong>
-              {money(
-                selectedLoan.schedules?.reduce(
-                  (acc, s) => acc + parseFloat(s.remaining_emi_amount ?? s.total_emi ?? 0),
-                  0,
-                ),
-              )}
-            </strong>
-            <small>Pending installments</small>
+            <strong>{money(remainingBalanceVal)}</strong>
+            <small>
+              {selectedLoan.loan?.status === "COMPLETED" ? "Fully Settled" : "Pending installments"}
+            </small>
           </div>
           <div className="loanSummaryMetric fineMetric">
             <div className="loanSummaryLabel">
@@ -408,7 +423,50 @@ export default function LoanDetailsModal({
                 .length || 0}{" "}
               / {selectedLoan.schedules?.length || 0} Paid)
             </h3>
-            <div style={{ display: "flex", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#ffffff",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                }}
+              >
+                <Search size={13} color="#64748b" />
+                <input
+                  type="text"
+                  placeholder="Search inst #, date, amount, status..."
+                  value={scheduleSearch}
+                  onChange={(e) => setScheduleSearch(e.target.value)}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    fontSize: "12px",
+                    color: "#1e293b",
+                    width: "180px",
+                    background: "transparent",
+                  }}
+                />
+                {scheduleSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setScheduleSearch("")}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#94a3b8",
+                      cursor: "pointer",
+                      padding: "0 2px",
+                    }}
+                    title="Clear Search"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
               {selectedLoan.loan.status !== 'COMPLETED' && (
                 <button
                   className="primary autoBtn"
@@ -437,7 +495,7 @@ export default function LoanDetailsModal({
                 <th>Interest</th>
                 <th>Total EMI</th>
                 <th>Status</th>
-                <th>EMI</th>
+                <th>Collection / Action</th>
               </tr>
             </thead>
             <tbody>
@@ -445,7 +503,17 @@ export default function LoanDetailsModal({
                 const earliestUnpaid = selectedLoan.schedules?.find(
                   (item) => item.status === "PENDING" || item.status === "PARTIAL"
                 );
-                return selectedLoan.schedules?.map((s) => {
+                const displaySchedules = (selectedLoan.schedules || []).filter((s) => {
+                  if (!scheduleSearch.trim()) return true;
+                  const q = scheduleSearch.toLowerCase();
+                  return (
+                    String(s.installment_number).includes(q) ||
+                    String(s.due_date || "").toLowerCase().includes(q) ||
+                    String(s.status || "").toLowerCase().includes(q) ||
+                    String(s.total_emi || "").includes(q)
+                  );
+                });
+                return displaySchedules.map((s) => {
                   const isEarliestDue = earliestUnpaid && earliestUnpaid.id === s.id;
                   const hasPriorUnpaid = earliestUnpaid && earliestUnpaid.installment_number < s.installment_number;
                   const paymentSummary = paymentSummaryByEmi.get(s.id) || { lastDate: "", fineAmount: 0 };
@@ -537,9 +605,38 @@ export default function LoanDetailsModal({
                           </div>
                         ) : s.status === "PARTIAL" ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                            <span className="tag" style={{ background: "#fef08a", color: "#854d0e", borderColor: "#fde047", width: "fit-content" }}>
-                              PARTIAL
-                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span className="tag" style={{ background: "#fef08a", color: "#854d0e", borderColor: "#fde047", width: "fit-content" }}>
+                                PARTIAL
+                              </span>
+                              <button
+                                type="button"
+                                className="autoSecondaryBtn"
+                                title="Edit Collection (Amount, Date, Fine)"
+                                onClick={() => {
+                                  setEditingCollection({
+                                    schedule: s,
+                                    paymentSummary: paymentSummary,
+                                  });
+                                }}
+                                style={{
+                                  padding: "2px 6px",
+                                  fontSize: "10px",
+                                  fontWeight: "700",
+                                  background: "#ffffff",
+                                  border: "1px solid #fde047",
+                                  borderRadius: "4px",
+                                  color: "#b45309",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                <Edit size={10} />
+                                Edit
+                              </button>
+                            </div>
                             <span style={{ fontSize: "11px", color: "#64748b" }}>
                               Paid: {money(emiCollected)}
                             </span>
@@ -635,8 +732,38 @@ export default function LoanDetailsModal({
                             {isEarliestDue ? "Collect EMI" : hasPriorUnpaid ? `Pay Due (#${earliestUnpaid.installment_number})` : "Pay Advance"}
                           </button>
                         ) : (
-                          <div style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
-                            {money(emiCollected)}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ color: "#047857", fontWeight: "bold", fontSize: "13px" }}>
+                              {money(emiCollected)}
+                            </span>
+                            <button
+                              type="button"
+                              className="autoSecondaryBtn"
+                              title="Edit Collection (Amount, Date, Fine)"
+                              onClick={() => {
+                                setEditingCollection({
+                                  schedule: s,
+                                  paymentSummary: paymentSummary,
+                                });
+                              }}
+                              style={{
+                                padding: "3px 8px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                background: "#ffffff",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                color: "#0f766e",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                              }}
+                            >
+                              <Edit size={12} />
+                              Edit
+                            </button>
                           </div>
                         )}
                       </td>
@@ -644,9 +771,55 @@ export default function LoanDetailsModal({
                   );
                 });
               })()}
+
+              {closurePayment && (
+                <tr style={{ background: "#f0fdf4", borderTop: "2px solid #86efac" }}>
+                  <td colSpan={2}>
+                    <b style={{ color: "#15803d" }}>✓ EARLY CLOSURE SETTLEMENT</b>
+                  </td>
+                  <td>
+                    {closurePayment.payment_date ? dateLabel(closurePayment.payment_date) : "—"}
+                  </td>
+                  <td>
+                    <b>{money(closurePayment.principal_paid)}</b>
+                    <small style={{ display: "block", color: "#16a34a", fontSize: "11px" }}>
+                      Settled Principal
+                    </small>
+                  </td>
+                  <td>
+                    <b>{money(closurePayment.interest_paid)}</b>
+                    <small style={{ display: "block", color: "#16a34a", fontSize: "11px" }}>
+                      Settled Interest
+                    </small>
+                  </td>
+                  <td>
+                    <b style={{ color: "#15803d" }}>{money(closurePayment.amount_paid)}</b>
+                    <small style={{ display: "block", color: "#64748b", fontSize: "11px" }}>
+                      {closurePayment.payment_method || "CASH"}
+                    </small>
+                  </td>
+                  <td>
+                    <span className="tag" style={{ background: "#dcfce7", color: "#15803d", borderColor: "#86efac" }}>
+                      SETTLED
+                    </span>
+                  </td>
+                  <td style={{ color: "#15803d", fontWeight: "bold", fontSize: "13px" }}>
+                    {money(closurePayment.amount_paid)}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* MODAL: EDIT COLLECTION */}
+        <EditAutoCollectionModal
+          isOpen={Boolean(editingCollection)}
+          onClose={() => setEditingCollection(null)}
+          schedule={editingCollection?.schedule}
+          paymentSummary={editingCollection?.paymentSummary}
+          onSave={handleUpdateCollection}
+        />
       </div>
     </div>
   );

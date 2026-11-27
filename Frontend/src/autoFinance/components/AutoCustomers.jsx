@@ -1,5 +1,6 @@
-import React from "react";
-import { UserRound, Calendar, X, RotateCcw, Search, Users, MapPin, Mail, ArrowUpRight, Download } from "lucide-react";
+import React, { useState } from "react";
+import { UserRound, Calendar, X, RotateCcw, Search, Users, MapPin, Mail, ArrowUpRight, Download, Edit3 } from "lucide-react";
+import EditAutoCustomerModal from "../modals/EditAutoCustomerModal";
 
 export default function AutoCustomers({
   filteredCustomers = [],
@@ -9,12 +10,27 @@ export default function AutoCustomers({
   setSearch,
   handleExportCustomers,
   setSelectedCustomer,
+  onUpdateCustomer,
 }) {
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [busy, setBusy] = useState(false);
+
   const isFiltered = Boolean(customerMonthFilter) || Boolean(search);
 
   const handleResetFilters = () => {
     setCustomerMonthFilter?.("");
     setSearch("");
+  };
+
+  const handleSaveCustomer = async (id, updatedFields) => {
+    setBusy(true);
+    try {
+      if (onUpdateCustomer) {
+        await onUpdateCustomer(id, updatedFields);
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -68,7 +84,7 @@ export default function AutoCustomers({
         </div>
         <div className="autoCustomersTableScroll">
           <table className="autoCustomersTable">
-            <thead><tr><th className="autoCustomerIndex">#</th><th>Customer</th><th>Phone</th><th>Email</th><th>Location</th><th>Address</th><th aria-label="Open profile" /></tr></thead>
+            <thead><tr><th className="autoCustomerIndex">#</th><th>Customer</th><th>Phone</th><th>Email</th><th>Location</th><th>Address</th><th>Action</th><th aria-label="Open profile" /></tr></thead>
             <tbody>
               {filteredCustomers.map((c, idx) => {
                 const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Unnamed customer";
@@ -81,6 +97,20 @@ export default function AutoCustomers({
                     <td>{c.email ? <span className="autoCustomerInline"><Mail size={14} />{c.email}</span> : <span className="autoCustomerMuted">—</span>}</td>
                     <td>{c.city || c.state ? <span className="autoCustomerInline"><MapPin size={14} />{[c.city, c.state].filter(Boolean).join(", ")}</span> : <span className="autoCustomerMuted">—</span>}</td>
                     <td className="autoCustomerAddress" title={c.address || ""}>{c.address || <span className="autoCustomerMuted">—</span>}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="autoSecondaryBtn"
+                        style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "6px" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCustomer(c);
+                        }}
+                        title="Edit Customer Profile"
+                      >
+                        <Edit3 size={12} /> Edit
+                      </button>
+                    </td>
                     <td><span className="autoCustomerOpen" aria-hidden="true"><ArrowUpRight size={16} /></span></td>
                   </tr>
                 );
@@ -90,6 +120,15 @@ export default function AutoCustomers({
           {!filteredCustomers.length && <div className="autoCustomersEmpty"><span><UserRound size={22} /></span><strong>No customers found</strong><p>Try a different name, contact, or registration month.</p>{isFiltered && <button type="button" className="autoSecondaryBtn" onClick={handleResetFilters}>Clear filters</button>}</div>}
         </div>
       </div>
+
+      {editingCustomer && (
+        <EditAutoCustomerModal
+          customer={editingCustomer}
+          onSave={handleSaveCustomer}
+          onClose={() => setEditingCustomer(null)}
+          busy={busy}
+        />
+      )}
     </section>
   );
 }

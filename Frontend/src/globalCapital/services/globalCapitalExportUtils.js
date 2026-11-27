@@ -1354,9 +1354,9 @@ export const sortLoansByStatusAndName = (loans = []) => {
 export const exportAutoCategoryReport = (reportData, additionalData = {}, customFileName) => {
   const autoData = reportData?.autoFinance || {};
   const autoTotals = autoData.totals || {};
-  const autoLoans = autoData.loans || additionalData.loans || [];
-  const autoCollections = autoData.collections || additionalData.collections || [];
-  const allExpenses = reportData?.expenses?.items || additionalData.expenses || [];
+  const autoLoans = additionalData.loans || autoData.loans || [];
+  const autoCollections = additionalData.collections || autoData.collections || [];
+  const allExpenses = additionalData.expenses || reportData?.expenses?.items || [];
 
   const workbook = XLSX.utils.book_new();
   const sortedLoans = sortLoansByStatusAndName(autoLoans);
@@ -1520,16 +1520,21 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   // AUTO FINANCE DASHBOARD & RECONCILIATION SUMMARY
   // -------------------------------------------------------------
   const overview = additionalData.overview || {};
+  const dm = additionalData.dashboardMetrics || {};
   const fcSelavu = Number(autoTotals.fcSelavu || 0);
   const brokerSelavu = Number(autoTotals.broker || totalBrokerage || 0);
   const overheadSelavu = Number(autoTotals.expensesSaleryRentCar || 0);
-  const totalAutoSelavu = Number(overview.expenses || autoTotals.totalSelavu || (fcSelavu + brokerSelavu + overheadSelavu));
+  const totalAutoSelavu = Number(dm.expenses ?? (overview.expenses || autoTotals.totalSelavu || (fcSelavu + brokerSelavu + overheadSelavu)));
   
-  // Dashboard Analytics Alignment:
-  const displayTotalCapital = Number(overview.total_capital || 0);
-  const displayKaiIruppu = Number(overview.kai_iruppu ?? autoTotals.iruppu ?? (totalRecovered - totalAutoSelavu));
-  const displayRemaining = Number(overview.remaining ?? (Math.max(0, totalRepayable - totalRecovered)));
-  const displayFineCollected = Number(overview.total_fine_collected || 0);
+  // Dashboard Analytics Alignment (uses exact Dashboard figures when available):
+  const displayTotalCapital = Number(dm.totalCapital ?? (overview.total_capital || 0));
+  const displayKaiIruppu = Number(dm.kaiIruppu ?? (overview.kai_iruppu ?? autoTotals.iruppu ?? (totalRecovered - totalAutoSelavu)));
+  const displayRemaining = Number(dm.remaining ?? (overview.remaining ?? (Math.max(0, totalRepayable - totalRecovered))));
+  const displayFineCollected = Number(dm.fineCollected ?? (overview.total_fine_collected || 0));
+  const displayGross = Number(dm.totalFinanceGross ?? totalRepayable);
+  const displayInterest = Number(dm.interest ?? Math.max(0, totalRepayable - totalLoanAmt));
+  const displayDisbursed = Number(dm.amountGiven ?? totalLoanAmt);
+  const displayCollection = Number(dm.collectionAmount ?? totalRecovered);
 
   sheet1Data.push([]);
   sheet1Data.push(["DASHBOARD ANALYTICS SUMMARY", "AMOUNT (₹)"]);
@@ -1538,10 +1543,10 @@ export const exportAutoCategoryReport = (reportData, additionalData = {}, custom
   }
   sheet1Data.push(["Kai Iruppu (Cash in Hand)", displayKaiIruppu]);
   sheet1Data.push(["Expense on Auto Finance", totalAutoSelavu]);
-  sheet1Data.push(["Total Finance Given (Gross)", totalRepayable]);
-  sheet1Data.push(["Interest (Profit)", Math.max(0, totalRepayable - totalLoanAmt)]);
-  sheet1Data.push(["Amount Given (Disbursed)", totalLoanAmt]);
-  sheet1Data.push(["Collection Amount", totalRecovered]);
+  sheet1Data.push(["Total Finance Given (Gross)", displayGross]);
+  sheet1Data.push(["Interest (Profit)", displayInterest]);
+  sheet1Data.push(["Amount Given (Disbursed)", displayDisbursed]);
+  sheet1Data.push(["Collection Amount", displayCollection]);
   if (displayFineCollected > 0) {
     sheet1Data.push(["Fine Collected", displayFineCollected]);
   }

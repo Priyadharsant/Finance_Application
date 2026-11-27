@@ -73,8 +73,9 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
       customer_name: customer.customer_name,
       collectionDate: date,
       amount: customer.today_collection,
+      fineAmount: customer.today_fine_collection || 0,
       paymentMethod: customer.today_payment_method || paymentMethod || "CASH",
-      notes: customer.notes || "",
+      notes: customer.today_notes || customer.notes || "",
       maxAllowed,
       agreedTotalPayable: customer.agreed_total_payable,
       remaining: customer.remaining,
@@ -155,9 +156,16 @@ function EntryRow({ customer, date, savePayment, onEditPayment, openDetails, loa
               <CheckCircle2 size={15} color="#16a34a" />
               Collected {money(customer.today_collection)}
             </span>
-            <small style={{ color: "#64748b", fontSize: "11px", fontWeight: "600" }}>
-              ({customer.today_payment_method || "CASH"})
-            </small>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <small style={{ color: "#64748b", fontSize: "11px", fontWeight: "600" }}>
+                ({customer.today_payment_method || "CASH"})
+              </small>
+              {Number(customer.today_fine_collection || 0) > 0 && (
+                <small style={{ color: "#d97706", fontSize: "11px", fontWeight: "700" }}>
+                  + Fine {money(customer.today_fine_collection)}
+                </small>
+              )}
+            </div>
           </div>
         ) : isLoanClosed ? (
           <span
@@ -515,6 +523,11 @@ export default function DailyEntryTab({
     [daily],
   );
 
+  const totalFineCollectedToday = useMemo(
+    () => daily.reduce((sum, c) => sum + Number(c.today_fine_collection || 0), 0),
+    [daily],
+  );
+
   const pendingCollection = Math.max(predictedDayCollection - totalCollectedToday, 0);
 
   const collectedCount = useMemo(
@@ -658,6 +671,13 @@ export default function DailyEntryTab({
           value={totalCollectedToday}
           tone="green"
         />
+        {totalFineCollectedToday > 0 && (
+          <Metric
+            title="Fine Collected"
+            value={totalFineCollectedToday}
+            tone="orange"
+          />
+        )}
         <Metric
           title="Daily Expenses"
           value={dayExpensesTotal}
@@ -665,7 +685,7 @@ export default function DailyEntryTab({
         />
         <Metric
           title="Net Day Cash"
-          value={totalCollectedToday - dayExpensesTotal}
+          value={(totalCollectedToday + totalFineCollectedToday) - dayExpensesTotal}
           tone="teal"
         />
         <Metric

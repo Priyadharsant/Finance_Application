@@ -680,6 +680,7 @@ export async function closeLoanEarly(req, res) {
       principalAmount,
       interestAmount,
       discountAmount,
+      closingDate,
       paymentMethod,
       referenceNumber,
     } = req.body;
@@ -688,6 +689,9 @@ export async function closeLoanEarly(req, res) {
     const paidInterest = Math.max(0, Number(interestAmount || 0));
     const discountAmt = Math.max(0, Number(discountAmount || 0));
     const totalPaid = paidPrincipal + paidInterest;
+    const validClosingDate = /^\d{4}-\d{2}-\d{2}$/.test(String(closingDate || ""))
+      ? closingDate
+      : null;
 
     if (!loanId) {
       throw new Error("loanId is required");
@@ -729,12 +733,13 @@ export async function closeLoanEarly(req, res) {
           reference_number
         )
         VALUES (
-          $1, CURRENT_DATE, $2, $3, $4, 0, $5, $6
+          $1, COALESCE($2::date, CURRENT_DATE), $3, $4, $5, 0, $6, $7
         )
         RETURNING *
         `,
         [
           loanId,
+          validClosingDate,
           totalPaid,
           paidPrincipal,
           paidInterest,
@@ -784,10 +789,10 @@ export async function closeLoanEarly(req, res) {
         INSERT INTO expenses (
           expense_date, amount, category, expense_type, description, loan_id
         )
-        VALUES (CURRENT_DATE, $1, 'AUTO', 'LOAN_CLOSURE_DISCOUNT', $2, $3)
+        VALUES (COALESCE($1::date, CURRENT_DATE), $2, 'AUTO', 'LOAN_CLOSURE_DISCOUNT', $3, $4)
         RETURNING *
         `,
-        [discountAmt, expDesc, loanId]
+        [validClosingDate, discountAmt, expDesc, loanId]
       );
       expenseRecord = expRes.rows[0];
     }
@@ -917,6 +922,294 @@ export async function deleteDocument(req, res) {
     const result = await deleteDocumentFile(loanId, filename);
     return res.json({ success: true, ...result });
   } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function updateLoanTerms(req, res) {
+  try {
+    const { id: loanId } = req.params;
+    const updates = req.body || {};
+
+    const lRes = await pool.query(
+      `SELECT l.*, v.id AS vehicle_id, c.id AS cust_id
+       FROM autofinance_loans l
+       LEFT JOIN autofinance_customers c ON c.id = l.customer_id
+       LEFT JOIN autofinance_vehicles v ON v.loan_id = l.id
+       WHERE l.id = $1`,
+      [loanId]
+    );
+
+    if (!lRes.rows.length) {
+      return res.status(404).json({ success: false, message: "Loan not found" });
+    }
+
+    const curL = lRes.rows[0];
+
+    // 1. Borrower Name / Phone update
+    if (curL.cust_id && (updates.customer_name !== undefined || updates.customer_phone !== undefined)) {
+      const currentCustomerRes = await pool.query(
+        `SELECT * FROM autofinance_customers WHERE id = $1`,
+        [curL.cust_id]
+      );
+      const currentCustomer = currentCustomerRes.rows[0];
+      if (currentCustomer) {
+        const fullName = updates.customer_name !== undefined && String(updates.customer_name).trim()
+          ? String(updates.customer_name).trim()
+          : [currentCustomer.first_name, currentCustomer.last_name].filter(Boolean).join(' ').trim();
+        const nameParts = fullName.split(/\s+/);
+        const firstName = nameParts.shift() || currentCustomer.first_name;
+        const lastName = nameParts.join(' ') || null;
+        const phone = updates.customer_phone !== undefined
+          ? (updates.customer_phone ? String(updates.customer_phone).trim() : null)
+          : currentCustomer.phone;
+
+        await pool.query(
+          `UPDATE autofinance_customers
+           SET first_name = $1, last_name = $2, phone = $3, updated_at = NOW()
+           WHERE id = $4`,
+          [firstName, lastName, phone, curL.cust_id]
+        );
+      }
+    }
+
+    // 2. Vehicle registration number
+    if (updates.registration_number !== undefined && curL.vehicle_id) {
+      await pool.query(
+        `UPDATE autofinance_vehicles SET registration_number = $1, updated_at = NOW() WHERE id = $2`,
+        [String(updates.registration_number).trim(), curL.vehicle_id]
+      );
+    }
+
+    // 3. Fees & deductions JSONB
+    const feeFieldMap = {
+      income_due: 'incomeDue',
+      document_fee: 'documentFee',
+      hire_purchase: 'hirePurchase',
+      tax_amount: 'taxAmount',
+      insurance: 'insurance',
+      insurance_fine: 'insuranceFine',
+      green_tax: 'greenTax',
+      fine: 'fine',
+      national_tax: 'nationalTax',
+      permit: 'permit',
+      brokerage_customer: 'brokerageCustomer',
+      brokerage_hand: 'brokerageHand',
+    };
+    const feeUpdates = Object.entries(feeFieldMap).filter(([field]) => updates[field] !== undefined);
+    if (feeUpdates.length) {
+      const feesDetails = typeof curL.fees_details === 'string'
+        ? JSON.parse(curL.fees_details || '{}')
+        : { ...(curL.fees_details || {}) };
+      for (const [field, jsonKey] of feeUpdates) {
+        feesDetails[jsonKey] = Number(updates[field] || 0);
+      }
+      await pool.query(
+        `UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+        [JSON.stringify(feesDetails), loanId]
+      );
+    }
+
+    // 4. Loan Financial Terms (loan_amount, interest_rate, interest_type, tenure_months, start_date, disbursement_date)
+    const newLoanAmt = updates.loan_amount !== undefined ? Number(updates.loan_amount) : Number(curL.loan_amount);
+    const newRate = updates.interest_rate !== undefined ? Number(updates.interest_rate) : Number(curL.interest_rate);
+    const newType = updates.interest_type !== undefined ? String(updates.interest_type).toUpperCase() : (curL.interest_type || 'FLAT');
+    const newTenure = updates.tenure_months !== undefined ? Number(updates.tenure_months) : Number(curL.tenure_months);
+    let newStart = updates.start_date || curL.start_date || new Date().toISOString().slice(0, 10);
+    let newDisb = updates.disbursement_date || updates.start_date || curL.disbursement_date || curL.start_date || new Date().toISOString().slice(0, 10);
+
+    await pool.query(
+      `UPDATE autofinance_loans
+       SET loan_amount = $1, interest_rate = $2, interest_type = $3, tenure_months = $4,
+           start_date = $5, disbursement_date = $6, updated_at = NOW()
+       WHERE id = $7`,
+      [newLoanAmt, newRate, newType, newTenure, newStart, newDisb, loanId]
+    );
+
+    // 5. Global Cash Ledger sync
+    await pool.query(
+      `UPDATE global_cash_ledger
+       SET amount = $1, effective_date = $2
+       WHERE type = 'AUTO_LOAN_DISBURSEMENT' AND reference_id = $3::uuid`,
+      [newLoanAmt, newDisb, loanId]
+    );
+
+    // 6. Reschedule future EMIs
+    await rescheduleFutureEMIs(loanId);
+
+    return res.json({ success: true, message: "Loan terms updated and rescheduled successfully." });
+  } catch (error) {
+    console.error("Error updating loan terms:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * Update an existing collection installment (allowed fields: collected_amount, collected_date, fine_amount)
+ */
+export async function updateCollection(req, res) {
+  const { scheduleId } = req.params;
+  const updates = req.body || {};
+
+  try {
+    const curRes = await pool.query(
+      `SELECT id, loan_id, installment_number, principal_component, interest_component, total_emi, collected_amount
+       FROM autofinance_emi_schedules WHERE id = $1`,
+      [scheduleId]
+    );
+
+    if (curRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Installment schedule not found." });
+    }
+
+    const sched = curRes.rows[0];
+    const loanId = sched.loan_id;
+    const pComp = Number(sched.principal_component || 0);
+    const iComp = Number(sched.interest_component || 0);
+    const contractualEmi = Number((pComp + iComp).toFixed(2));
+
+    const amountWasEdited = updates.collected_amount !== undefined;
+    const fineWasEdited = updates.fine_amount !== undefined;
+    const dateWasEdited = updates.collected_date !== undefined;
+
+    let fineToSave = 0;
+    if (fineWasEdited) {
+      const fineAmount = Number(updates.fine_amount);
+      if (!Number.isFinite(fineAmount) || fineAmount < 0) {
+        return res.status(400).json({ success: false, message: "Fine amount must be a valid amount greater than or equal to zero." });
+      }
+      fineToSave = Number(fineAmount.toFixed(2));
+    }
+
+    let dateToSave = new Date().toISOString().slice(0, 10);
+    if (dateWasEdited) {
+      const collectedDate = String(updates.collected_date || "");
+      const validDate = /^\d{4}-\d{2}-\d{2}$/.test(collectedDate)
+        && !Number.isNaN(Date.parse(`${collectedDate}T00:00:00Z`))
+        && new Date(`${collectedDate}T00:00:00Z`).toISOString().slice(0, 10) === collectedDate;
+      if (!validDate) {
+        return res.status(400).json({ success: false, message: "Collected date must be a valid date (YYYY-MM-DD)." });
+      }
+      dateToSave = collectedDate;
+    }
+
+    let newAmt = Number(sched.collected_amount || 0);
+    if (amountWasEdited) {
+      const rawCol = updates.collected_amount;
+      newAmt = (rawCol === "" || rawCol === null || isNaN(Number(rawCol)))
+        ? 0
+        : Math.max(0, Number(Number(rawCol).toFixed(2)));
+    }
+
+    if (!amountWasEdited && newAmt <= 0) {
+      return res.status(400).json({ success: false, message: "Fine amount and collected date can only be edited on an installment with a payment." });
+    }
+
+    let paidInterest = 0;
+    let paidPrincipal = 0;
+    let extraPrincipal = 0;
+    let newStatus = "PENDING";
+
+    if (newAmt > 0) {
+      let rem = newAmt;
+      paidInterest = Number(Math.min(rem, iComp).toFixed(2));
+      rem = Number((rem - paidInterest).toFixed(2));
+      paidPrincipal = Number(Math.min(rem, pComp).toFixed(2));
+      rem = Number((rem - paidPrincipal).toFixed(2));
+      extraPrincipal = Number(Math.max(0, rem).toFixed(2));
+
+      const isFullyPaid = (paidInterest >= iComp - 0.01) && (paidPrincipal >= pComp - 0.01) && contractualEmi > 0;
+      newStatus = isFullyPaid ? "PAID" : "PARTIAL";
+    }
+
+    // Update schedule
+    await pool.query(
+      `UPDATE autofinance_emi_schedules
+       SET collected_amount = $1,
+           paid_interest = $2,
+           paid_principal = $3,
+           extra_principal_paid = $4,
+           status = $5
+       WHERE id = $6`,
+      [
+        newAmt > 0 ? newAmt : null,
+        paidInterest,
+        paidPrincipal,
+        extraPrincipal,
+        newStatus,
+        scheduleId
+      ]
+    );
+
+    // Reconcile autofinance_payments
+    if (newAmt > 0) {
+      const payCheck = await pool.query(
+        `SELECT id, fine_amount, payment_date FROM autofinance_payments WHERE emi_id = $1 ORDER BY created_at ASC`,
+        [scheduleId]
+      );
+      const primary = payCheck.rows[0];
+      const primaryId = primary?.id;
+      const existingFine = payCheck.rows.reduce((sum, payment) => sum + Number(payment.fine_amount || 0), 0);
+      const finalFine = fineWasEdited ? fineToSave : existingFine;
+      const finalDate = dateWasEdited ? dateToSave : (primary?.payment_date ? primary.payment_date.toISOString().slice(0, 10) : dateToSave);
+
+      if (payCheck.rows.length > 0) {
+        await pool.query(
+          `UPDATE autofinance_payments
+           SET amount_paid = $1, principal_paid = $2, interest_paid = $3, extra_principal_paid = $4, payment_date = $5, fine_amount = $6
+           WHERE id = $7`,
+          [newAmt, paidPrincipal, paidInterest, extraPrincipal, finalDate, finalFine, primaryId]
+        );
+
+        if (payCheck.rows.length > 1) {
+          const extraIds = payCheck.rows.slice(1).map((p) => p.id);
+          await pool.query(
+            `DELETE FROM global_cash_ledger WHERE source_module = 'AUTO' AND reference_type = 'AUTO_PAYMENT' AND reference_id = ANY($1::uuid[])`,
+            [extraIds]
+          );
+          await pool.query(`DELETE FROM autofinance_payments WHERE id = ANY($1)`, [extraIds]);
+        }
+      } else {
+        const insertedPayment = await pool.query(
+          `INSERT INTO autofinance_payments (
+            loan_id, emi_id, payment_date, amount_paid, fine_amount, principal_paid, interest_paid, extra_principal_paid, payment_method, reference_number
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'CASH', 'Collection Editor')
+          RETURNING id`,
+          [loanId, scheduleId, finalDate, newAmt, finalFine, paidPrincipal, paidInterest, extraPrincipal]
+        );
+        await pool.query(
+          `INSERT INTO global_cash_ledger (effective_date, type, amount, direction, source_module, reference_type, reference_id, notes)
+           VALUES ($1, 'AUTO_COLLECTION', $2, 'CREDIT', 'AUTO', 'AUTO_PAYMENT', $3, 'Auto collection recorded via Collection Editor')`,
+          [finalDate, newAmt + finalFine, insertedPayment.rows[0].id]
+        );
+      }
+
+      await pool.query(
+        `UPDATE global_cash_ledger ledger
+         SET amount = payment.amount_paid + COALESCE(payment.fine_amount, 0), effective_date = payment.payment_date
+         FROM autofinance_payments payment
+         WHERE ledger.source_module = 'AUTO' AND ledger.reference_type = 'AUTO_PAYMENT'
+           AND ledger.reference_id = payment.id AND payment.emi_id = $1`,
+        [scheduleId]
+      );
+    } else {
+      const removedPayments = await pool.query(`SELECT id FROM autofinance_payments WHERE emi_id = $1`, [scheduleId]);
+      const removedIds = removedPayments.rows.map((p) => p.id);
+      if (removedIds.length) {
+        await pool.query(
+          `DELETE FROM global_cash_ledger WHERE source_module = 'AUTO' AND reference_type = 'AUTO_PAYMENT' AND reference_id = ANY($1::uuid[])`,
+          [removedIds]
+        );
+      }
+      await pool.query(`DELETE FROM autofinance_payments WHERE emi_id = $1`, [scheduleId]);
+    }
+
+    // Reschedule subsequent EMIs
+    await rescheduleFutureEMIs(loanId);
+
+    return res.json({ success: true, message: "Collection updated successfully." });
+  } catch (error) {
+    console.error("Error updating collection:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 }

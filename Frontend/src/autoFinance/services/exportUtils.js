@@ -341,3 +341,151 @@ export const exportIndividualLoan = (loan) => {
     `Full_Report_${loan.loan.customer_code || "Loan"}_${loan.loan.registration_number || "Vehicle"}.xlsx`
   );
 };
+
+/**
+ * Monthly Collection Schedule Report
+ * Generates an actionable field collection schedule.
+ * Omits address, loan amount, remaining, and pending due status as requested.
+ * Automatically computes total summary row at the bottom using Excel SUM formulas for dynamic recalculation.
+ * Includes data validation dropdown for payment methods.
+ */
+export const exportMonthlyAgentCollectionReport = (loans = [], dueSchedules = [], monthLabel = "") => {
+  const activeLoans = (loans || []).filter((l) => l.status === "ACTIVE");
+
+  // Lookup map for current due schedule of each loan
+  const scheduleMap = new Map();
+  (dueSchedules || []).forEach((d) => {
+    scheduleMap.set(String(d.loan_id), d);
+  });
+
+  const rows = activeLoans.map((l, idx) => {
+    const dashDue = scheduleMap.get(String(l.id));
+    const monthlyDueAmount = dashDue
+      ? (dashDue.remaining_emi_amount !== undefined ? Number(dashDue.remaining_emi_amount) : Math.max(0, Number(dashDue.total_emi || 0) - Number(dashDue.collected_amount || 0)))
+      : Number(l.next_emi_amount || 0);
+
+    const carriedArrears = Number(dashDue?.pending_amount || l.next_emi_pending_amount || 0);
+    const totalToCollect = monthlyDueAmount;
+    const emiAmount = Math.max(0, monthlyDueAmount - carriedArrears);
+
+    const principal = Number(l.loan_amount || 0);
+    const interest = Number(l.total_interest || 0);
+    const totalLoan = Number(
+      l.agreed_total_payable ?? l.total_payable ?? (principal + interest)
+    );
+    const totalPaid = Number(l.total_paid || 0);
+    const remainingBalance = Math.max(0, totalLoan - totalPaid);
+
+    const instNo = dashDue ? dashDue.installment_number : (l.next_installment_number || "—");
+
+    return {
+      "S.No": idx + 1,
+      "Customer Name": `${l.first_name || ""} ${l.last_name || ""}`.trim() || "—",
+      "Phone Number": l.phone || "—",
+      "Vehicle Make & Model": `${l.make || "Vehicle"} ${l.model || ""}`.trim(),
+      "Registration No": l.registration_number || l.vehicle_type || "—",
+      "Principal (₹)": principal,
+      "Interest (₹)": interest,
+      "Total Loan (₹)": totalLoan,
+      "Remaining Balance (₹)": remainingBalance,
+      "Installment #": `#${instNo}`,
+      "Due Date": dateLabel(dashDue?.due_date || l.next_due_date),
+      "Monthly EMI (₹)": emiAmount,
+      "Previous month pending": carriedArrears,
+      "Total Amount To Collect (₹)": totalToCollect,
+      "Collected Amount (₹)": "", // Field manual entry: changes here will automatically update the SUM total below
+      "Collected Date": "",
+      "Payment Method": "",
+      "Signature / Remarks": "",
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  autoFitColumns(ws, rows);
+
+  const startRow = 2; // Row 1 is header (1-indexed)
+  const endRow = activeLoans.length > 0 ? startRow + activeLoans.length - 1 : startRow;
+  const totalRowIndex = endRow + 1;
+
+  // Append Total Row using dynamic Excel =SUM(...) formulas
+  // Columns:
+  // A: S.No
+  // B: Customer Name
+  // C: Phone Number
+  // D: Vehicle Make & Model
+  // E: Registration No
+  // F: Principal (₹)
+  // G: Interest (₹)
+  // H: Total Loan (₹)
+  // I: Remaining Balance (₹)
+  // J: Installment #
+  // K: Due Date
+  // L: Monthly EMI (₹)
+  // M: Previous month pending
+  // N: Total Amount To Collect (₹)
+  // O: Collected Amount (₹)
+  // P: Collected Date
+  // Q: Payment Method
+  // R: Signature / Remarks
+  const totalRowData = [
+    "TOTAL",
+    `Total Active Accounts: ${activeLoans.length}`,
+    "",
+    "",
+    "",
+    null, // F: Principal
+    null, // G: Interest
+    null, // H: Total Loan (Principal + Interest)
+    null, // I: Remaining Balance
+    "",
+    "",
+    null, // L: Monthly EMI
+    null, // M: Previous month pending
+    null, // N: Total Amount To Collect
+    null, // O: Collected Amount
+    "",
+    "",
+    "",
+  ];
+
+  XLSX.utils.sheet_add_aoa(ws, [totalRowData], { origin: `A${totalRowIndex}` });
+
+  if (activeLoans.length > 0) {
+    ws[`F${totalRowIndex}`] = { t: "n", f: `SUM(F${startRow}:F${endRow})` };
+    ws[`G${totalRowIndex}`] = { t: "n", f: `SUM(G${startRow}:G${endRow})` };
+    ws[`H${totalRowIndex}`] = { t: "n", f: `SUM(H${startRow}:H${endRow})` };
+    ws[`I${totalRowIndex}`] = { t: "n", f: `SUM(I${startRow}:I${endRow})` };
+    ws[`L${totalRowIndex}`] = { t: "n", f: `SUM(L${startRow}:L${endRow})` };
+    ws[`M${totalRowIndex}`] = { t: "n", f: `SUM(M${startRow}:M${endRow})` };
+    ws[`N${totalRowIndex}`] = { t: "n", f: `SUM(N${startRow}:N${endRow})` };
+    ws[`O${totalRowIndex}`] = { t: "n", f: `SUM(O${startRow}:O${endRow})` };
+  } else {
+    ws[`F${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`G${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`H${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`I${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`L${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`M${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`N${totalRowIndex}`] = { t: "n", v: 0 };
+    ws[`O${totalRowIndex}`] = { t: "n", v: 0 };
+  }
+
+  // Add Excel Data Validation dropdown for "Payment Method" column (Col Q)
+  ws["!dataValidation"] = [
+    {
+      sqref: `Q${startRow}:Q${endRow + 10}`,
+      type: "list",
+      operator: "equal",
+      formula1: '"CASH,GPay / UPI,Bank Transfer,Cheque"',
+      allowBlank: true,
+      showDropDown: true,
+    },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const sheetTitle = monthLabel ? `Schedule_${monthLabel.replace(/\s+/g, "_")}` : "Collection_Schedule";
+  XLSX.utils.book_append_sheet(wb, ws, sheetTitle.slice(0, 31));
+
+  const fileName = `Collection_Schedule_${monthLabel ? monthLabel.replace(/[\s/]+/g, "_") : new Date().toISOString().slice(0, 7)}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+};

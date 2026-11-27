@@ -79,9 +79,16 @@ export default function CustomerDetailsModal({ customer, loans = [], onClose }) 
                 const loan = details?.loan || summary;
                 const fee = loan.fees_details || {};
                 const docs = details?.documents || [];
-                const paid = Number(loan.total_paid || 0);
+                // Total collected excluding fines, counting all payments (including early close)
+                const paid = details?.payments?.length
+                  ? details.payments.reduce((s, p) => s + Number(p.amount_paid || 0), 0)
+                  : Number(loan.total_paid || 0);
+                const fine = details?.payments?.length
+                  ? details.payments.reduce((s, p) => s + Number(p.fine_amount || 0), 0)
+                  : Number(loan.total_fine_paid || 0);
                 const principal = Number(loan.loan_amount || 0);
-                const balance = Number(loan.remaining_balance ?? loan.balance_pending ?? Math.max(0, principal - paid));
+                const totalGross = Number(loan.agreed_total_payable ?? loan.total_payable ?? (principal + Number(loan.total_interest || 0)));
+                const balance = loan.status === "COMPLETED" ? 0 : Math.max(0, totalGross - paid);
                 return (
                   <article className="autoCustomerLoanCard" key={summary.id}>
                     <div className="autoCustomerLoanCardHead">
@@ -93,6 +100,7 @@ export default function CustomerDetailsModal({ customer, loans = [], onClose }) 
                     <div className="autoCustomerLoanStats">
                       <Metric icon={IndianRupee} label="Principal" value={money(loan.loan_amount)} />
                       <Metric icon={CreditCard} label="Collected" value={money(paid)} />
+                      {fine > 0 && <Metric icon={CreditCard} label="Fine" value={money(fine)} />}
                       <Metric icon={Gauge} label="Balance" value={money(balance)} />
                       <Metric icon={CalendarDays} label="Tenure" value={`${loan.tenure_months ?? "—"} months`} />
                     </div>

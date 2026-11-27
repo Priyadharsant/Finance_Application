@@ -236,6 +236,57 @@ export default function PaymentEditorModal({
           </div>
         )}
 
+        {/* Fine / Penalty Collection (especially for late or final settlement) */}
+        <label style={{ display: "block", marginBottom: "14px", fontWeight: "600", fontSize: "13px", color: "#334155" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Banknote size={14} color="#d97706" />
+              <span>Fine / Penalty Amount (₹)</span>
+            </div>
+            {Number(payment.fineAmount || payment.fine_amount || 0) > 0 && (
+              <span style={{ fontSize: "11px", color: "#d97706", fontWeight: "700" }}>
+                Total: {money(Number(payment.amount || 0) + Number(payment.fineAmount || payment.fine_amount || 0))}
+              </span>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <span
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontWeight: "700",
+                fontSize: "15px",
+                color: "#94a3b8",
+              }}
+            >
+              ₹
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              value={payment.fineAmount !== undefined ? payment.fineAmount : (payment.fine_amount ?? "")}
+              onChange={(e) => setPayment({ ...payment, fineAmount: e.target.value, fine_amount: e.target.value })}
+              style={{
+                width: "100%",
+                height: "42px",
+                paddingLeft: "30px",
+                paddingRight: "12px",
+                borderRadius: "9px",
+                border: "1.5px solid #cbd5e1",
+                outline: "none",
+                fontSize: "15px",
+                fontWeight: "600",
+                color: "#0f172a",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+        </label>
+
         {/* Payment Method Selector */}
         <label style={{ display: "block", marginBottom: "14px", fontWeight: "600", fontSize: "13px", color: "#334155" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>

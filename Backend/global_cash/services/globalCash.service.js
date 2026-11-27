@@ -225,15 +225,15 @@ export async function getCapitalBreakdown(client) {
     const autoRes = await client.query(`
       SELECT
         COALESCE(SUM(loan_amount), 0) AS disbursed,
+        COALESCE(SUM(
+          COALESCE(total_payable, loan_amount + (loan_amount * (interest_rate / 100.0) * tenure_months))
+        ), 0) AS contractual_gross,
+        COALESCE(SUM(
+          COALESCE(total_payable - loan_amount, (loan_amount * (interest_rate / 100.0) * tenure_months))
+        ), 0) AS contractual_interest,
         COUNT(*) AS customers
       FROM autofinance_loans
       WHERE status <> 'CANCELLED';
-    `);
-    const autoSchedRes = await client.query(`
-      SELECT
-        COALESCE(SUM(total_emi), 0) AS expected,
-        COALESCE(SUM(interest_component), 0) AS interest
-      FROM autofinance_emi_schedules;
     `);
     const autoCollRes = await client.query(`
       SELECT COALESCE(SUM(amount_paid), 0) AS collected
@@ -249,21 +249,21 @@ export async function getCapitalBreakdown(client) {
     const dfCust = parseInt(dfRes.rows[0]?.customers || 0, 10);
 
     const autoDisbursed = parseFloat(autoRes.rows[0]?.disbursed || 0);
-    const autoExpected = parseFloat(autoSchedRes.rows[0]?.expected || autoDisbursed);
-    const autoInterest = parseFloat(autoSchedRes.rows[0]?.interest || (autoExpected - autoDisbursed));
+    const autoGross = parseFloat(autoRes.rows[0]?.contractual_gross || autoDisbursed);
+    const autoInterest = parseFloat(autoRes.rows[0]?.contractual_interest || (autoGross - autoDisbursed));
     const autoCollected = parseFloat(autoCollRes.rows[0]?.collected || 0);
-    const autoRemaining = Math.max(0, autoExpected - autoCollected);
+    const autoRemaining = Math.max(0, autoGross - autoCollected);
     const autoCust = parseInt(autoRes.rows[0]?.customers || 0, 10);
 
     portfolioData = {
-      grossGiven: dfGross + autoExpected,
+      grossGiven: dfGross + autoGross,
       interest: dfInterest + autoInterest,
       disbursed: dfDisbursed + autoDisbursed,
       collected: dfCollected + autoCollected,
       remaining: dfRemaining + autoRemaining,
       totalCustomers: dfCust + autoCust,
       daily: { gross: dfGross, interest: dfInterest, disbursed: dfDisbursed, collected: dfCollected, remaining: dfRemaining, customers: dfCust },
-      auto: { gross: autoExpected, interest: autoInterest, disbursed: autoDisbursed, collected: autoCollected, remaining: autoRemaining, customers: autoCust }
+      auto: { gross: autoGross, interest: autoInterest, disbursed: autoDisbursed, collected: autoCollected, remaining: autoRemaining, customers: autoCust }
     };
   } catch (err) {
     console.error("Error in getCapitalBreakdown (portfolioData):", err);

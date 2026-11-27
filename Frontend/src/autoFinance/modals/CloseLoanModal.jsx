@@ -10,8 +10,9 @@ export default function CloseLoanModal({
   if (!closeLoanModal) return null;
 
   const remP = Number(closeLoanModal.remainingPrincipal ?? closeLoanModal.principalAmount ?? 0);
+  const remI = Number(closeLoanModal.remainingInterest ?? 0);
   const p = Number(closeLoanModal.principalAmount ?? remP);
-  const interestAmt = Number(closeLoanModal.interestAmount || 0);
+  const interestAmt = Number(closeLoanModal.interestAmount ?? remI);
   const discountAmt = Number(closeLoanModal.discountAmount || 0);
   const totalAmt = p + interestAmt;
 
@@ -75,9 +76,26 @@ export default function CloseLoanModal({
             <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
               {closeLoanModal.regNumber ? `Vehicle: ${closeLoanModal.regNumber} · ` : ""}
               Remaining Principal: <strong>₹{remP.toLocaleString()}</strong>
+              {remI > 0 ? ` · Remaining Interest: ₹${remI.toLocaleString()}` : ""}
             </div>
           </div>
         )}
+
+        <div className="closeLoanField" style={{ marginBottom: "12px" }}>
+          <label className="closeLoanLabel">Closing Date</label>
+          <input
+            type="date"
+            required
+            className="closeLoanTextInput"
+            value={closeLoanModal.closingDate || ""}
+            onChange={(e) =>
+              setCloseLoanModal({
+                ...closeLoanModal,
+                closingDate: e.target.value,
+              })
+            }
+          />
+        </div>
 
         <div className="closeLoanGrid">
           <div className="closeLoanField">

@@ -148,6 +148,15 @@ export default function DailyDashboard({
           source="daily_finance_payments."
         />
         <Metric
+          title="Fine Collected"
+          value={position.fine_collected || 0}
+          tone="orange"
+          explanation="Total penalty and late fine amount collected on daily finance accounts."
+          formula="Sum of fine_amount in daily_finance_payments."
+          period="All dates, lifetime to date."
+          source="daily_finance_payments.fine_amount."
+        />
+        <Metric
           title="Remaining"
           value={position.receivable}
           tone="orange"

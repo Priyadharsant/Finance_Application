@@ -1,15 +1,18 @@
 import React, { useState } from "react";
-import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw, FileSpreadsheet } from "lucide-react";
+import { Plus, Clock3, CarFront, Download, Calendar, X, RotateCcw, FileSpreadsheet, UserCheck, Edit3 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import { apiCall, money, dateLabel } from "../services/autoFinanceApi";
 import { exportAutoMonthlyCollectionReport } from "../../globalCapital/services/globalCapitalExportUtils";
+import { exportMonthlyAgentCollectionReport } from "../services/exportUtils";
 import MonthFilterModal from "../../components/MonthFilterModal";
+import EditAutoLoanModal from "../modals/EditAutoLoanModal";
 
 export default function AutoVehicleLoans({
   overview = {},
   loans = [],
   vehiclePageLoans = [],
   loanSerialById = new Map(),
+  dashboardData = {},
   loanTabFilter,
   setLoanTabFilter,
   loanMonthFilter = "",
@@ -21,8 +24,22 @@ export default function AutoVehicleLoans({
   setShowCreateLoan,
   openLoanDetails,
   handleExportVehicleLoans,
+  onUpdateLoan,
 }) {
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const [editingLoan, setEditingLoan] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSaveLoan = async (id, updatedFields) => {
+    setBusy(true);
+    try {
+      if (onUpdateLoan) {
+        await onUpdateLoan(id, updatedFields);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleExportMonthlyCollections = async (selectedMonth) => {
     const response = await apiCall(`/loans/reports/monthly?month=${encodeURIComponent(selectedMonth)}`);
@@ -85,6 +102,15 @@ export default function AutoVehicleLoans({
           <button
             type="button"
             className="unifiedReportBtn"
+            onClick={() => exportMonthlyAgentCollectionReport(loans, dashboardData.dueSchedules, loanMonthFilter || "")}
+            title="Download Collection Schedule (.xlsx) with auto sum calculations and method dropdown"
+            style={{ background: "#f0fdf4", color: "#15803d", borderColor: "#bbf7d0" }}
+          >
+            <UserCheck size={15} /> Collection Schedule (.xlsx)
+          </button>
+          <button
+            type="button"
+            className="unifiedReportBtn"
             onClick={() => setShowMonthModal(true)}
             title="Download Monthly Collections Report (.xlsx)"
           >
@@ -124,13 +150,10 @@ export default function AutoVehicleLoans({
         </div>
         <div className="metric autoMetric green">
           <span>{isFiltered ? "Filtered Collected" : "Total Collected"}</span>
-          <b>{money(filteredCollected)}</b>
+          <b>{money(filteredLoanRepayments)}</b>
           <small style={{ color: "#047857", fontSize: "11.5px", fontWeight: 600, display: "block", marginTop: "4px" }}>
             {filteredRecoveryRate}% Recovered
           </small>
-          {filteredFineCollected > 0 && <small style={{ color: "#0f766e", fontSize: "11px", fontWeight: 650, display: "block", marginTop: "3px" }}>
-            Includes {money(filteredFineCollected)} in fines
-          </small>}
         </div>
         <div className="metric autoMetric teal">
           <span>Fine Collected</span>
@@ -254,102 +277,234 @@ export default function AutoVehicleLoans({
               <th>Vehicle &amp; Reg No</th>
               <th>Loan Details</th>
               <th>Collections</th>
+              <th>Due Status</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {vehiclePageLoans.map((l) => (
-              <tr
-                key={l.id}
-                className="clickable"
-                onClick={() => openLoanDetails(l.id)}
-              >
-                <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{loanSerialById.get(String(l.id)) || "—"}</td>
-                <td>
-                  <div className="customerNameCell">
-                    <div>
-                      <b>
-                        {l.first_name} {l.last_name}
-                      </b>
-                      <small>
-                        {l.phone ? (
-                          <PhoneLink phone={l.phone} icon />
-                        ) : (
-                          l.customer_code
-                        )}
+            {vehiclePageLoans.map((l) => {
+              const getLocalDateString = (d) => {
+                if (!d) return "";
+                const dt = new Date(d);
+                if (isNaN(dt.getTime())) return "";
+                const y = dt.getFullYear();
+                const m = String(dt.getMonth() + 1).padStart(2, "0");
+                const day = String(dt.getDate()).padStart(2, "0");
+                return `${y}-${m}-${day}`;
+              };
+
+              const todayStr = getLocalDateString(new Date());
+              const dueStr = getLocalDateString(l.next_due_date);
+              const isToday = Boolean(dueStr && dueStr === todayStr);
+              const isOverdue = Boolean(dueStr && dueStr < todayStr);
+              const hasUpcoming = Boolean(dueStr && dueStr > todayStr);
+
+              const dashDue = (dashboardData.dueSchedules || []).find(
+                (d) => String(d.loan_id) === String(l.id),
+              );
+              const monthlyDueAmount = dashDue
+                ? (dashDue.remaining_emi_amount !== undefined ? Number(dashDue.remaining_emi_amount) : Math.max(0, Number(dashDue.total_emi || 0) - Number(dashDue.collected_amount || 0)))
+                : Number(l.next_emi_amount || 0);
+              const instNo = dashDue
+                ? dashDue.installment_number
+                : l.next_installment_number || "?";
+
+              const dueStatus = dashDue?.status || l.next_emi_status || "";
+              const paidSoFar = Number(dashDue?.collected_amount || l.next_emi_collected || 0);
+              const carriedAmount = Number(dashDue?.pending_amount || l.next_emi_pending_amount || 0);
+
+              const isPartial = dueStatus === "PARTIAL" || (paidSoFar > 0 && monthlyDueAmount > 0);
+              const isPending = !isPartial && isOverdue;
+              const overdueMonths = Number(
+                l.overdue_dues_count || l.overdue_due_count || (isOverdue ? Math.max(1, Number(l.pending_dues_count || 1)) : 0)
+              );
+
+              return (
+                <tr
+                  key={l.id}
+                  className="clickable"
+                  onClick={() => openLoanDetails(l.id)}
+                >
+                  <td style={{ color: "#64748b", fontWeight: "600", width: "50px" }}>{loanSerialById.get(String(l.id)) || "—"}</td>
+                  <td>
+                    <div className="customerNameCell">
+                      <div>
+                        <b>
+                          {l.first_name} {l.last_name}
+                        </b>
+                        <small>
+                          {l.phone ? (
+                            <PhoneLink phone={l.phone} icon />
+                          ) : (
+                            l.customer_code
+                          )}
+                        </small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <b>
+                      {l.make || "Vehicle"} {l.model}
+                    </b>
+                    <small
+                      className="autoRegNo"
+                      style={{ display: "inline-block", marginTop: "3px" }}
+                    >
+                      {l.registration_number || l.vehicle_type}
+                    </small>
+                  </td>
+                  <td>
+                    <b>{money(l.loan_amount)}</b>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", marginTop: "3px" }}>
+                      <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                        {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
+                      </small>
+                      <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
+                        Interest amount: {money(l.total_interest)}
                       </small>
                     </div>
-                  </div>
-                </td>
-                <td>
-                  <b>
-                    {l.make || "Vehicle"} {l.model}
-                  </b>
-                  <small
-                    className="autoRegNo"
-                    style={{ display: "inline-block", marginTop: "3px" }}
-                  >
-                    {l.registration_number || l.vehicle_type}
-                  </small>
-                </td>
-                <td>
-                  <b>{money(l.loan_amount)}</b>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", marginTop: "3px" }}>
-                    <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
-                      {l.interest_rate}% ({l.interest_type || "FLAT"}) • {l.tenure_months} Mo
-                    </small>
-                    <small style={{ display: "block", color: "#64748b", lineHeight: 1.35 }}>
-                      Interest amount: {money(l.total_interest)}
-                    </small>
-                  </div>
-                </td>
-                <td>
-                  <b className="greenText">{money(Number(l.total_paid || 0) + Number(l.total_fine_paid || 0))}</b>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px", marginTop: "5px" }}>
-                    <small style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", lineHeight: 1.2, whiteSpace: "nowrap" }}>
-                      {Number(l.total_fine_paid || 0) > 0 && <span style={{ color: "#a16207", fontWeight: 650 }}>Fine: {money(l.total_fine_paid)}</span>}
-                      <span>Last collected: {l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</span>
-                    </small>
-                    <small style={{ color: "#64748b", lineHeight: 1.2 }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 7px", borderRadius: "6px", background: Number(l.pending_dues_count || 0) > 0 ? "#fff7ed" : "#ecfdf5", color: Number(l.pending_dues_count || 0) > 0 ? "#c2410c" : "#047857", fontWeight: 700 }}>
-                        <Clock3 size={11} /> {l.pending_dues_count || 0} Pending
-                      </span>
-                    </small>
-                  </div>
-                </td>
-                <td>
-                  <span
-                    className="tag"
-                    style={{
-                      background: l.status === "ACTIVE" ? "#ecfdf5" : "#eff6ff",
-                      color: l.status === "ACTIVE" ? "#047857" : "#1d4ed8",
-                      border: `1px solid ${l.status === "ACTIVE" ? "#d1fae5" : "#bfdbfe"}`,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {l.status || "ACTIVE"}
-                  </span>
-                </td>
-                <td>
-                  <button
-                    className="payButton"
-                    style={{
-                      background: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
-                      borderColor: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
-                      color: "#fff",
-                      fontWeight: 700,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openLoanDetails(l.id);
-                    }}
-                  >
-                    Details
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>
+                    <b className="greenText">{money(Number(l.total_paid || 0))}</b>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px", marginTop: "5px" }}>
+                      <small style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                        {Number(l.total_fine_paid || 0) > 0 && <span style={{ color: "#a16207", fontWeight: 650 }}>Fine: {money(l.total_fine_paid)}</span>}
+                        <span>Last collected: {l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</span>
+                      </small>
+                      <small style={{ color: "#64748b", lineHeight: 1.2 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 7px", borderRadius: "6px", background: Number(l.pending_dues_count || 0) > 0 ? "#fff7ed" : "#ecfdf5", color: Number(l.pending_dues_count || 0) > 0 ? "#c2410c" : "#047857", fontWeight: 700 }}>
+                          <Clock3 size={11} /> {l.pending_dues_count || 0} Pending
+                        </span>
+                      </small>
+                    </div>
+                  </td>
+                  <td>
+                    {l.status === "ACTIVE" && (isToday || isOverdue || hasUpcoming) ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                          gap: "4px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                          {isPartial ? (
+                            <span
+                              className="tag"
+                              style={{
+                                background: "#fef3c7",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                fontWeight: "800",
+                              }}
+                            >
+                              PARTIAL
+                            </span>
+                          ) : isPending ? (
+                            <span
+                              className="tag"
+                              style={{
+                                background: isOverdue ? "#fee2e2" : isToday ? "#ffedd5" : "#eff6ff",
+                                color: isOverdue ? "#b91c1c" : isToday ? "#c2410c" : "#1d4ed8",
+                                border: `1px solid ${isOverdue ? "#fecaca" : isToday ? "#fed7aa" : "#dbeafe"}`,
+                                fontSize: "10px",
+                                padding: "2px 6px",
+                                fontWeight: "800",
+                              }}
+                            >
+                              PENDING
+                            </span>
+                          ) : null}
+
+                          <span
+                            className="tag"
+                            style={{
+                              background: isToday ? "#fff7ed" : isOverdue ? "#fef2f2" : "#eff6ff",
+                              color: isToday ? "#c2410c" : isOverdue ? "#b91c1c" : "#1d4ed8",
+                              border: `1px solid ${isToday ? "#ffedd5" : isOverdue ? "#fecaca" : "#dbeafe"}`,
+                              fontSize: "10px",
+                              padding: "2px 6px",
+                              fontWeight: isOverdue ? "700" : "500",
+                            }}
+                          >
+                            {isToday ? "DUE TODAY" : isOverdue ? (overdueMonths > 1 ? `${overdueMonths} MONTHS OVERDUE` : "1 MONTH OVERDUE") : "UPCOMING"}
+                          </span>
+                        </div>
+
+                        <b
+                          style={{
+                            color: isPartial ? "#d97706" : isOverdue ? "#dc2626" : isToday ? "#d97706" : "#1e3a8a",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {money(monthlyDueAmount)}
+                        </b>
+                        <small
+                          style={{ color: "#64748b", fontSize: "11px" }}
+                        >
+                          Inst #{instNo} {isPartial && paidSoFar > 0 ? `· Paid: ${money(paidSoFar)}` : hasUpcoming ? `· Due: ${dateLabel(l.next_due_date)}` : ""}
+                        </small>
+                        {carriedAmount > 0 && (
+                          <small style={{ color: "#92400e", fontSize: "11px" }}>
+                            Previous pending: {money(carriedAmount)}
+                          </small>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span
+                      className="tag"
+                      style={{
+                        background: l.status === "ACTIVE" ? "#ecfdf5" : "#eff6ff",
+                        color: l.status === "ACTIVE" ? "#047857" : "#1d4ed8",
+                        border: `1px solid ${l.status === "ACTIVE" ? "#d1fae5" : "#bfdbfe"}`,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {l.status || "ACTIVE"}
+                    </span>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <button
+                        className="payButton"
+                        style={{
+                          background: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
+                          borderColor: l.status === "ACTIVE" ? "#059669" : "#3b82f6",
+                          color: "#fff",
+                          fontWeight: 700,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openLoanDetails(l.id);
+                        }}
+                      >
+                        Details
+                      </button>
+                      <button
+                        type="button"
+                        className="autoSecondaryBtn"
+                        style={{ padding: "4px 8px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "6px" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingLoan(l);
+                        }}
+                        title="Edit Loan & Financial Terms"
+                      >
+                        <Edit3 size={12} /> Edit
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {!vehiclePageLoans.length && (
@@ -361,6 +516,16 @@ export default function AutoVehicleLoans({
           </div>
         )}
       </div>
+
+
+      {editingLoan && (
+        <EditAutoLoanModal
+          loan={editingLoan}
+          onSave={handleSaveLoan}
+          onClose={() => setEditingLoan(null)}
+          busy={busy}
+        />
+      )}
 
 
       <MonthFilterModal

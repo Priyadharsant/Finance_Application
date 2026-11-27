@@ -419,16 +419,30 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       0
     );
     const remainingPrincipal = Math.max(0, principal - paidPrincipalRes);
+
+    // Calculate remaining scheduled interest from pending/partial installments
+    const remainingInterest = (loanDetails.schedules || [])
+      .filter((s) => s.status === "PENDING" || s.status === "PARTIAL")
+      .reduce((acc, s) => {
+        const remInt = s.remaining_interest !== undefined
+          ? Number(s.remaining_interest)
+          : Math.max(0, Number(s.interest_component || 0) - Number(s.paid_interest || 0));
+        return acc + remInt;
+      }, 0);
+
     const custName = `${loanDetails.loan.first_name || ''} ${loanDetails.loan.last_name || ''}`.trim() || 'Customer';
     const regNum = loanDetails.loan.registration_number || '';
+    const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
     setCloseLoanModal({
       loanId: loanDetails.loan.id,
       customerName: custName,
       regNumber: regNum,
+      closingDate: todayStr,
       remainingPrincipal,
       principalAmount: remainingPrincipal,
-      interestAmount: 0,
+      remainingInterest,
+      interestAmount: remainingInterest,
       discountAmount: 0,
       paymentMethod: "CASH",
       referenceNumber: "",
@@ -450,6 +464,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
           principalAmount: p,
           interestAmount: interestAmt,
           discountAmount: discount,
+          closingDate: closeLoanModal.closingDate,
           paymentMethod: closeLoanModal.paymentMethod,
           referenceNumber: closeLoanModal.referenceNumber,
         }),
@@ -580,6 +595,28 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
       openLoanDetails(selectedLoan.loan.id);
     } catch (err) {
       setNotice?.({ type: "error", text: err.message });
+    }
+  };
+
+  const handleUpdateCollection = async (scheduleId, updates) => {
+    try {
+      const res = await apiCall(`/loans/schedules/${scheduleId}/collection`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
+      });
+      if (res.success) {
+        setNotice?.({ type: "success", text: "Collection updated successfully!" });
+        if (selectedLoan?.loan?.id) {
+          loanDetailsCacheRef.current.delete(selectedLoan.loan.id);
+          await openLoanDetails(selectedLoan.loan.id);
+        }
+        await loadData(false);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      setNotice?.({ type: "error", text: err.message || "Failed to update collection." });
+      throw err;
     }
   };
 
@@ -821,6 +858,8 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               setStatusFilter={setStatusFilter}
               dashboardMonthFilter={dashboardMonthFilter}
               setDashboardMonthFilter={setDashboardMonthFilter}
+              search={search}
+              setSearch={setSearch}
               handleExportDashboardLoans={handleExportDashboardLoans}
               sortConfig={sortConfig}
               handleSort={handleSort}
@@ -841,6 +880,14 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               setSearch={setSearch}
               handleExportCustomers={handleExportCustomers}
               setSelectedCustomer={setSelectedCustomer}
+              onUpdateCustomer={async (id, data) => {
+                await apiCall(`/customers/${id}`, {
+                  method: "PUT",
+                  body: JSON.stringify(data),
+                });
+                setNotice?.({ type: "success", text: "Customer details updated successfully!" });
+                loadData(false);
+              }}
             />
           )}
 
@@ -859,6 +906,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               loans={loans}
               vehiclePageLoans={vehiclePageLoans}
               loanSerialById={loanSerialById}
+              dashboardData={dashboardData}
               loanTabFilter={loanTabFilter}
               setLoanTabFilter={setLoanTabFilter}
               loanMonthFilter={loanMonthFilter}
@@ -870,6 +918,15 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
               setShowCreateLoan={setShowCreateLoan}
               openLoanDetails={openLoanDetails}
               handleExportVehicleLoans={handleExportVehicleLoans}
+              onUpdateLoan={async (id, data) => {
+                await apiCall(`/loans/${id}/terms`, {
+                  method: "PUT",
+                  body: JSON.stringify(data),
+                });
+                setNotice?.({ type: "success", text: "Loan terms updated and rescheduled successfully!" });
+                loanDetailsCacheRef.current.delete(id);
+                loadData(false);
+              }}
             />
           )}
 
@@ -917,6 +974,7 @@ export default function AutoFinanceView({ activeMenu, setNotice }) {
         handleEditVehicle={handleEditVehicle}
         handleUploadDocument={handleUploadDocument}
         handleDeleteDocument={handleDeleteDocument}
+        handleUpdateCollection={handleUpdateCollection}
         setPayEmiModal={(modal) => {
           if (modal && (!modal.loanId || !modal.emiId)) {
             setNotice?.({ type: "error", text: "This installment is missing its loan or schedule reference. Refresh the Auto Finance page and try again." });

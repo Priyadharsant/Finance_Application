@@ -4,7 +4,8 @@ import os from "os";
 import { authenticateToken } from "../middleware/authMiddleware.js";
 import { 
   addLoan, getLoans, getLoan, getDashboard, recordEmiPayment, getMonthlyReport, closeLoanEarly,
-  updateVehicle, uploadDocument, getDocuments, serveDocument, deleteDocument 
+  updateVehicle, uploadDocument, getDocuments, serveDocument, deleteDocument, updateLoanTerms,
+  updateCollection
 } from "../controllers/loanController.js";
 
 const router = express.Router();
@@ -16,6 +17,8 @@ router.get("/dashboard", getDashboard);
 router.get("/", getLoans);
 router.post("/", addLoan);
 router.get("/:id", getLoan);
+router.put("/:id/terms", updateLoanTerms);
+router.put("/schedules/:scheduleId/collection", updateCollection);
 router.post("/:id/close", closeLoanEarly);
 router.get("/reports/monthly", getMonthlyReport);
 router.post("/pay-emi", recordEmiPayment);

@@ -12,6 +12,7 @@ import {
   X,
   RotateCcw,
   FileSpreadsheet,
+  Search,
 } from "lucide-react";
 import PhoneLink from "../common/PhoneLink";
 import MetricTooltipCard from "../../components/MetricTooltipCard.jsx";
@@ -28,6 +29,8 @@ export default function AutoDashboard({
   setStatusFilter,
   dashboardMonthFilter = "",
   setDashboardMonthFilter,
+  search = "",
+  setSearch,
   handleExportDashboardLoans,
   sortConfig,
   handleSort,
@@ -42,7 +45,21 @@ export default function AutoDashboard({
     try {
       setDownloadingAutoReport(true);
       const reportData = await globalCapitalApi.getMasterBusinessLedger();
-      exportAutoCategoryReport(reportData, { loans: dashboardLoans, overview });
+      exportAutoCategoryReport(reportData, {
+        loans: dashboardLoans,
+        overview,
+        dashboardMetrics: {
+          totalCapital: Number(overview.total_capital || 0),
+          kaiIruppu: Number(overview.kai_iruppu || 0),
+          expenses: Number(overview.expenses || 0),
+          totalFinanceGross: Number(dashExpectedReturn || overview.total_expected || 0),
+          interest: Number(overview.total_profit || Math.max(0, dashExpectedReturn - dashDisbursed)),
+          amountGiven: Number(dashDisbursed || overview.total_disbursed || 0),
+          collectionAmount: Number(displayCashCollected || 0),
+          fineCollected: Number(displayFineCollected || 0),
+          remaining: Number(dashRemaining || overview.remaining || 0),
+        },
+      });
     } catch (e) {
       console.error(e);
       alert("Failed to export Auto Finance Report: " + e.message);
@@ -51,19 +68,28 @@ export default function AutoDashboard({
     }
   };
 
-  const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter);
+  const isDashboardFiltered = statusFilter !== "ALL" || Boolean(dashboardMonthFilter) || Boolean(search);
 
   const dashDisbursed = dashboardLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
   const dashLoanRepayments = dashboardLoans.reduce((sum, l) => sum + Number(l.total_paid || 0), 0);
   const dashFineCollected = dashboardLoans.reduce((sum, l) => sum + Number(l.total_fine_paid || 0), 0);
   const dashCollected = dashLoanRepayments + dashFineCollected;
-  const dashRemaining = Math.max(0, dashDisbursed - dashLoanRepayments);
+  const dashExpectedReturn = dashboardLoans.reduce(
+    (sum, loan) => sum + Number(
+      loan.agreed_total_payable ?? loan.total_payable ??
+      (Number(loan.loan_amount || 0) + Number(loan.total_interest || 0)),
+    ),
+    0,
+  );
+  // Total contractual remaining: Expected Gross minus Loan Repayments (matching overview.remaining)
+  const dashRemaining = Math.max(0, dashExpectedReturn - dashLoanRepayments);
   const displayFineCollected = isDashboardFiltered
     ? dashFineCollected
     : Number(overview.total_fine_collected ?? dashFineCollected);
+  // Collection Amount without fines
   const displayCashCollected = isDashboardFiltered
-    ? dashCollected
-    : Number(overview.total_collected ?? dashCollected);
+    ? dashLoanRepayments
+    : Number(overview.total_loan_repayments ?? dashLoanRepayments);
   const dashOverdueCount = dashboardLoans.filter((l) => {
     const todayStr = new Date().toISOString().slice(0, 10);
     return l.next_due_date && new Date(l.next_due_date) < new Date(todayStr);
@@ -73,14 +99,9 @@ export default function AutoDashboard({
     const dueStr = l.next_due_date ? new Date(l.next_due_date).toISOString().slice(0, 10) : "";
     return dueStr === todayStr;
   }).length;
-  const dashRecoveryRate = dashDisbursed > 0 ? Math.round((dashLoanRepayments / dashDisbursed) * 100) : 0;
-  const dashExpectedReturn = dashboardLoans.reduce(
-    (sum, loan) => sum + Number(
-      loan.agreed_total_payable ?? loan.total_payable ??
-      (Number(loan.loan_amount || 0) + Number(loan.total_interest || 0)),
-    ),
-    0,
-  );
+  const dashRecoveryRate = dashExpectedReturn > 0
+    ? Math.round((dashLoanRepayments / dashExpectedReturn) * 100)
+    : (dashDisbursed > 0 ? Math.round((dashLoanRepayments / dashDisbursed) * 100) : 0);
   const dashProjectedAmount = dashCollected + dashboardLoans
     .filter((loan) => loan.status === "ACTIVE")
     .reduce((sum, loan) => sum + Number(
@@ -201,9 +222,9 @@ export default function AutoDashboard({
           title="Collection Amount"
           value={money(displayCashCollected)}
           tone="autoMetric green"
-          detail={`${dashRecoveryRate}% EMI recovery${displayFineCollected > 0 ? ` · ${money(displayFineCollected)} fine included` : ""}`}
-          definition="Total cash received from EMI payments and fines on auto loans."
-          formula="Sum of EMI payments and fine amounts received."
+          detail={`${dashRecoveryRate}% EMI recovery`}
+          definition="Total cash received from loan and EMI repayments on auto loans (excluding fines)."
+          formula="Sum of loan EMI and principal/interest payments received."
           period="Lifetime to date."
           source="autofinance_payments."
         />
@@ -323,6 +344,53 @@ export default function AutoDashboard({
                 </button>
               )}
             </div>
+
+            {/* Universal Search Input */}
+            {setSearch && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#ffffff",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                }}
+              >
+                <Search size={14} color="#64748b" />
+                <input
+                  type="text"
+                  placeholder="Search customer, phone, reg no, make..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    fontSize: "12px",
+                    color: "#1e293b",
+                    width: "160px",
+                    background: "transparent",
+                  }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#94a3b8",
+                      cursor: "pointer",
+                      padding: "0 2px",
+                    }}
+                    title="Clear Search"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <table className="autoDashboardLoansTable">
@@ -402,6 +470,10 @@ export default function AutoDashboard({
                 : l.next_installment_number || "?";
               const emiId = dashDue ? dashDue.id : l.next_emi_id;
 
+              const overdueMonths = Number(
+                l.overdue_dues_count || l.overdue_due_count || (isOverdue ? Math.max(1, Number(l.pending_dues_count || 1)) : 0)
+              );
+
               // Determine partial or pending status of the due installment
               const dueStatus = dashDue?.status || l.next_emi_status || "";
               const paidSoFar = Number(dashDue?.collected_amount || l.next_emi_collected || 0);
@@ -461,7 +533,7 @@ export default function AutoDashboard({
                     </div>
                   </td>
                   <td>
-                    <b className="greenText">{money(Number(l.total_paid || 0) + Number(l.total_fine_paid || 0))}</b>
+                    <b className="greenText">{money(Number(l.total_paid || 0))}</b>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: "7px", rowGap: "1px", marginTop: "2px", fontSize: "10.5px", lineHeight: 1.2 }}>
                       {Number(l.total_fine_paid || 0) > 0 && <span style={{ color: "#a16207", fontWeight: 650 }}>Fine: {money(l.total_fine_paid)}</span>}
                       <span style={{ color: "#64748b" }}>Last: {l.last_collected_date ? dateLabel(l.last_collected_date) : "—"}</span>
@@ -535,9 +607,10 @@ export default function AutoDashboard({
                               border: `1px solid ${isToday ? "#ffedd5" : isOverdue ? "#fecaca" : "#dbeafe"}`,
                               fontSize: "10px",
                               padding: "2px 6px",
+                              fontWeight: isOverdue ? "700" : "500",
                             }}
                           >
-                            {isToday ? "DUE TODAY" : isOverdue ? "OVERDUE" : "UPCOMING"}
+                            {isToday ? "DUE TODAY" : isOverdue ? (overdueMonths > 1 ? `${overdueMonths} MONTHS OVERDUE` : "1 MONTH OVERDUE") : "UPCOMING"}
                           </span>
                         </div>
 
