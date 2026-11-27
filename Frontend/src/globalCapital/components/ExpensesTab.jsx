@@ -7,6 +7,7 @@ import {
   Building,
   Search,
   X,
+  Pencil,
   Trash2,
   Download,
   Calendar,
@@ -27,6 +28,7 @@ export default function ExpensesTab({
   expenseSearch,
   setExpenseSearch,
   onOpenAddExpense,
+  onEditExpense,
   onDeleteExpense,
   onSelectRecord,
 }) {
@@ -394,17 +396,32 @@ export default function ExpensesTab({
                     {money(exp.amount)}
                   </td>
                   <td style={{ textAlign: "center" }}>
-                    <button
-                      type="button"
-                      className="actionIconBtn"
-                      title="Delete expense"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteExpense(exp.id);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                      {onEditExpense && (
+                        <button
+                          type="button"
+                          className="actionIconBtn"
+                          title="Edit expense"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditExpense(exp);
+                          }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="actionIconBtn"
+                        title="Delete expense"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteExpense(exp.id);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

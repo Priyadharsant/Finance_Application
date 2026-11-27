@@ -110,6 +110,7 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   });
 
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [expenseFormData, setExpenseFormData] = useState({
     amount: "",
     category: "GENERAL",
@@ -443,15 +444,24 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
   const handleAddExpense = async (e) => {
     e.preventDefault();
     if (actionLoading) return;
-    setActionLoading("Recording Expense...");
+    setActionLoading(editingExpenseId ? "Updating Expense..." : "Recording Expense...");
     try {
-      await globalCapitalApi.createExpense({
-        ...expenseFormData,
-        amount: parseFloat(expenseFormData.amount),
-      });
+      if (editingExpenseId) {
+        await globalCapitalApi.updateExpense(editingExpenseId, {
+          ...expenseFormData,
+          amount: parseFloat(expenseFormData.amount),
+        });
+        setNotice({ type: "success", text: "Expense updated successfully" });
+      } else {
+        await globalCapitalApi.createExpense({
+          ...expenseFormData,
+          amount: parseFloat(expenseFormData.amount),
+        });
+        setNotice({ type: "success", text: "Expense recorded successfully" });
+      }
       setShowAddExpense(false);
+      setEditingExpenseId(null);
       setActionLoading(null);
-      setNotice({ type: "success", text: "Expense recorded successfully" });
       setExpenseFormData({
         amount: "",
         category: "GENERAL",
@@ -464,6 +474,35 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
       setNotice({ type: "error", text: err.message });
       setActionLoading(null);
     }
+  };
+
+  const handleOpenEditExpense = (exp) => {
+    setEditingExpenseId(exp.id);
+    let dateStr = exp.expense_date ? String(exp.expense_date).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr.trim())) {
+      const [d, m, y] = dateStr.trim().split('-');
+      dateStr = `${y}-${m}-${d}`;
+    }
+    setExpenseFormData({
+      amount: String(exp.amount || ""),
+      category: exp.category || "GENERAL",
+      expenseType: exp.expense_type || "OFFICE_EXPENSE",
+      description: exp.description || "",
+      expenseDate: dateStr,
+    });
+    setShowAddExpense(true);
+  };
+
+  const handleOpenAddExpense = () => {
+    setEditingExpenseId(null);
+    setExpenseFormData({
+      amount: "",
+      category: "GENERAL",
+      expenseType: "OFFICE_EXPENSE",
+      description: "",
+      expenseDate: new Date().toISOString().slice(0, 10),
+    });
+    setShowAddExpense(true);
   };
 
   const handleDeleteExpense = async (id) => {
@@ -686,7 +725,8 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
               setExpenseFilterCategory={setExpenseFilterCategory}
               expenseSearch={expenseSearch}
               setExpenseSearch={setExpenseSearch}
-              onOpenAddExpense={() => setShowAddExpense(true)}
+              onOpenAddExpense={handleOpenAddExpense}
+              onEditExpense={handleOpenEditExpense}
               onDeleteExpense={handleDeleteExpense}
               onSelectRecord={setSelectedRecord}
             />
@@ -731,11 +771,15 @@ export default function GlobalCapitalView({ activeMenu, setNotice }) {
 
       <AddExpenseModal
         show={showAddExpense}
-        close={() => setShowAddExpense(false)}
+        close={() => {
+          setShowAddExpense(false);
+          setEditingExpenseId(null);
+        }}
         expenseFormData={expenseFormData}
         setExpenseFormData={setExpenseFormData}
         onSubmit={handleAddExpense}
         submitting={Boolean(actionLoading)}
+        isEdit={Boolean(editingExpenseId)}
       />
 
       <DraftClosingModal

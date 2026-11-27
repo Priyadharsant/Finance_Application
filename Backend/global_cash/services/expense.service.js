@@ -334,17 +334,205 @@ export async function getExpenses(client = pool, filters = {}) {
   };
 }
 
-export async function deleteExpense(client = pool, id) {
+export async function updateExpense(client = pool, id, data) {
   await ensureUnifiedExpensesTable(client);
-  const res = await client.query('DELETE FROM expenses WHERE id = $1 RETURNING *', [id]);
-  if (res.rowCount === 0) {
+
+  const curRes = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+  if (curRes.rows.length === 0) {
     throw new Error('Expense not found');
   }
+  const curExp = curRes.rows[0];
+
+  const {
+    amount,
+    description,
+    expenseDate,
+    category,
+    expenseType,
+    loanId,
+    financeId
+  } = data;
+
+  const numAmount = amount !== undefined ? parseFloat(amount) : parseFloat(curExp.amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    throw new Error('Expense amount must be greater than 0');
+  }
+
+  const finalDesc = description !== undefined ? description.trim() : (curExp.description || '');
+  if (!finalDesc) {
+    throw new Error('Expense description is required');
+  }
+
+  let finalCategory = curExp.category;
+  if (category !== undefined) {
+    const rawCat = String(category).toUpperCase();
+    finalCategory = ['AUTO', 'DAILY', 'GENERAL', 'INTEREST'].includes(rawCat) ? rawCat : 'GENERAL';
+  }
+
+  let finalDate = expenseDate || curExp.expense_date || new Date().toISOString().slice(0, 10);
+  if (typeof finalDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(finalDate.trim())) {
+    const [d, m, y] = finalDate.trim().split('-');
+    finalDate = `${y}-${m}-${d}`;
+  }
+
+  const finalType = expenseType !== undefined ? expenseType : (curExp.expense_type || 'GENERAL');
+  const finalLoanId = loanId !== undefined ? loanId : curExp.loan_id;
+  const finalFinanceId = financeId !== undefined ? financeId : curExp.finance_id;
+
+  const updateQuery = `
+    UPDATE expenses
+    SET amount = $1,
+        description = $2,
+        expense_date = $3,
+        category = $4,
+        expense_type = $5,
+        loan_id = $6,
+        finance_id = $7,
+        updated_at = NOW()
+    WHERE id = $8
+    RETURNING *;
+  `;
+
+  const res = await client.query(updateQuery, [
+    numAmount,
+    finalDesc,
+    finalDate,
+    finalCategory,
+    finalType,
+    finalLoanId || null,
+    finalFinanceId || null,
+    id
+  ]);
+  const updatedExpense = res.rows[0];
+
+  // 1. Sync global_cash_ledger debit entry for this expense
+  try {
+    await client.query(`
+      UPDATE global_cash_ledger
+      SET amount = $1, effective_date = $2, notes = $3
+      WHERE reference_type = 'EXPENSE' AND reference_id = $4::uuid
+    `, [numAmount, finalDate, finalDesc, id]);
+  } catch (err) {
+    console.warn("Could not sync expense update to global_cash_ledger:", err.message);
+  }
+
+  // 2. Sync daily_finance_expenses
+  if (finalCategory === 'DAILY') {
+    try {
+      await client.query(`
+        INSERT INTO daily_finance_expenses (expense_id, expense_date, amount, description, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (expense_id) DO UPDATE SET
+          amount = EXCLUDED.amount,
+          expense_date = EXCLUDED.expense_date,
+          description = EXCLUDED.description,
+          updated_at = NOW()
+      `, [id, finalDate, numAmount, finalDesc]);
+    } catch (e) {
+      console.warn("Could not sync update to daily_finance_expenses:", e.message);
+    }
+  } else if (curExp.category === 'DAILY' && finalCategory !== 'DAILY') {
+    try {
+      await client.query(`DELETE FROM daily_finance_expenses WHERE expense_id = $1`, [id]);
+    } catch (e) {
+      console.warn("Could not clean up daily_finance_expenses:", e.message);
+    }
+  }
+
+  // 3. Bidirectional Sync: If this expense is Hand Brokerage linked to an Auto Loan, sync to autofinance_loans fees_details
+  const targetLoanId = finalLoanId || curExp.loan_id;
+  const isHandBrokerage = finalType === 'BROKERAGE_HAND' ||
+    (curExp.expense_type === 'BROKERAGE_HAND') ||
+    /Brokerage Hand for Auto Loan/i.test(finalDesc) ||
+    /Brokerage Hand for Auto Loan/i.test(curExp.description || '');
+
+  let detectedLoanId = targetLoanId;
+  if (!detectedLoanId && isHandBrokerage) {
+    const m = (finalDesc || curExp.description || '').match(/Auto Loan\s+([a-f0-9\-]+)/i);
+    if (m && m[1]) {
+      detectedLoanId = m[1];
+    }
+  }
+
+  if (detectedLoanId && isHandBrokerage) {
+    try {
+      const loanRes = await client.query('SELECT fees_details FROM autofinance_loans WHERE id = $1', [detectedLoanId]);
+      if (loanRes.rows.length > 0) {
+        const feesDetails = typeof loanRes.rows[0].fees_details === 'string'
+          ? JSON.parse(loanRes.rows[0].fees_details || '{}')
+          : { ...(loanRes.rows[0].fees_details || {}) };
+
+        feesDetails.brokerageHand = numAmount;
+
+        await client.query(
+          'UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2',
+          [JSON.stringify(feesDetails), detectedLoanId]
+        );
+      }
+    } catch (err) {
+      console.error("Failed to sync updated hand brokerage expense to auto loan:", err);
+    }
+  }
+
+  return updatedExpense;
+}
+
+export async function deleteExpense(client = pool, id) {
+  await ensureUnifiedExpensesTable(client);
+
+  // Fetch expense first to detect links
+  const expRes = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+  if (expRes.rowCount === 0) {
+    throw new Error('Expense not found');
+  }
+  const curExp = expRes.rows[0];
+
+  const res = await client.query('DELETE FROM expenses WHERE id = $1 RETURNING *', [id]);
+
   try {
     await client.query('DELETE FROM daily_finance_expenses WHERE expense_id = $1', [id]);
   } catch (e) {
     // Ignore if not in daily_finance_expenses
   }
+
+  try {
+    await client.query(`DELETE FROM global_cash_ledger WHERE reference_type = 'EXPENSE' AND reference_id = $1::uuid`, [id]);
+  } catch (e) {
+    // Ignore if not found
+  }
+
+  // Bidirectional Sync: If deleting a Hand Brokerage expense for an Auto Loan, reset fees_details.brokerageHand to 0
+  let targetLoanId = curExp.loan_id;
+  const isHandBrokerage = curExp.expense_type === 'BROKERAGE_HAND' ||
+    /Brokerage Hand for Auto Loan/i.test(curExp.description || '');
+
+  if (!targetLoanId && isHandBrokerage) {
+    const m = (curExp.description || '').match(/Auto Loan\s+([a-f0-9\-]+)/i);
+    if (m && m[1]) {
+      targetLoanId = m[1];
+    }
+  }
+
+  if (targetLoanId && isHandBrokerage) {
+    try {
+      const loanRes = await client.query('SELECT fees_details FROM autofinance_loans WHERE id = $1', [targetLoanId]);
+      if (loanRes.rows.length > 0) {
+        const feesDetails = typeof loanRes.rows[0].fees_details === 'string'
+          ? JSON.parse(loanRes.rows[0].fees_details || '{}')
+          : { ...(loanRes.rows[0].fees_details || {}) };
+
+        feesDetails.brokerageHand = 0;
+
+        await client.query(
+          'UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2',
+          [JSON.stringify(feesDetails), targetLoanId]
+        );
+      }
+    } catch (err) {
+      console.error("Failed to reset auto loan hand brokerage on expense deletion:", err);
+    }
+  }
+
   return res.rows[0];
 }
 

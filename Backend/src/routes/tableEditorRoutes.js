@@ -1150,14 +1150,24 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
       if (expRes.rows.length > 0) {
         const curExp = expRes.rows[0];
         const finalCat = (updates.category || curExp.category || '').toUpperCase();
+        const newAmt = updates.amount !== undefined ? Number(updates.amount) : Number(curExp.amount);
+        let newDate = updates.expense_date || curExp.expense_date;
+        if (typeof newDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(newDate.trim())) {
+          const [d, m, y] = newDate.trim().split('-');
+          newDate = `${y}-${m}-${d}`;
+        }
+        const newDesc = updates.description !== undefined ? updates.description : curExp.description;
+        const newType = updates.expense_type !== undefined ? updates.expense_type : curExp.expense_type;
+
+        // Sync global cash ledger
+        await db.query(
+          `UPDATE global_cash_ledger
+           SET amount = $1, effective_date = $2, notes = $3
+           WHERE reference_type = 'EXPENSE' AND reference_id = $4::uuid`,
+          [newAmt, newDate, newDesc, id]
+        );
+
         if (finalCat === 'DAILY') {
-          const newAmt = updates.amount !== undefined ? Number(updates.amount) : Number(curExp.amount);
-          let newDate = updates.expense_date || curExp.expense_date;
-          if (typeof newDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(newDate.trim())) {
-            const [d, m, y] = newDate.trim().split('-');
-            newDate = `${y}-${m}-${d}`;
-          }
-          const newDesc = updates.description !== undefined ? updates.description : curExp.description;
           await db.query(
             `INSERT INTO daily_finance_expenses (expense_id, expense_date, amount, description, updated_at)
              VALUES ($1, $2, $3, $4, NOW())
@@ -1168,6 +1178,42 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
                  updated_at = NOW()`,
             [id, newDate, newAmt, newDesc]
           );
+        } else if (curExp.category === 'DAILY' && finalCat !== 'DAILY') {
+          await db.query(`DELETE FROM daily_finance_expenses WHERE expense_id = $1`, [id]);
+        }
+
+        // Bidirectional sync for Hand Brokerage linked to Auto Loan
+        const isHandBrokerage = newType === 'BROKERAGE_HAND' ||
+          curExp.expense_type === 'BROKERAGE_HAND' ||
+          /Brokerage Hand for Auto Loan/i.test(newDesc || '') ||
+          /Brokerage Hand for Auto Loan/i.test(curExp.description || '');
+
+        let detectedLoanId = curExp.loan_id;
+        if (!detectedLoanId && isHandBrokerage) {
+          const m = (newDesc || curExp.description || '').match(/Auto Loan\s+([a-f0-9\-]+)/i);
+          if (m && m[1]) {
+            detectedLoanId = m[1];
+          }
+        }
+
+        if (detectedLoanId && isHandBrokerage) {
+          try {
+            const loanRes = await db.query('SELECT fees_details FROM autofinance_loans WHERE id = $1', [detectedLoanId]);
+            if (loanRes.rows.length > 0) {
+              const feesDetails = typeof loanRes.rows[0].fees_details === 'string'
+                ? JSON.parse(loanRes.rows[0].fees_details || '{}')
+                : { ...(loanRes.rows[0].fees_details || {}) };
+
+              feesDetails.brokerageHand = newAmt;
+
+              await db.query(
+                'UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2',
+                [JSON.stringify(feesDetails), detectedLoanId]
+              );
+            }
+          } catch (e) {
+            console.error('Failed to sync expense update to auto loan fees_details:', e);
+          }
         }
       }
     }

@@ -8,6 +8,7 @@ export default function AddExpenseModal({
   setExpenseFormData,
   onSubmit,
   submitting = false,
+  isEdit = false,
 }) {
   if (!show) return null;
 
@@ -37,7 +38,7 @@ export default function AddExpenseModal({
         <div className="modalHeader">
           <div>
             <span className="overline autoBadgeTag">EXPENSE CONTROL</span>
-            <h3>Record New Expense</h3>
+            <h3>{isEdit ? "Edit Expense" : "Record New Expense"}</h3>
           </div>
           <button
             type="button"

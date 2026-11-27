@@ -13,6 +13,7 @@ import {
   ensureUnifiedExpensesTable,
   recordExpense,
   getExpenses,
+  updateExpense,
   deleteExpense,
   getTotalExpenses,
 } from '../services/expense.service.js';
@@ -185,6 +186,15 @@ router.post('/expenses', async (req, res) => {
   try {
     const expense = await recordExpense(pool, req.body);
     res.status(201).json(expense);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put('/expenses/:id', async (req, res) => {
+  try {
+    const updated = await updateExpense(pool, req.params.id, req.body);
+    res.json({ success: true, expense: updated });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

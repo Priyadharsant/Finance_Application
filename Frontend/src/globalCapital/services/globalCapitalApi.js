@@ -108,6 +108,17 @@ export const globalCapitalApi = {
     return json;
   },
 
+  updateExpense: async (id, data) => {
+    const res = await fetch(`${API}/expenses/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || json.err || json.message || "Failed to update expense");
+    return json;
+  },
+
   deleteExpense: async (id) => {
     const res = await fetch(`${API}/expenses/${id}`, {
       method: "DELETE",
