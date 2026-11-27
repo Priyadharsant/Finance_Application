@@ -286,12 +286,12 @@ async function main() {
     console.log("\n🔨 Packaging installer with Electron Builder...");
     execSync("npx electron-builder --win", { stdio: "inherit", cwd: path.join(ROOT_DIR, "Frontend") });
 
-    console.log("\n📦 Committing only version metadata...");
-    git(`add -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
+    console.log("\n📦 Staging and committing all project changes and version metadata...");
+    git("add -A");
     try {
-      git(`commit -m "chore(release): v${nextVersion}" -- ${releaseFiles.map((file) => `"${file}"`).join(" ")}`);
+      git(`commit -m "chore(release): v${nextVersion}"`);
     } catch (commitErr) {
-      console.log("ℹ️ Nothing new to commit for version metadata (already committed). Continuing with release...");
+      console.log("ℹ️ Nothing new to commit (working tree clean). Continuing with release...");
     }
     try {
       git(`tag v${nextVersion}`);

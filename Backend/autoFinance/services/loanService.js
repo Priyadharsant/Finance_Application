@@ -660,7 +660,19 @@ export async function getAutoFinanceOverview() {
   };
 }
 
-export async function rescheduleFutureEMIs(client, loanId) {
+export async function rescheduleFutureEMIs(clientOrLoanId, maybeLoanId) {
+  let client;
+  let loanId;
+  if (maybeLoanId !== undefined) {
+    client = clientOrLoanId;
+    loanId = maybeLoanId;
+  } else {
+    client = pool;
+    loanId = clientOrLoanId;
+  }
+  if (!client || typeof client.query !== 'function') {
+    client = pool;
+  }
   await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0;`);
   await client.query(`ALTER TABLE autofinance_emi_schedules ADD COLUMN IF NOT EXISTS pending_amount_forwarded NUMERIC(14,2) NOT NULL DEFAULT 0;`);
   await client.query(`ALTER TABLE autofinance_loans ADD COLUMN IF NOT EXISTS total_payable NUMERIC(14,2);`);

@@ -1008,22 +1008,81 @@ export async function updateLoanTerms(req, res) {
         `UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2`,
         [JSON.stringify(feesDetails), loanId]
       );
+
+      // Reconcile Brokerage Hand expense and Global Cash Ledger
+      if (updates.brokerage_hand !== undefined) {
+        const newBrokerageHand = Number(updates.brokerage_hand || 0);
+        const expenseDate = updates.disbursement_date || updates.start_date || curL.disbursement_date || curL.start_date || new Date().toISOString().slice(0, 10);
+        const desc = `Brokerage Hand for Auto Loan ${loanId}`;
+
+        if (newBrokerageHand > 0) {
+          const expCheck = await pool.query(
+            `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2 ORDER BY created_at ASC`,
+            [loanId, desc]
+          );
+
+          if (expCheck.rows.length > 0) {
+            const expId = expCheck.rows[0].id;
+            await pool.query(
+              `UPDATE expenses
+               SET amount = $1, expense_date = $2, updated_at = NOW()
+               WHERE id = $3`,
+              [newBrokerageHand, expenseDate, expId]
+            );
+
+            // Sync global_cash_ledger debit entry for this expense if tracked
+            await pool.query(
+              `UPDATE global_cash_ledger
+               SET amount = $1, effective_date = $2
+               WHERE reference_type = 'EXPENSE' AND reference_id = $3::uuid`,
+              [newBrokerageHand, expenseDate, expId]
+            );
+          } else {
+            const insRes = await pool.query(
+              `INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by)
+               VALUES ($1, $2, $3, 'AUTO', 'BROKERAGE_HAND', $4, null)
+               RETURNING id`,
+              [loanId, expenseDate, newBrokerageHand, desc]
+            );
+
+            await pool.query(
+              `INSERT INTO global_cash_ledger (effective_date, type, amount, direction, source_module, reference_type, reference_id, notes)
+               VALUES ($1, 'EXPENSE', $2, 'DEBIT', 'AUTO', 'EXPENSE', $3, $4)`,
+              [expenseDate, newBrokerageHand, insRes.rows[0].id, desc]
+            );
+          }
+        } else {
+          // If brokerage_hand was changed to 0, remove or delete expense and ledger
+          const expCheck = await pool.query(
+            `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2`,
+            [loanId, desc]
+          );
+          const expIds = expCheck.rows.map((r) => r.id);
+          if (expIds.length) {
+            await pool.query(
+              `DELETE FROM global_cash_ledger WHERE reference_type = 'EXPENSE' AND reference_id = ANY($1::uuid[])`,
+              [expIds]
+            );
+            await pool.query(`DELETE FROM expenses WHERE id = ANY($1::uuid[])`, [expIds]);
+          }
+        }
+      }
     }
 
-    // 4. Loan Financial Terms (loan_amount, interest_rate, interest_type, tenure_months, start_date, disbursement_date)
+    // 4. Loan Financial Terms (loan_amount, interest_rate, interest_type, tenure_months, start_date)
     const newLoanAmt = updates.loan_amount !== undefined ? Number(updates.loan_amount) : Number(curL.loan_amount);
     const newRate = updates.interest_rate !== undefined ? Number(updates.interest_rate) : Number(curL.interest_rate);
     const newType = updates.interest_type !== undefined ? String(updates.interest_type).toUpperCase() : (curL.interest_type || 'FLAT');
     const newTenure = updates.tenure_months !== undefined ? Number(updates.tenure_months) : Number(curL.tenure_months);
     let newStart = updates.start_date || curL.start_date || new Date().toISOString().slice(0, 10);
-    let newDisb = updates.disbursement_date || updates.start_date || curL.disbursement_date || curL.start_date || new Date().toISOString().slice(0, 10);
+    let effectiveDate = updates.disbursement_date || updates.start_date || curL.start_date || new Date().toISOString().slice(0, 10);
 
     await pool.query(
       `UPDATE autofinance_loans
        SET loan_amount = $1, interest_rate = $2, interest_type = $3, tenure_months = $4,
-           start_date = $5, disbursement_date = $6, updated_at = NOW()
-       WHERE id = $7`,
-      [newLoanAmt, newRate, newType, newTenure, newStart, newDisb, loanId]
+           start_date = $5, updated_at = NOW()
+       WHERE id = $6`,
+      [newLoanAmt, newRate, newType, newTenure, newStart, loanId]
     );
 
     // 5. Global Cash Ledger sync
@@ -1031,11 +1090,11 @@ export async function updateLoanTerms(req, res) {
       `UPDATE global_cash_ledger
        SET amount = $1, effective_date = $2
        WHERE type = 'AUTO_LOAN_DISBURSEMENT' AND reference_id = $3::uuid`,
-      [newLoanAmt, newDisb, loanId]
+      [newLoanAmt, effectiveDate, loanId]
     );
 
     // 6. Reschedule future EMIs
-    await rescheduleFutureEMIs(loanId);
+    await rescheduleFutureEMIs(pool, loanId);
 
     return res.json({ success: true, message: "Loan terms updated and rescheduled successfully." });
   } catch (error) {
@@ -1151,7 +1210,13 @@ export async function updateCollection(req, res) {
       const primaryId = primary?.id;
       const existingFine = payCheck.rows.reduce((sum, payment) => sum + Number(payment.fine_amount || 0), 0);
       const finalFine = fineWasEdited ? fineToSave : existingFine;
-      const finalDate = dateWasEdited ? dateToSave : (primary?.payment_date ? primary.payment_date.toISOString().slice(0, 10) : dateToSave);
+      const rawPaymentDate = primary?.payment_date;
+      const formattedExistingDate = rawPaymentDate
+        ? (typeof rawPaymentDate === 'string'
+            ? rawPaymentDate.slice(0, 10)
+            : (rawPaymentDate instanceof Date ? rawPaymentDate.toISOString().slice(0, 10) : String(rawPaymentDate).slice(0, 10)))
+        : dateToSave;
+      const finalDate = dateWasEdited ? dateToSave : formattedExistingDate;
 
       if (payCheck.rows.length > 0) {
         await pool.query(
@@ -1205,7 +1270,7 @@ export async function updateCollection(req, res) {
     }
 
     // Reschedule subsequent EMIs
-    await rescheduleFutureEMIs(loanId);
+    await rescheduleFutureEMIs(pool, loanId);
 
     return res.json({ success: true, message: "Collection updated successfully." });
   } catch (error) {

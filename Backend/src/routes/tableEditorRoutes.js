@@ -1065,6 +1065,63 @@ router.put('/data/:tableName/:id', requireAuth, async (req, res) => {
             `UPDATE autofinance_loans SET fees_details = $1::jsonb, updated_at = NOW() WHERE id = $2`,
             [JSON.stringify(feesDetails), id]
           );
+
+          // Reconcile Brokerage Hand expense and Global Cash Ledger
+          if (feesDetails.brokerageHand !== undefined) {
+            const newBrokerageHand = Number(feesDetails.brokerageHand || 0);
+            const expenseDate = updates.disbursement_date || updates.start_date || curL.disbursement_date || curL.start_date || new Date().toISOString().slice(0, 10);
+            const desc = `Brokerage Hand for Auto Loan ${id}`;
+
+            if (newBrokerageHand > 0) {
+              const expCheck = await db.query(
+                `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2 ORDER BY created_at ASC`,
+                [id, desc]
+              );
+
+              if (expCheck.rows.length > 0) {
+                const expId = expCheck.rows[0].id;
+                await db.query(
+                  `UPDATE expenses
+                   SET amount = $1, expense_date = $2, updated_at = NOW()
+                   WHERE id = $3`,
+                  [newBrokerageHand, expenseDate, expId]
+                );
+
+                await db.query(
+                  `UPDATE global_cash_ledger
+                   SET amount = $1, effective_date = $2
+                   WHERE reference_type = 'EXPENSE' AND reference_id = $3::uuid`,
+                  [newBrokerageHand, expenseDate, expId]
+                );
+              } else {
+                const insRes = await db.query(
+                  `INSERT INTO expenses (loan_id, expense_date, amount, category, expense_type, description, created_by)
+                   VALUES ($1, $2, $3, 'AUTO', 'BROKERAGE_HAND', $4, null)
+                   RETURNING id`,
+                  [id, expenseDate, newBrokerageHand, desc]
+                );
+
+                await db.query(
+                  `INSERT INTO global_cash_ledger (effective_date, type, amount, direction, source_module, reference_type, reference_id, notes)
+                   VALUES ($1, 'EXPENSE', $2, 'DEBIT', 'AUTO', 'EXPENSE', $3, $4)`,
+                  [expenseDate, newBrokerageHand, insRes.rows[0].id, desc]
+                );
+              }
+            } else {
+              const expCheck = await db.query(
+                `SELECT id FROM expenses WHERE (loan_id = $1 AND expense_type = 'BROKERAGE_HAND') OR description = $2`,
+                [id, desc]
+              );
+              const expIds = expCheck.rows.map((r) => r.id);
+              if (expIds.length) {
+                await db.query(
+                  `DELETE FROM global_cash_ledger WHERE reference_type = 'EXPENSE' AND reference_id = ANY($1::uuid[])`,
+                  [expIds]
+                );
+                await db.query(`DELETE FROM expenses WHERE id = ANY($1::uuid[])`, [expIds]);
+              }
+            }
+          }
         }
 
         // Sync global_cash_ledger if loan_amount or disbursement_date changes
