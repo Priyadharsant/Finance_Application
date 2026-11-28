@@ -3,6 +3,59 @@ import { pool } from "../../autoFinance/config/db.js";
 const REDACTED = "[REDACTED]";
 const SECRET_KEY = /(password|passwd|secret|token|authorization|cookie|api.?key|credential|aadhaar|aadhar|pan|ssn|document|file|image|signature)/i;
 const MAX_VALUE_LENGTH = 12000;
+const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+const MAX_DEDUPE_CACHE_SIZE = 1000;
+const recentErrorAlerts = new Map();
+
+function getNormalizedClientIp(clientIp) {
+  const raw = Array.isArray(clientIp) ? clientIp[0] : String(clientIp || "");
+  return raw.split(",")[0].trim() || "unknown";
+}
+
+function extractErrorMessage(details) {
+  if (typeof details.error === "string" && details.error.trim()) {
+    return details.error.split("\n")[0].trim().slice(0, 200);
+  }
+  const res = details.response;
+  if (res && typeof res === "object") {
+    return String(res.message || res.error || "").trim().slice(0, 200);
+  }
+  if (typeof res === "string" && res.trim()) {
+    return res.trim().slice(0, 200);
+  }
+  return "";
+}
+
+function getAlertDedupeKey(details) {
+  const ip = getNormalizedClientIp(details.clientIp);
+  const errorMessage = extractErrorMessage(details);
+  if (details.method) {
+    const path = String(details.path || "").split("?")[0];
+    return `${details.status || 500}|${String(details.method).toUpperCase()}|${path}|${errorMessage}|${ip}`;
+  }
+  return `SERVER|${details.type || "Unhandled"}|${errorMessage}|${ip}`;
+}
+
+function shouldSendErrorAlert(details, now = Date.now()) {
+  const key = getAlertDedupeKey(details);
+  const lastSentAt = recentErrorAlerts.get(key);
+  if (lastSentAt && now - lastSentAt < ALERT_COOLDOWN_MS) {
+    return false;
+  }
+  if (recentErrorAlerts.size >= MAX_DEDUPE_CACHE_SIZE) {
+    for (const [entryKey, timestamp] of recentErrorAlerts) {
+      if (now - timestamp >= ALERT_COOLDOWN_MS) {
+        recentErrorAlerts.delete(entryKey);
+      }
+    }
+    if (recentErrorAlerts.size >= MAX_DEDUPE_CACHE_SIZE) {
+      const oldestKey = recentErrorAlerts.keys().next().value;
+      if (oldestKey !== undefined) recentErrorAlerts.delete(oldestKey);
+    }
+  }
+  recentErrorAlerts.set(key, now);
+  return true;
+}
 
 function safeValue(value, key = "", depth = 0) {
   if (SECRET_KEY.test(key)) return REDACTED;
@@ -271,6 +324,11 @@ async function findTargetRecords(req) {
 }
 
 export async function sendApiErrorAlert(details) {
+  if (!shouldSendErrorAlert(details)) {
+    console.log(`[API Error Alert] Suppressed duplicate alert for ${getAlertDedupeKey(details)}`);
+    return;
+  }
+
   const apiKey = process.env.FINANCE_ERROR_RESEND_API_KEY;
   const from = process.env.FINANCE_ERROR_MAIL_FROM;
   const to = process.env.FINANCE_ERROR_MAIL_TO;
